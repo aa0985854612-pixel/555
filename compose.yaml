@@ -1,6 +1,6 @@
 services:
   app:
-    image: pigledger:1.0.0
+    image: pigledger:1.1.0
     build: .
     restart: unless-stopped
     environment:

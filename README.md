@@ -1,35 +1,46 @@
-# 肉豬紀錄管理 App — PigLedger 1.0.0
+# 肉豬紀錄管理 App — PigLedger 1.1.0
 
-**正式使用請部署整個專案，開啟 HTTPS 網站。不要直接開 `index.html`，也不要使用手機「檔案預覽」。**
+**只有 Windows 筆電？下載筆電版，全部解壓縮後雙擊 `START_WINDOWS.bat`。**
 
-下載交付包 `pigledger-1.0.0.zip` 後解壓縮，以本檔為入口。六頁共用同一 SQLite 持久資料庫和伺服器帳號；手機、平板、電腦透過同一網址使用。繁體中文／越南語切換、角色權限、CSV、完整備份、更正歷程、衝突及重送處理均已實作。沒有自動叫料、配送／採食量預測或相關背景工作。
+- **[下載 Windows 筆電版 v1.1.0](https://github.com/aa0985854612-pixel/555/raw/refs/heads/main/release/pigledger-windows-1.1.0.zip)**（內附 Python，不必安裝 Docker／另租主機）
+- [Windows 操作說明](WINDOWS_README.txt)
+- [本版測試及資料保留](docs/TEST_REPORT_1.1.0.md)
+- [完整原始碼包](https://github.com/aa0985854612-pixel/555/raw/refs/heads/main/release/pigledger-1.1.0.zip)
 
-- [Docker 正式部署步驟](docs/DEPLOY.md)
-- [日常操作說明](docs/USER_GUIDE.md)
-- [資料模型、更新與保留](docs/DATA.md)
-- [測試結果及待驗收項目](docs/TEST_REPORT.md)
+首次啟動在黑色視窗設定帳號與至少12字元密碼，瀏覽器自動開啟後登入。密碼輸入不顯示字元是正常的。再次開啟沿用帳號與資料。使用時保留啟動視窗，按Ctrl+C可停止。
 
-## 本機開發
+Windows 資料固定放在 `%LOCALAPPDATA%\PigLedger\data\pigledger.sqlite3`，與解壓的版本資料夾分開。更新前備份、關掉舊視窗，再雙擊新版。之前雲端開發環境的帳號不會跟程式包搬到筆電；下載包沒有正式密碼或農場資料。備份可匯入同一 App 的雲端部署。
 
-需要 Python 3.12+；應用程式只用 Python 標準函式庫，沒有第三方服務或套件依賴。
+這是同一套六頁 App、資料模型及權限。Windows 版本僅新增啟動器，沒有另寫一套不相通的計算。支援繁體中文／越南語，豬隻異動、到料與耗料分開、加權均重、ADG、FCR、CSV、備份、更正歷程及重送／衝突處理。沒有自動叫料、配送或採食量預測。
 
-```sh
-cd /workspace/555
-python3 -m app.manage create-admin --username YOUR_ADMIN
-python3 -m app.server --host 127.0.0.1 --port 8080
-```
+## 雲端部署
 
-管理員密碼在終端機隱藏輸入，至少12字元。沒有預設帳號、密碼或內嵌管理員密鑰。開發時使用本機 HTTP；正式部署使用下方 Docker + Caddy HTTPS。資料預設在 `.data/pigledger.sqlite3`，可用 `--db` 或 `PIGLEDGER_DB` 指定。啟動伺服器不會建立示範豬隻或清空資料。
+Docker 原有方式保留，參考[部署說明](docs/DEPLOY.md)。正式使用手機／多人遠端操作，需部署到HTTPS網站；不要開HTML檔案預覽。單機 Windows 版僅提供筆電自己的 loopback 連線，不提供公開網址。
+
+- [日常登記指南](docs/USER_GUIDE.md)
+- [資料模型及備份](docs/DATA.md)
+- [舊版1.0.0測試報告](docs/TEST_REPORT.md)
+
+## 開發驗證
+
+共用應用使用 Python 3.12+ 標準函式庫，無第三方應用依賴。
 
 ```sh
 ./scripts/check.sh
-# 以下瀏覽器測試需要 Playwright（測試依賴）及 Chromium：
 python3 tests/browser_smoke.py
 python3 tests/pwa_test.py
 ```
 
-正式環境使用 Docker 持久 volume `farm_data`；SQLite 支援單一應用實例的多人交易。請勿以共享網路磁碟承載 SQLite，也不要啟動多個不同 volume 的應用實例當成同一場資料。需要跨區／多實例服務時，應另外規劃資料库服務及迁移。
+本機啟動器可在已有Python環境執行 `python3 -m app.desktop`；啟動器會依作業系統決定資料位置。測試用 `--data-dir`指定隔離暫存位置，不寫入正式資料。Linux/macOS可用啟動器，但本次交付的內附執行環境ZIP為Windows x64。
 
-## 交付內容
+Windows runtime 來源為 CPython 官方 Windows 文件推薦的 PSF NuGet `python` 套件。打包時以官方catalog SHA-512核對完整原包，保留 NuGet 原包及逐檔校驗資料，不修改DLL。原生Windows雙擊操作尚未在本雲端Linux機驗收，詳見本版報告。
 
-`app/` 是完整原始碼；`Dockerfile`、`compose.yaml`、`Caddyfile` 是正式部署入口；`tests/`、`docs/`、`VERSION` 同包提供。範例資料只存在隔離測試，交付包不含農場資料庫或正式密碼。程式包 SHA-256 在同名 `.sha256` 檔中。
+重建Windows交付包：
+
+```sh
+python3 scripts/fetch_windows_runtime.py
+python3 scripts/package.py
+python3 scripts/package_windows.py
+```
+
+打包腳本會核對已下載的PSF原包SHA-512，拒絕不一致的檔案；不會把使用者資料夾放進程式包。

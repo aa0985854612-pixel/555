@@ -18,7 +18,7 @@ def call(path,body=None):
         if path=='/api/login':assert 'Secure' in response.headers['Set-Cookie'] and 'HttpOnly' in response.headers['Set-Cookie']
         assert 'max-age=' in response.headers.get('Strict-Transport-Security','')
         return json.load(response)
-assert call('/api/health')['version']=='1.0.0'
+assert call('/api/health')['version']=='1.1.0'
 me=call('/api/login',{'username':'docker-test','password':'docker-fixture-password'})
 barn=call('/api/barns',{'name':'Docker fixture','group':''})
 batch=call('/api/batches',{'barn_id':barn['id'],'name':'100-head fixture','entry_date':'2026-01-01','entry_count':100,'entry_age_days':70,'status':'active'})
@@ -35,5 +35,5 @@ for attempt in range(20):
         time.sleep(.25)
 assert len(snapshot['batches'])==1 and len(snapshot['weights'])==2
 assert call('/api/statistics?batch_id='+batch['id'])['aggregate_fcr']==2.5
-(root/'artifacts/docker-results.json').write_text(json.dumps({'version':'1.0.0','tests':['Docker build','Compose healthy application','Caddy HTTPS with trusted root; TLS verification enabled','Secure HttpOnly cookie and HSTS','real HTTPS login and writes','HTTPS FCR 2.5','backup with schema 2','restart preserves records and calculations']},indent=2))
+(root/'artifacts/docker-results.json').write_text(json.dumps({'version':'1.1.0','tests':['Docker build','Compose healthy application','Caddy HTTPS with trusted root; TLS verification enabled','Secure HttpOnly cookie and HSTS','real HTTPS login and writes','HTTPS FCR 2.5','backup with schema 2','restart preserves records and calculations']},indent=2))
 print('PASS 8 Docker/HTTPS scenarios')

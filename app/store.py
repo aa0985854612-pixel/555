@@ -3,7 +3,7 @@ from pathlib import Path
 from datetime import datetime, timezone
 from .domain import Invalid, day, number, herd, consumption, age
 
-VERSION='1.0.0'
+VERSION='1.1.0'
 KINDS=('barns','batches','movements','deliveries','usages','weights')
 
 class Problem(Exception):
@@ -101,6 +101,20 @@ class Store:
         except sqlite3.IntegrityError:
             raise Problem('username_exists',409)
         finally: db.close()
+
+    def create_initial_admin(self, username, password):
+        # First-run creation is atomic. Never reset or replace an existing account.
+        if not isinstance(username,str) or not 1<=len(username.strip())<=80 or not isinstance(password,str) or not 12<=len(password)<=512:raise Problem('invalid_user')
+        db=self.connect()
+        try:
+            db.execute('BEGIN IMMEDIATE')
+            if db.execute('SELECT COUNT(*) FROM users').fetchone()[0]:raise Problem('already_initialized',409)
+            uid=str(uuid.uuid4())
+            db.execute('INSERT INTO users(id,username,hash,role) VALUES(?,?,?,?)',(uid,username.strip(),password_hash(password),'admin'))
+            self.audit(db,'desktop-first-run','create','users',uid,None,{'username':username.strip(),'role':'admin'})
+            db.commit()
+            return {'id':uid,'username':username.strip(),'role':'admin'}
+        finally:db.close()
 
     def audit(self, db, user, action, kind, rid, before, after):
         db.execute('INSERT INTO audit(timestamp,user_id,action,kind,record_id,before_value,after_value) VALUES(?,?,?,?,?,?,?)',(now(),user,action,kind,rid,encode(before) if before is not None else None,encode(after) if after is not None else None))

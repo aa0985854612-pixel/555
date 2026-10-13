@@ -151,7 +151,7 @@ class Handler(BaseHTTPRequestHandler):
             db=store.connect()
             try:db.execute('SELECT 1').fetchone()
             finally:db.close()
-            return self.send({'ok':True,'version':VERSION})
+            return self.send({'ok':True,'version':VERSION,'profile_id':hashlib.sha256(str(store.path.resolve()).encode()).hexdigest()[:16]})
         if path=='/api/login' and method=='POST':
             origin=self.headers.get('Origin')
             if origin and urlparse(origin).netloc!=self.headers.get('Host'):raise Problem('csrf_failed',403)
