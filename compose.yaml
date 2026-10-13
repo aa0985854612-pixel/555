@@ -1,0 +1,33 @@
+services:
+  app:
+    image: pigledger:1.0.0
+    build: .
+    restart: unless-stopped
+    environment:
+      PIGLEDGER_SECURE: "1"
+      PIGLEDGER_DB: /data/pigledger.sqlite3
+    volumes:
+      - farm_data:/data
+    networks: [farm]
+  web:
+    image: caddy:2.10-alpine@sha256:4c6e91c6ed0e2fa03efd5b44747b625fec79bc9cd06ac5235a779726618e530d
+    restart: unless-stopped
+    environment:
+      FARM_DOMAIN: ${FARM_DOMAIN:?Set FARM_DOMAIN in .env}
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks: [farm]
+    depends_on:
+      app:
+        condition: service_healthy
+volumes:
+  farm_data:
+  caddy_data:
+  caddy_config:
+networks:
+  farm:

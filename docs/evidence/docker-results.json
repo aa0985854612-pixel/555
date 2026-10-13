@@ -1,0 +1,13 @@
+{
+  "version": "1.0.0",
+  "tests": [
+    "Docker build",
+    "Compose healthy application",
+    "Caddy HTTPS with trusted root; TLS verification enabled",
+    "Secure HttpOnly cookie and HSTS",
+    "real HTTPS login and writes",
+    "HTTPS FCR 2.5",
+    "backup with schema 2",
+    "restart preserves records and calculations"
+  ]
+}

@@ -1,0 +1,23 @@
+{
+  "version": "1.0.0",
+  "type": "real Chromium + synthetic fixtures",
+  "passed": [
+    "login and dashboard 825 / 170 / 5 / 99.50%",
+    "language change preserves input and expanded state",
+    "background sync preserves focus, scroll, input and details",
+    "double-click writes once and save preserves scope",
+    "reload restores pending payload and scope without new request",
+    "lost committed response and retry do not duplicate",
+    "UI 2 tons persisted as 2000 kg; no consumption invented",
+    "unit switch preserves physical quantity",
+    "individual weights auto-count, total and weighted mean",
+    "date + type filters and CSV agree",
+    "insufficient FCR remains explicitly unknown",
+    "conflicting edit rejected without clearing input",
+    "offline is pending until explicit successful retry",
+    "390px phone, 768px tablet, desktop: all six pages without page overflow",
+    "viewer UI and actual server denial (403)",
+    "account switch reloads role restrictions and hides administrator controls",
+    "no uncaught JavaScript errors"
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "type": "real Chromium, simulated old/new SW versions",
+  "checks": [
+    "old cache restored",
+    "unsaved input blocks activation",
+    "new version activates and removes old cache",
+    "API data never cached",
+    "192/512 PNG manifest icons"
+  ]
+}
