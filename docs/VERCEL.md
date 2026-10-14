@@ -2,13 +2,13 @@
 
 部署完成後，用手機 Safari／Chrome 開啟 Vercel 正式 HTTPS 網址、登入，再選「加入主畫面」。筆電可以關機，六個頁面共用雲端資料。
 
-**目前程式已完成部署改造，尚未正式發布。** 本維護環境缺 Vercel 授權與 Turso 連線，對 Vercel API 的 HTTPS 連線也收到環境代理 403。GitHub 程式碼網址、localhost、原資料來源 `666-rust.vercel.app` 都不是這個 App 已完成部署的網址。
+**2026-10-15 使用者已部署 [555-rho-nine.vercel.app](https://555-rho-nine.vercel.app/)，登入畫面顯示雲端資料庫尚未連接。** 此狀態依使用者截圖，維護環境未完成公網驗證，仍缺 Vercel 授權與 Turso 連線，HTTPS 請求收到環境代理403。GitHub 程式碼網址、localhost、原資料來源 `666-rust.vercel.app` 都不是這個 App 的正式使用入口。新網站需連接資料庫並私密移入資料後才可正式使用。
 
 ## 用原 Vercel 帳號建立專案
 
 1. 登入原帳號，開啟 [匯入 555](https://vercel.com/new/import?s=https%3A%2F%2Fgithub.com%2Faa0985854612-pixel%2F555)。清單沒有 repository 時，授權 Vercel 的 GitHub App 存取 `aa0985854612-pixel/555`。
 2. 專案名稱可用 `pigledger`；Framework Preset 選 **Other**，Root Directory 使用 repository 根目錄。Build Command、Output Directory 不指定其他 framework 的設定。根目錄已有 `vercel.json` 與 Python 3.12 設定。建立 App 專案即可，無須刪除原 `666` 網站。
-3. 建立／連接一個 Turso 資料庫。可在 Vercel Marketplace 尋找 Turso，或至 [Turso](https://app.turso.tech/) 建立資料庫，再於 **App 專案 → Settings → Environment Variables → Production** 加入：
+3. 先至 [Turso 官網](https://turso.tech/) 進入登入／管理介面，使用 GitHub 登入，建立名為 `pigledger` 的資料庫。若已建立相同用途的資料庫，直接沿用。先前提供的 `vercel.com/marketplace/turso` 在使用者介面顯示404，不依賴此入口。Vercel 的 **Connect Database** 搜尋的是團隊已建立的資料庫，不是供應商搜尋；不用在那裡搜尋 Turso。建立後將平台提供的資料庫網址與存取金鑰填入 **555專案 → Environment Variables → Production**：
 
    | 名稱 | 內容 |
    | --- | --- |
