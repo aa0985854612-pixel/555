@@ -1,7 +1,7 @@
-肉豬紀錄管理 App — Windows／手機版 v1.2.0
+肉豬紀錄管理 App — Windows／手機版 v1.2.1
 
 【下載與啟動】
-1. 下載 pigledger-windows-1.2.0.zip，右鍵 → 全部解壓縮。
+1. 下載 pigledger-windows-1.2.1.zip，右鍵 → 全部解壓縮。
 2. 筆電本機：雙擊 START_WINDOWS.bat。
    手機外出／行動網路：雙擊 START_PHONE.bat。
 3. 第一次在黑色視窗設定帳號（預設名稱 farmadmin）與至少12字元密碼。

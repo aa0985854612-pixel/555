@@ -84,6 +84,14 @@ class LegacyTests(unittest.TestCase):
         self.store.import_workbook(self.admin,self.payload|{'closed_barns':[2]},str(uuid.uuid4()));d=self.store.snapshot();closed=next(b for b in d['batches'] if b['legacy_barn']==2)
         self.assertEqual(closed['status'],'ended');self.assertEqual(herd(d['batches'],d['movements'],'2026-10-14',[closed['id']])['remaining'],0)
         self.assertEqual(age(closed,'2026-10-14'),105)
+    def test_confirmed_empty_period_excluded_from_fcr_but_nonzero_feed_is_not_hidden(self):
+        self.store.import_workbook(self.admin,self.payload|{'closed_barns':[2]},str(uuid.uuid4()));d=self.store.snapshot();live=next(b for b in d['batches'] if b['legacy_barn']==1);closed=next(b for b in d['batches'] if b['legacy_barn']==2)
+        for on,mean in [('2026-10-15',50),('2026-10-29',60)]:self.store.mutate(self.admin,'weights',{'date':on,'batch_id':live['id'],'count':2,'total_kg':2*mean,'representative':True},str(uuid.uuid4()))
+        self.store.mutate(self.admin,'usages',{'start':'2026-10-15','end':'2026-10-29','batch_id':live['id'],'method':'direct','kg':2250},str(uuid.uuid4()))
+        query={'group':['JD-TEST'],'to':['2026-10-29']};result=statistics(self.store.snapshot(),query)
+        self.assertEqual(result['aggregate_fcr'],2.5);self.assertEqual(result['empty_fcr_batches'],1);self.assertEqual(result['incomplete_fcr_batches'],0)
+        self.store.mutate(self.admin,'usages',{'start':'2026-10-15','end':'2026-10-29','batch_id':closed['id'],'method':'direct','kg':10},str(uuid.uuid4()))
+        self.assertIsNone(statistics(self.store.snapshot(),query)['aggregate_fcr'])
     def test_malformed_xlsx_and_duplicate_counts_rejected(self):
         with self.assertRaises(Invalid):review(b'not a zip')
         with self.assertRaises(Invalid):parse_counts('1/50\n1/49')

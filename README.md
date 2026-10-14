@@ -1,12 +1,12 @@
-# 肉豬紀錄管理 App — PigLedger 1.2.0
+# 肉豬紀錄管理 App — PigLedger 1.2.1
 
 **Windows 筆電使用 START_WINDOWS.bat；手機外出使用 START_PHONE.bat。**
 
-- [下載 Windows／手機版 v1.2.0](https://github.com/aa0985854612-pixel/555/raw/refs/heads/main/release/pigledger-windows-1.2.0.zip)，全部解壓縮後啟動，內附官方 Python 與 Cloudflare 連線程式。
+- [下載 Windows／手機版 v1.2.1](https://github.com/aa0985854612-pixel/555/raw/refs/heads/main/release/pigledger-windows-1.2.1.zip)，全部解壓縮後啟動，內附官方 Python 與 Cloudflare 連線程式。
 - [Windows／手機操作說明](WINDOWS_README.txt)
 - [Excel 移入說明](docs/EXCEL_IMPORT.md)
-- [本版測試結果與限制](docs/TEST_REPORT_1.2.0.md)
-- [完整原始碼包](https://github.com/aa0985854612-pixel/555/raw/refs/heads/main/release/pigledger-1.2.0.zip)
+- [本版測試結果與限制](docs/TEST_REPORT_1.2.1.md)
+- [完整原始碼包](https://github.com/aa0985854612-pixel/555/raw/refs/heads/main/release/pigledger-1.2.1.zip)
 
 首次啟動設定管理員與至少12字元密碼；再次啟動沿用帳號與資料。資料固定存在 %LOCALAPPDATA%\PigLedger\data\pigledger.sqlite3，換版本資料夾不重建。schema2→3 自動先備份，保留帳號、原始紀錄與歷程。程式包不包含使用者工作簿、農場資料或密碼。
 

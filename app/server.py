@@ -96,6 +96,22 @@ def statistics(data,query):
         p=performance(b,data['batches'],data['movements'],data['weights'],data['usages'],data['deliveries'],until,start,until)
         perfs.append(p)
         stats['batches'].append({'id':b['id'],'age_days':age(b,until),'herd':herd(data['batches'],data['movements'],until,[b['id']]),'performance':p})
+    periods={(p['first']['date'],p['last']['date']) for p in perfs if p.get('first') and p.get('last')}
+    comparison_period=next(iter(periods)) if len(periods)==1 else (start,until) if not periods and start else None
+    empty_ids=set()
+    if comparison_period:
+        first,last=comparison_period
+        for item in stats['batches']:
+            bid=item['id']
+            n0=herd(data['batches'],data['movements'],first,[bid],before=True)['remaining']
+            n1=herd(data['batches'],data['movements'],last,[bid],before=True)['remaining']
+            activity=any(first<=m['date']<=last and (m['batch_id']==bid or m.get('target_batch_id')==bid) for m in data['movements'])
+            activity|=any(w['batch_id']==bid and first<=w['date']<=last for w in data['weights'])
+            activity|=any(u['batch_id']==bid and u['active'] and u['start']<last and u['end']>first for u in data['usages'])
+            if n0==0 and n1==0 and not activity:
+                empty_ids.add(bid);item['performance']['reasons']=['empty_fcr_period']
+        perfs=[item['performance'] for item in stats['batches'] if item['id'] not in empty_ids]
+    stats['empty_fcr_batches']=len(empty_ids)
     comparable=len({(p.get('first',{}).get('date'),p.get('last',{}).get('date')) for p in perfs})==1
     if perfs and all(p['fcr'] is not None for p in perfs) and comparable:
         feed=sum(p['feed'] for p in perfs);gain=sum(p['gain'] for p in perfs)
