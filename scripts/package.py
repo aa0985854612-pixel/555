@@ -5,8 +5,8 @@ import hashlib
 root=Path(__file__).resolve().parents[1]
 version=(root/'VERSION').read_text().strip();name='pigledger-'+version
 out=root/'release';out.mkdir(exist_ok=True)
-files=[root/f for f in ('README.md','START_WINDOWS.bat','START_PHONE.bat','WINDOWS_README.txt','VERSION','Dockerfile','compose.yaml','Caddyfile','.env.example','.gitignore','.gitattributes','.dockerignore')]
-for folder in ('app','docs','tests','scripts'):
+files=[root/f for f in ('README.md','START_WINDOWS.bat','START_PHONE.bat','WINDOWS_README.txt','VERSION','Dockerfile','compose.yaml','Caddyfile','.env.example','.gitignore','.gitattributes','.dockerignore','vercel.json','.vercelignore','pyproject.toml')]
+for folder in ('app','api','docs','tests','scripts'):
     files += [p for p in (root/folder).rglob('*') if p.is_file() and '__pycache__' not in p.parts and p.suffix not in ('.pyc','.sqlite3')]
 with ZipFile(out/(name+'.zip'),'w',compression=ZIP_DEFLATED,compresslevel=9) as z:
     for p in sorted(files):

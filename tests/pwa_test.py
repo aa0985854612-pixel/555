@@ -8,7 +8,7 @@ from playwright.sync_api import sync_playwright
 root=Path(__file__).resolve().parents[1]
 with tempfile.TemporaryDirectory() as folder:
     folder=Path(folder);static=folder/'static';shutil.copytree(root/'app/static',static)
-    current=(static/'sw.js').read_text();(static/'sw.js').write_text(current.replace('pigledger-1.2.1','pigledger-0.9.0'))
+    current=(static/'sw.js').read_text();(static/'sw.js').write_text(current.replace('pigledger-1.3.0','pigledger-0.9.0'))
     server_module.STATIC=static;store=Store(folder/'db.sqlite3');store.create_user('tester','browser-test-password')
     server=server_module.Server(('127.0.0.1',0),store);threading.Thread(target=server.serve_forever,daemon=True).start()
     with sync_playwright() as p:
@@ -25,7 +25,7 @@ with tempfile.TemporaryDirectory() as folder:
         page.evaluate("finishForm(document.querySelector('#movement-form'))")
         with page.expect_navigation(wait_until='networkidle'):
             page.locator('#pwa-update').click()
-        page.wait_for_function("async()=>{const k=await caches.keys();return k.includes('pigledger-1.2.1')&&!k.includes('pigledger-0.9.0')}")
+        page.wait_for_function("async()=>{const k=await caches.keys();return k.includes('pigledger-1.3.0')&&!k.includes('pigledger-0.9.0')}")
         keys=page.evaluate('async()=>{const cs=await caches.keys();const urls=[];for(const c of cs){for(const r of await (await caches.open(c)).keys())urls.push(r.url)}return urls}')
         assert not any('/api/' in u for u in keys)
         manifest=page.request.get('http://127.0.0.1:'+str(server.server_port)+'/manifest.webmanifest').json()

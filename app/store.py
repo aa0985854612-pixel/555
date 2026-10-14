@@ -3,8 +3,16 @@ from pathlib import Path
 from datetime import datetime, timezone
 from .domain import Invalid, day, number, herd, consumption, age
 
-VERSION='1.2.1'
+VERSION='1.3.0'
 KINDS=('barns','batches','movements','deliveries','usages','weights','workbooks')
+SCHEMA='''
+CREATE TABLE IF NOT EXISTS records(kind TEXT NOT NULL, id TEXT PRIMARY KEY, revision INTEGER NOT NULL, deleted INTEGER NOT NULL DEFAULT 0, data TEXT NOT NULL);
+CREATE INDEX IF NOT EXISTS records_kind ON records(kind,deleted);
+CREATE TABLE IF NOT EXISTS users(id TEXT PRIMARY KEY, username TEXT UNIQUE NOT NULL, hash TEXT NOT NULL, role TEXT NOT NULL CHECK(role IN ('admin','staff','viewer')), active INTEGER NOT NULL DEFAULT 1, revision INTEGER NOT NULL DEFAULT 1);
+CREATE TABLE IF NOT EXISTS sessions(token_hash TEXT PRIMARY KEY, user_id TEXT NOT NULL, csrf TEXT NOT NULL, expires REAL NOT NULL);
+CREATE TABLE IF NOT EXISTS requests(user_id TEXT NOT NULL, key TEXT NOT NULL, fingerprint TEXT NOT NULL, result TEXT NOT NULL, PRIMARY KEY(user_id,key));
+CREATE TABLE IF NOT EXISTS audit(seq INTEGER PRIMARY KEY AUTOINCREMENT, timestamp TEXT NOT NULL, user_id TEXT NOT NULL, action TEXT NOT NULL, kind TEXT NOT NULL, record_id TEXT NOT NULL, before_value TEXT, after_value TEXT);
+'''
 
 class Problem(Exception):
     def __init__(self, code, status=400, details=None):
@@ -45,15 +53,7 @@ class Store:
             raise RuntimeError('Database schema is newer than this application')
         if existed and version < 3:
             self.backup_sqlite(db, 'before-migration')
-        db.executescript('''
-        CREATE TABLE IF NOT EXISTS records(kind TEXT NOT NULL, id TEXT PRIMARY KEY, revision INTEGER NOT NULL, deleted INTEGER NOT NULL DEFAULT 0, data TEXT NOT NULL);
-        CREATE INDEX IF NOT EXISTS records_kind ON records(kind,deleted);
-        CREATE TABLE IF NOT EXISTS users(id TEXT PRIMARY KEY, username TEXT UNIQUE NOT NULL, hash TEXT NOT NULL, role TEXT NOT NULL CHECK(role IN ('admin','staff','viewer')), active INTEGER NOT NULL DEFAULT 1, revision INTEGER NOT NULL DEFAULT 1);
-        CREATE TABLE IF NOT EXISTS sessions(token_hash TEXT PRIMARY KEY, user_id TEXT NOT NULL, csrf TEXT NOT NULL, expires REAL NOT NULL);
-        CREATE TABLE IF NOT EXISTS requests(user_id TEXT NOT NULL, key TEXT NOT NULL, fingerprint TEXT NOT NULL, result TEXT NOT NULL, PRIMARY KEY(user_id,key));
-        CREATE TABLE IF NOT EXISTS audit(seq INTEGER PRIMARY KEY AUTOINCREMENT, timestamp TEXT NOT NULL, user_id TEXT NOT NULL, action TEXT NOT NULL, kind TEXT NOT NULL, record_id TEXT NOT NULL, before_value TEXT, after_value TEXT);
-        
-        ''')
+        db.executescript(SCHEMA)
         if 'revision' not in {r['name'] for r in db.execute('PRAGMA table_info(users)')}:
             db.execute('ALTER TABLE users ADD COLUMN revision INTEGER NOT NULL DEFAULT 1')
         db.execute('PRAGMA user_version=3');db.commit()

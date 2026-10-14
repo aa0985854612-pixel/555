@@ -202,10 +202,14 @@ class Handler(BaseHTTPRequestHandler):
             body=self.body();username=body.get('username','');password=body.get('password','')
             if not isinstance(username,str) or not isinstance(password,str) or len(password)>512:raise Problem('invalid_credentials',401)
             key=(self.client_address[0],username)
-            with self.server.lock:
-                failures=[t for t in self.server.login_attempts.get(key,[]) if t>time.time()-900]
-                if len(failures)>=10:raise Problem('login_limited',429)
-                self.server.login_attempts[key]=failures+[time.time()]
+            if hasattr(store,'reserve_login_attempt'):
+                # Shared persistent limiter survives Vercel cold starts.
+                store.reserve_login_attempt(key)
+            else:
+                with self.server.lock:
+                    failures=[t for t in self.server.login_attempts.get(key,[]) if t>time.time()-900]
+                    if len(failures)>=10:raise Problem('login_limited',429)
+                    self.server.login_attempts[key]=failures+[time.time()]
             db=store.connect()
             try:
                 user=db.execute('SELECT * FROM users WHERE username=? AND active=1',(username,)).fetchone()
@@ -213,7 +217,9 @@ class Handler(BaseHTTPRequestHandler):
                 token=secrets.token_urlsafe(32);csrf=secrets.token_urlsafe(32)
                 db.execute('DELETE FROM sessions WHERE expires<?',(time.time(),))
                 db.execute('INSERT INTO sessions VALUES(?,?,?,?)',(hashlib.sha256(token.encode()).hexdigest(),user['id'],csrf,time.time()+43200));db.commit()
-                with self.server.lock:self.server.login_attempts.pop(key,None)
+                if hasattr(store,'clear_login_attempts'):store.clear_login_attempts(key)
+                else:
+                    with self.server.lock:self.server.login_attempts.pop(key,None)
                 return self.send({'id':user['id'],'username':user['username'],'role':user['role'],'csrf':csrf,'version':VERSION},headers={'Set-Cookie':'session='+token+'; HttpOnly; SameSite=Strict; Path=/; Max-Age=43200'+('; Secure' if self.server.secure else '')})
             finally:db.close()
         if path.startswith('/api/'):

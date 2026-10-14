@@ -1,12 +1,22 @@
-# 肉豬紀錄管理 App — PigLedger 1.2.1
+# 肉豬紀錄管理 App — PigLedger 1.3.0
 
-**Windows 筆電使用 START_WINDOWS.bat；手機外出使用 START_PHONE.bat。**
+**建議部署至 Vercel，手機與電腦共用固定 HTTPS 網址；筆電不必保持開機。**
+
+- [在 Vercel 匯入此專案](https://vercel.com/new/import?s=https%3A%2F%2Fgithub.com%2Faa0985854612-pixel%2F555)
+- [Vercel 設定與原資料移入](docs/VERCEL.md)
+- [本版測試結果與部署狀態](docs/TEST_REPORT_1.3.0.md)
+- [完整 Vercel／Docker 原始碼包 v1.3.0](https://github.com/aa0985854612-pixel/555/raw/refs/heads/main/release/pigledger-1.3.0.zip)
+
+Vercel 版使用持久 Turso/libSQL 資料庫，沿用同一套頁面、批次、統計與伺服器權限。原 SQLite 移入工具先備份，再完整保留帳號密碼雜湊、原始 Excel、紀錄 ID、修訂、操作歷程與去重紀錄；重複移入不新增，已有不同資料時拒絕覆蓋。新網址需重新登入，不重設密碼。
+
+**目前尚未正式部署，沒有已驗證的 App 網址。** 維護環境缺 Vercel 授權、Turso 連線及對這些服務的網路存取。程式具備部署設定，但 GitHub 程式包不含私人農場資料；必須完成私密資料移入後，網站才可正式使用。
+
+原筆電版仍可使用：
 
 - [下載 Windows／手機版 v1.2.1](https://github.com/aa0985854612-pixel/555/raw/refs/heads/main/release/pigledger-windows-1.2.1.zip)，全部解壓縮後啟動，內附官方 Python 與 Cloudflare 連線程式。
 - [Windows／手機操作說明](WINDOWS_README.txt)
 - [Excel 移入說明](docs/EXCEL_IMPORT.md)
-- [本版測試結果與限制](docs/TEST_REPORT_1.2.1.md)
-- [完整原始碼包](https://github.com/aa0985854612-pixel/555/raw/refs/heads/main/release/pigledger-1.2.1.zip)
+- [筆電版 v1.2.1 測試結果與限制](docs/TEST_REPORT_1.2.1.md)
 
 首次啟動設定管理員與至少12字元密碼；再次啟動沿用帳號與資料。資料固定存在 %LOCALAPPDATA%\PigLedger\data\pigledger.sqlite3，換版本資料夾不重建。schema2→3 自動先備份，保留帳號、原始紀錄與歷程。程式包不包含使用者工作簿、農場資料或密碼。
 
