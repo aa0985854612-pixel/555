@@ -6,7 +6,7 @@ if exist "%~dp0runtime\python.exe" (
   if errorlevel 1 echo Startup failed. Keep this window open and send a screenshot without passwords.
 ) else (
   echo The Python runtime is missing. Extract the FULL Windows ZIP before starting.
-  echo Download pigledger-windows-1.1.0.zip from the GitHub release folder.
+  echo Download pigledger-windows-1.2.0.zip from the GitHub release folder.
 )
 echo.
 echo This window may now be closed. Your saved data is kept on this laptop.

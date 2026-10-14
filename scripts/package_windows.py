@@ -1,8 +1,11 @@
 """Package PSF's NuGet Windows runtime and app. Requires verified provenance metadata."""
 import base64,hashlib,json
+import sys
 from pathlib import Path,PurePosixPath
 from zipfile import ZipFile,ZipInfo,ZIP_DEFLATED
 root=Path(__file__).resolve().parents[1]
+sys.path.insert(0,str(root))
+from app.tunnel_binary import verify_binary,ASSETS
 version=(root/'VERSION').read_text().strip()
 meta=json.loads((root/'artifacts/runtime/provenance.json').read_text())
 runtime_package=root/'artifacts/runtime'/('python-'+meta['version']+'.nupkg')
@@ -31,10 +34,15 @@ with ZipFile(source) as src,ZipFile(runtime_package) as rt,ZipFile(out,'w',compr
     add(target,'runtime-original/'+runtime_package.name,raw)
     add(target,'runtime-original/provenance.json',json.dumps(meta,indent=2).encode())
     add(target,'runtime-original/extracted-files.sha256.json',json.dumps(runtime_hashes,sort_keys=True,indent=2).encode())
+    connector_name=ASSETS['windows-amd64'][0]
+    connector=verify_binary(root/'artifacts'/'connectors'/connector_name,'windows-amd64')
+    add(target,'connectors/'+connector_name,connector.read_bytes())
+    add(target,'connectors/provenance.json',(connector.parent/(connector_name+'.json')).read_bytes())
 with ZipFile(out) as z:
     assert z.testzip() is None
     assert name+'/runtime/python.exe' in z.namelist()
     assert name+'/START_WINDOWS.bat' in z.namelist()
+    assert name+'/START_PHONE.bat' in z.namelist() and name+'/connectors/'+connector_name in z.namelist()
     assert not any('/.data/' in n or n.endswith('/.env') or n.endswith('/farmadmin-login.txt') or n.endswith('.sqlite3') for n in z.namelist())
 digest=hashlib.sha256(out.read_bytes()).hexdigest()
 (out.with_suffix('.sha256')).write_text(digest+'  '+out.name+'\n')

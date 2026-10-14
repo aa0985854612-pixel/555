@@ -3,8 +3,8 @@ from pathlib import Path
 from datetime import datetime, timezone
 from .domain import Invalid, day, number, herd, consumption, age
 
-VERSION='1.1.0'
-KINDS=('barns','batches','movements','deliveries','usages','weights')
+VERSION='1.2.0'
+KINDS=('barns','batches','movements','deliveries','usages','weights','workbooks')
 
 class Problem(Exception):
     def __init__(self, code, status=400, details=None):
@@ -17,6 +17,11 @@ def now():
 
 def encode(obj):
     return json.dumps(obj, ensure_ascii=False, sort_keys=True, separators=(',',':'), allow_nan=False)
+
+def re_barn_number(value):
+    import re
+    match=re.fullmatch(r'\s*第?(\d+)棟\s*',value)
+    return int(match[1]) if match else None
 
 
 def password_hash(password, salt=None):
@@ -35,10 +40,10 @@ class Store:
         existed = self.path.exists() and self.path.stat().st_size > 0
         db = self.connect()
         version = db.execute('PRAGMA user_version').fetchone()[0]
-        if version > 2:
+        if version > 3:
             db.close()
             raise RuntimeError('Database schema is newer than this application')
-        if existed and version < 2:
+        if existed and version < 3:
             self.backup_sqlite(db, 'before-migration')
         db.executescript('''
         CREATE TABLE IF NOT EXISTS records(kind TEXT NOT NULL, id TEXT PRIMARY KEY, revision INTEGER NOT NULL, deleted INTEGER NOT NULL DEFAULT 0, data TEXT NOT NULL);
@@ -51,7 +56,7 @@ class Store:
         ''')
         if 'revision' not in {r['name'] for r in db.execute('PRAGMA table_info(users)')}:
             db.execute('ALTER TABLE users ADD COLUMN revision INTEGER NOT NULL DEFAULT 1')
-        db.execute('PRAGMA user_version=2');db.commit()
+        db.execute('PRAGMA user_version=3');db.commit()
         db.close()
         if self.path.exists():
             os.chmod(self.path, 0o600)
@@ -84,8 +89,33 @@ class Store:
         for r in db.execute('SELECT * FROM records WHERE deleted=0 ORDER BY rowid'):
             if r['kind'] not in data: raise RuntimeError('Unknown entity in database')
             data[r['kind']].append(json.loads(r['data']) | {'id':r['id'],'revision':r['revision']})
+        self.enrich_legacy(data)
         if owned: db.close()
         return data
+
+    def enrich_legacy(self,data):
+        books={book['id']:book for book in data['workbooks']}
+        for b in data['batches']:
+            if not b.get('legacy_source'):continue
+            book=books.get(b['legacy_source'])
+            if not book:continue
+            row=next((r for r in book['report']['rows'] if r['key']==b['legacy_row']),None)
+            plan=next((p for p in book['plan']['rows'] if p['key']==b['legacy_row']),None)
+            if not row or not plan:continue
+            members=[x['id'] for x in data['batches'] if x.get('legacy_source')==book['id'] and x.get('legacy_row')==row['key']]
+            b['legacy_group']={'id':book['id']+':'+row['key'],'members':members,'expected_members':len(row['barns']),'snapshots':plan['snapshots'],'as_of':book['report']['as_of']}
+            b['legacy_heads']={book['report']['as_of']:plan['current'].get(str(b['legacy_barn']),plan['current'].get(b['legacy_barn']))}
+            if book['plan']['counts_as_of']!=book['report']['as_of']:
+                b['legacy_heads'][book['plan']['counts_as_of']]=plan['before'].get(str(b['legacy_barn']),plan['before'].get(b['legacy_barn']))
+            b['legacy_values']={}
+            for snapshot_date in plan['snapshots']:
+                values={'entry':b['entry_count']}
+                for field,typ in [('sold','sale'),('culled','cull'),('dead','death')]:
+                    all_events=[e for e in row['events'] if e['type']==typ]
+                    dated=[e for e in all_events if e['date']<=snapshot_date]
+                    complete=sum(e['quantity'] for e in all_events)==row['totals'][field] and all(sum(a['quantity'] for a in e['allocations'])==e['quantity'] for e in dated)
+                    values[field]=sum(a['quantity'] for e in dated for a in e['allocations'] if a['barn']==b['legacy_barn']) if complete else None
+                b['legacy_values'][snapshot_date]=values
 
     def create_user(self, username, password, role='admin', actor='bootstrap'):
         if role not in ('admin','staff','viewer') or not isinstance(username,str) or not 1<=len(username.strip())<=80 or not isinstance(password,str) or not 12<=len(password)<=512:
@@ -138,16 +168,19 @@ class Store:
         def batch(key='batch_id', datekey='date'):
             b=lookup('batches',d.get(key))
             if day(d[datekey])<day(b['entry_date']): raise Invalid('before_entry')
+            if b.get('legacy_group') and kind=='movements' and d[datekey]<=b['legacy_group']['as_of']:
+                if not (kind=='movements' and d.get('type')=='adjustment' and d[datekey]==b['legacy_group']['as_of'] and user['role']=='admin'):raise Invalid('legacy_period_locked')
             if b['status']=='ended' and user['role']!='admin': raise Problem('batch_ended',403)
             return b
         d={k:v for k,v in d.items() if k not in ('id','revision','created_at','created_by','updated_at','deleted')}
         allowed={
             'barns':{'name','group'},
-            'batches':{'barn_id','name','group','entry_date','entry_count','entry_age_days','age_date','status','cohort_id'},
+            'batches':{'barn_id','name','group','entry_date','entry_count','entry_age_days','age_date','status','cohort_id','legacy_source','legacy_row','legacy_barn','note'},
             'movements':{'date','batch_id','type','quantity','note','target_batch_id','total_weight_kg'},
             'deliveries':{'date','kg','display_unit','vendor','item','note','allocations'},
             'usages':{'start','end','batch_id','method','kg','opening','closing','transfer_in','transfer_out','loss','note','active','vendor','item'},
             'weights':{'date','batch_id','age_days','pen','count','total_kg','individual_kg','sampling','note','representative'},
+            'workbooks':{'filename','base64','counts_text','counts_as_of','closed_barns','source_url','sha256','report','plan'},
         }[kind]
         d={k:v for k,v in d.items() if k in allowed}
         if kind=='barns':
@@ -155,8 +188,18 @@ class Store:
             if any(x['name']==d['name'] for x in data['barns']): raise Invalid('duplicate_barn')
         elif kind=='batches':
             lookup('barns',d.get('barn_id'));text('name',True);text('group')
-            day(d.get('entry_date'));qty('entry_count',False,True)
-            if d['entry_count']<0: raise Invalid('invalid_number')
+            day(d.get('entry_date'))
+            if d.get('legacy_source'):
+                book=lookup('workbooks',d['legacy_source'])
+                source=next((r for r in book['report']['rows'] if r['key']==d.get('legacy_row')),None)
+                if not source or d.get('legacy_barn') not in source['barns']:raise Invalid('missing_reference')
+                if d.get('entry_count') is not None:
+                    if len(source['barns'])!=1 or d['entry_count']!=source['totals']['entry']:raise Invalid('legacy_entry_unknown')
+                if d['entry_date']!=source['entry_date']:raise Invalid('legacy_source_conflict')
+                text('note')
+            else:
+                qty('entry_count',False,True)
+                if d['entry_count']<0: raise Invalid('invalid_number')
             if d.get('entry_age_days') is not None:
                 qty('entry_age_days')
                 if d['entry_age_days']<0: raise Invalid('invalid_number')
@@ -165,13 +208,13 @@ class Store:
             if d.get('status') not in ('active','ended'): raise Invalid('invalid_status')
             if any(x['barn_id']==d['barn_id'] and x['name']==d['name'] for x in data['batches']): raise Invalid('duplicate_batch')
             # Transfer destination is a separate zero-entry batch tied to the source cohort.
-            if d.get('cohort_id'):
+            if d.get('cohort_id') and not d.get('legacy_source'):
                 sources=[x for x in data['batches'] if (x.get('cohort_id') or x['id'])==d['cohort_id'] or x['id']==d['cohort_id']]
                 if not sources or d['entry_count']!=0: raise Invalid('invalid_transfer_batch')
                 source=sources[0]
                 if d['entry_age_days'] is None:
                     d.update(entry_age_days=source['entry_age_days'],age_date=source['age_date'])
-            else: d['cohort_id']=None
+            elif not d.get('legacy_source'): d['cohort_id']=None
         elif kind=='movements':
             day(d.get('date'));b=batch();text('note')
             k=d.get('type')
@@ -229,9 +272,20 @@ class Store:
             elif qty('age_days')<0:raise Invalid('invalid_number')
             if not isinstance(d.get('representative',False),bool):raise Invalid('invalid_status')
             d['representative']=d.get('representative',False)
+        elif kind=='workbooks':
+            from .legacy import unpack,review,reconcile,parse_counts
+            text('filename',True);text('source_url')
+            raw=unpack(d.get('base64'));report=review(raw)
+            closed=d.get('closed_barns',[])
+            if not isinstance(closed,list) or any(isinstance(n,bool) or not isinstance(n,int) for n in closed):raise Invalid('invalid_counts')
+            plan=reconcile(report,parse_counts(d.get('counts_text')),d.get('counts_as_of'),closed)
+            if any(x['issue']=='large_adjustment' for x in plan['issues']):raise Invalid('large_allocation_adjustment')
+            d.update(sha256=report['source_sha256'],report=report,plan=plan,closed_barns=closed)
         return d
 
     def validate_global(self, data):
+        data={kind:[dict(r) for r in rows] for kind,rows in data.items()}
+        self.enrich_legacy(data)
         bid={b['id']:b for b in data['batches']}
         barns={b['id'] for b in data['barns']}
         for b in data['batches']:
@@ -252,10 +306,12 @@ class Store:
                 if d['date']<bid[a['batch_id']]['entry_date']:raise Invalid('before_entry')
         # Daily deltas allow retroactive validation in O(records log records),
         # rather than rescanning the entire farm for each batch and date.
-        deltas={b['id']:{b['entry_date']:b['entry_count']} for b in data['batches']}
+        deltas={b['id']:{(b['legacy_group']['as_of'] if b.get('legacy_group') else b['entry_date']):(b['legacy_heads'][b['legacy_group']['as_of']] if b.get('legacy_group') else b['entry_count'])} for b in data['batches']}
         def apply(batch_id, date, change):
             dates=deltas[batch_id];dates[date]=dates.get(date,0)+change
         for m in data['movements']:
+            if bid[m['batch_id']].get('legacy_group') and m['date']<=bid[m['batch_id']]['legacy_group']['as_of']:
+                if m['type']!='adjustment' or m['date']!=bid[m['batch_id']]['legacy_group']['as_of']:raise Invalid('legacy_period_locked')
             change=m['quantity'] if m['type'] in ('arrival','adjustment') else -m['quantity']
             apply(m['batch_id'],m['date'],change)
             if m['type']=='transfer':apply(m['target_batch_id'],m['date'],m['quantity'])
@@ -264,6 +320,10 @@ class Store:
             for date in sorted(changes):
                 balance+=changes[date]
                 if balance<0:raise Invalid('insufficient_heads')
+        for book in data['workbooks']:
+            for row in book['report']['rows']:
+                members=[b for b in data['batches'] if b.get('legacy_source')==book['id'] and b.get('legacy_row')==row['key']]
+                if len(members)!=len(row['barns']) or {b['legacy_barn'] for b in members}!=set(row['barns']):raise Invalid('legacy_source_conflict')
         active_by_batch={}
         for u in data['usages']:
             if u['active']:active_by_batch.setdefault(u['batch_id'],[]).append(u)
@@ -272,8 +332,9 @@ class Store:
             if any(a['end']>b['start'] for a,b in zip(rows,rows[1:])):raise Invalid('overlapping_usage')
 
     def mutate(self, user, kind, payload, request_key, rid=None, delete=False):
-        self.require(user,admin=kind in ('barns','batches') or rid is not None)
+        self.require(user,admin=kind in ('barns','batches','workbooks') or rid is not None)
         if kind not in KINDS:raise Problem('unknown_kind',404)
+        if kind=='workbooks':raise Problem('legacy_source_readonly',403)
         if not isinstance(payload,dict) or not isinstance(request_key,str) or not 16<=len(request_key)<=128:raise Problem('idempotency_required')
         fingerprint=hashlib.sha256(encode([kind,rid,delete,payload]).encode()).hexdigest()
         db=self.connect()
@@ -308,17 +369,58 @@ class Store:
         except Invalid as e:raise Problem(str(e))
         finally:db.close()
 
+    def import_workbook(self,user,payload,request_key):
+        self.require(user,True)
+        if not isinstance(payload,dict) or not isinstance(request_key,str) or not 16<=len(request_key)<=128:raise Problem('idempotency_required')
+        cleaned=self.validate('workbooks',dict(payload),self.snapshot(),user)
+        fingerprint=hashlib.sha256(encode(['workbook',payload]).encode()).hexdigest()
+        # Back up before any account/record mutation, including legacy ingestion.
+        self.backup_sqlite(label='before-workbook-import')
+        db=self.connect()
+        try:
+            db.execute('BEGIN IMMEDIATE')
+            prior=db.execute('SELECT * FROM requests WHERE user_id=? AND key=?',(user['id'],request_key)).fetchone()
+            if prior:
+                if prior['fingerprint']!=fingerprint:raise Problem('idempotency_mismatch',409)
+                return json.loads(prior['result'])
+            data=self.snapshot(db)
+            existing=next((book for book in data['workbooks'] if book['sha256']==cleaned['sha256']),None)
+            if existing:
+                result={'book_id':existing['id'],'already_imported':True,'barns_added':0,'batches_added':0}
+            else:
+                book_id=str(uuid.uuid5(uuid.NAMESPACE_URL,'pigledger-workbook:'+cleaned['sha256']))
+                def insert(kind,content,rid=None):
+                    output=content|{'id':rid or str(uuid.uuid4()),'revision':1,'created_at':now(),'created_by':user['id'],'updated_at':now()}
+                    db.execute('INSERT INTO records(kind,id,revision,deleted,data) VALUES(?,?,1,0,?)',(kind,output['id'],encode(output)))
+                    self.audit(db,user['id'],'import-workbook',kind,output['id'],None,output if kind!='workbooks' else {'sha256':cleaned['sha256'],'filename':cleaned['filename']})
+                    data[kind].append(output);return output
+                insert('workbooks',cleaned,book_id);barns_added=batches_added=0
+                for row in cleaned['report']['rows']:
+                    plan=next(p for p in cleaned['plan']['rows'] if p['key']==row['key']);cohort_id=None
+                    for barn_number in row['barns']:
+                        barn=next((b for b in data['barns'] if re_barn_number(b['name'])==barn_number),None)
+                        if not barn:
+                            barn=insert('barns',{'name':str(barn_number)+'棟','group':''});barns_added+=1
+                        if any(b['barn_id']==barn['id'] and b['name']==row['name'] for b in data['batches']):raise Problem('legacy_source_conflict',409)
+                        head=plan['current'].get(str(barn_number),plan['current'].get(barn_number))
+                        batch={'barn_id':barn['id'],'name':row['name'],'group':row['name'],'entry_date':row['entry_date'],'entry_count':row['totals']['entry'] if len(row['barns'])==1 else None,'entry_age_days':row['entry_age_days'],'age_date':row['entry_date'],'status':'ended' if head==0 else 'active','cohort_id':cohort_id,'legacy_source':book_id,'legacy_row':row['key'],'legacy_barn':barn_number,'note':'來源表合併名稱；分棟數為暫定核對分配。首次進場計齡，原始明細、公式與備註保存在 Excel 來源。'}
+                        created=insert('batches',self.validate('batches',batch,data,user));cohort_id=cohort_id or created['id'];batches_added+=1
+                self.validate_global(self.snapshot(db))
+                result={'book_id':book_id,'already_imported':False,'barns_added':barns_added,'batches_added':batches_added}
+            db.execute('INSERT INTO requests VALUES(?,?,?,?)',(user['id'],request_key,fingerprint,encode(result)));db.commit();return result
+        finally:db.close()
+
     def export_backup(self):
         self.backup_sqlite(label='export')
         db=self.connect()
         try:
             db.execute('BEGIN')
-            return {'format':'pigledger-backup','schema':2,'version':VERSION,'exported_at':now(),'records':[dict(r) for r in db.execute('SELECT * FROM records')],'users':[dict(r) for r in db.execute('SELECT * FROM users')],'audit':[dict(r) for r in db.execute('SELECT * FROM audit ORDER BY seq')]}
+            return {'format':'pigledger-backup','schema':3,'version':VERSION,'exported_at':now(),'records':[dict(r) for r in db.execute('SELECT * FROM records')],'users':[dict(r) for r in db.execute('SELECT * FROM users')],'audit':[dict(r) for r in db.execute('SELECT * FROM audit ORDER BY seq')]}
         finally:db.close()
 
     def import_backup(self, user, document):
         self.require(user,True)
-        if not isinstance(document,dict) or document.get('format')!='pigledger-backup' or document.get('schema') not in (1,2):raise Problem('invalid_backup')
+        if not isinstance(document,dict) or document.get('format')!='pigledger-backup' or document.get('schema') not in (1,2,3):raise Problem('invalid_backup')
         self.backup_sqlite(label='before-import')
         db=self.connect()
         added=skipped=0

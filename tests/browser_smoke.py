@@ -76,23 +76,23 @@ with sync_playwright() as p:
     form.locator('[name=quantity]').fill('1');context.set_offline(True);form.locator('.primary').click();page.wait_for_selector('#pending:not([hidden])');assert form.locator('[name=quantity]').input_value()=='1'
     context.set_offline(False);page.locator('#retry').click();page.wait_for_function('()=>pending===null');passed('offline is pending until explicit successful retry')
     # Screenshot from synthetic fixture only.
-    page.locator('nav [href="#daily"]').click();page.evaluate('scrollTo(0,0)');page.wait_for_timeout(500);page.screenshot(path=str(out/'desktop-1.1.0.png'),full_page=True)
+    page.locator('nav [href="#daily"]').click();page.evaluate('scrollTo(0,0)');page.wait_for_timeout(500);page.screenshot(path=str(out/'desktop-1.2.0.png'),full_page=True)
     for size in [{'width':390,'height':844},{'width':768,'height':1024},{'width':1440,'height':900}]:
         page.set_viewport_size(size)
         for name in ['daily','stats','history','feed','weights','settings']:
             page.locator(f'nav [href="#{name}"]').click();page.wait_for_timeout(100)
             assert page.evaluate('document.documentElement.scrollWidth<=innerWidth'),(size,name)
-    page.set_viewport_size({'width':390,'height':844});page.locator('nav [href="#daily"]').click();page.wait_for_timeout(300);page.evaluate('scrollTo(0,0)');page.screenshot(path=str(out/'mobile-1.1.0.png'),full_page=True)
+    page.set_viewport_size({'width':390,'height':844});page.locator('nav [href="#daily"]').click();page.wait_for_timeout(300);page.evaluate('scrollTo(0,0)');page.screenshot(path=str(out/'mobile-1.2.0.png'),full_page=True)
     passed('390px phone, 768px tablet, desktop: all six pages without page overflow')
     # Separate browser session validates viewer UI and server enforcement.
     readonly=browser.new_context();rpage=readonly.new_page();rpage.goto(base);rpage.locator('#login-form [name=username]').fill('reader');rpage.locator('#login-form [name=password]').fill('browser-test-password');rpage.locator('#login-form button').click();rpage.wait_for_selector('#barns .barn-card')
     assert rpage.locator('#movement-form [name=quantity]').is_disabled()
     code=rpage.evaluate("""async()=>{const m=await (await fetch('/api/me')).json();return (await fetch('/api/movements',{method:'POST',headers:{'Content-Type':'application/json','X-CSRF-Token':m.csrf,'Idempotency-Key':crypto.randomUUID()},body:JSON.stringify({})})).status}""")
     assert code==403;passed('viewer UI and actual server denial (403)')
-    page.locator('#logout').click();page.wait_for_selector('#login-view:not([hidden])');page.locator('#login-form [name=username]').fill('reader');page.locator('#login-form [name=password]').fill('browser-test-password');page.locator('#login-form button').click();page.wait_for_selector('#workspace:not([hidden])');page.wait_for_timeout(300);assert page.locator('#movement-form [name=quantity]').is_disabled();assert page.locator('#movement-form .primary').is_disabled();page.locator('nav [href="#settings"]').click();assert page.locator('.admin-section').is_hidden()
+    page.locator('#logout').click();page.wait_for_selector('#login-view:not([hidden])');page.locator('#login-form [name=username]').fill('reader');page.locator('#login-form [name=password]').fill('browser-test-password');page.locator('#login-form button').click();page.wait_for_selector('#workspace:not([hidden])');page.wait_for_timeout(300);assert page.locator('#movement-form [name=quantity]').is_disabled();assert page.locator('#movement-form .primary').is_disabled();page.locator('nav [href="#settings"]').click();assert page.locator('.admin-section').evaluate_all('(els)=>els.every(e=>e.hidden)')
     passed('account switch reloads role restrictions and hides administrator controls')
     assert not errors,errors;passed('no uncaught JavaScript errors')
     browser.close()
 server.shutdown();server.server_close();tmp.cleanup()
-(out/'browser-results.json').write_text(json.dumps({'version':'1.1.0','type':'real Chromium + synthetic fixtures','passed':results},ensure_ascii=False,indent=2))
+(out/'browser-results.json').write_text(json.dumps({'version':'1.2.0','type':'real Chromium + synthetic fixtures','passed':results},ensure_ascii=False,indent=2))
 print('Completed',len(results),'browser scenarios')

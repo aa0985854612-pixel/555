@@ -37,8 +37,31 @@ def herd(batches, movements, on, selected=None, before=False):
     ids = set(selected if selected is not None else [b['id'] for b in batches])
     valid = lambda d: d < on if before else d <= on
     # Entry stocks exist at the beginning of the entry day.
-    entry = sum(b['entry_count'] for b in batches if b['id'] in ids and b['entry_date'] <= on)
+    entry = sum(b['entry_count'] for b in batches if b['id'] in ids and b['entry_date'] <= on and not b.get('legacy_group'))
     result = dict(entry=entry, added=0, sold=0, culled=0, dead=0, transfer_in=0, transfer_out=0, adjustment=0)
+    baseline_remaining=0;unknown_remaining=False;unknown_fields=set();seen=set();legacy=False
+    for b in batches:
+        if b['id'] not in ids or b['entry_date']>on or not b.get('legacy_group'):continue
+        legacy=True;group=b['legacy_group'];key=group['id']
+        if key in seen:continue
+        seen.add(key)
+        members=[x for x in batches if x['id'] in group['members'] and x['id'] in ids]
+        effective=group['as_of'] if (on>group['as_of'] or (on==group['as_of'] and not before)) else on
+        if before and effective==on:effective=None
+        snapshot=group['snapshots'].get(effective)
+        complete=len(group['members'])==group['expected_members'] and set(group['members'])<=ids
+        if complete and snapshot:
+            for k in ('entry','sold','culled','dead'):result[k]+=snapshot[k]
+            baseline_remaining+=snapshot['remaining']
+        else:
+            for member in members:
+                stock=member['legacy_heads'].get(effective)
+                if stock is None:unknown_remaining=True
+                else:baseline_remaining+=stock
+                known=member.get('legacy_values',{}).get(effective,{})
+                for field in ('entry','sold','culled','dead'):
+                    if known.get(field) is None:unknown_fields.add(field)
+                    else:result[field]+=known[field]
     for m in movements:
         if not valid(m['date']):
             continue
@@ -54,10 +77,18 @@ def herd(batches, movements, on, selected=None, before=False):
         elif included:
             key = {'sale':'sold', 'cull':'culled', 'death':'dead', 'arrival':'added', 'adjustment':'adjustment'}[k]
             result[key] += q
-    result['remaining'] = entry + result['added'] + result['transfer_in'] - result['transfer_out'] + result['adjustment'] - result['sold'] - result['culled'] - result['dead']
-    result['outgoing'] = result['sold'] + result['culled']
-    result['denominator'] = entry + result['added'] + result['transfer_in']
-    result['survival'] = (result['denominator'] - result['dead']) / result['denominator'] * 100 if result['denominator'] else None
+    # Legacy exits are already reflected in baseline stock. Only new operational
+    # movements enter the balance a second time; original group totals stay exact.
+    operational=[m for m in movements if valid(m['date'])]
+    out_delta=sum(m['quantity'] for m in operational if m['batch_id'] in ids and m['type'] in ('sale','cull','death'))
+    result['remaining'] = None if unknown_remaining else entry+baseline_remaining+result['added']+result['transfer_in']-result['transfer_out']+result['adjustment']-out_delta
+    if not legacy:
+        result['remaining']=entry+result['added']+result['transfer_in']-result['transfer_out']+result['adjustment']-result['sold']-result['culled']-result['dead']
+    for field in unknown_fields:result[field]=None
+    result['legacy_source']=legacy;result['historical_unknown']=unknown_remaining or bool(unknown_fields)
+    result['outgoing'] = result['sold'] + result['culled'] if result['sold'] is not None and result['culled'] is not None else None
+    result['denominator'] = result['entry']+result['added']+result['transfer_in'] if result['entry'] is not None else None
+    result['survival'] = (result['denominator'] - result['dead']) / result['denominator'] * 100 if result['denominator'] and result['dead'] is not None else None
     return result
 
 
@@ -107,6 +138,8 @@ def performance(batch, batches, movements, weights, usages, deliveries, until, s
         result['reasons'].append('representative_required')
     n0 = herd(batches, movements, first['date'], [batch['id']], before=True)['remaining']
     n1 = herd(batches, movements, last['date'], [batch['id']], before=True)['remaining']
+    if n0 is None or n1 is None:
+        result['reasons'].append('legacy_history_unknown');return result
     if n0 <= 0 or n1 < 0:
         result['reasons'].append('invalid_herd')
     gain = last['mean'] * n1 - first['mean'] * n0

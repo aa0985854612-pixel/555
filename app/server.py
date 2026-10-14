@@ -19,7 +19,8 @@ def filter_rows(kind,data,query):
     get=lambda key:query.get(key,[''])[0]
     ids=set(selected_ids(data,query));scoped=any(get(k) for k in ('batch_id','barn_id','group'))
     rows=[]
-    for r in data[kind]:
+    candidates=data[kind]+legacy_history_rows(data) if kind=='movements' else data[kind]
+    for r in candidates:
         rd=r.get('date') or r.get('start') or r.get('entry_date','')
         if get('from') and (r['end']<=get('from') if kind=='usages' else rd<get('from')):continue
         if get('to') and rd>get('to'):continue
@@ -31,8 +32,25 @@ def filter_rows(kind,data,query):
         elif kind=='batches':
             if r['id'] not in ids:continue
         elif r.get('batch_id') and r['batch_id'] not in ids and r.get('target_batch_id') not in ids:continue
+        elif r.get('legacy_source') and not r.get('batch_id') and scoped:
+            if get('batch_id') or get('barn_id') or not (set(r['legacy_members'])&ids):continue
         rows.append(r)
     return sorted(rows,key=lambda r:r.get('date') or r.get('start') or r.get('entry_date',''),reverse=True)
+
+def legacy_history_rows(data):
+    """Read-only source events; excluded from live deltas already in baseline stock."""
+    import uuid
+    output=[]
+    for book in data.get('workbooks',[]):
+        for source in book['report']['rows']:
+            members=[b for b in data['batches'] if b.get('legacy_source')==book['id'] and b.get('legacy_row')==source['key']]
+            for index,event in enumerate(source['events']):
+                allocations=event['allocations'] or [{'barn':None,'quantity':event['quantity']}]
+                for allocation in allocations:
+                    batch=next((b for b in members if b['legacy_barn']==allocation['barn']),None)
+                    rid=str(uuid.uuid5(uuid.NAMESPACE_URL,book['id']+':'+event['cell']+':'+str(index)+':'+str(allocation['barn'])))
+                    output.append({'id':rid,'revision':1,'date':event['date'],'type':event['type'],'quantity':allocation['quantity'],'batch_id':batch['id'] if batch else None,'legacy_batch':source['name'],'legacy_members':[b['id'] for b in members],'legacy_source':book['id'],'source_cell':book['report']['sheet']+'!'+event['cell'],'note':event['text']+(' [以儲存公式的正常出豬數為準，死亡另計]' if event.get('formula_count_corrected') else '')})
+    return output
 
 
 def statistics(data,query):
@@ -43,10 +61,15 @@ def statistics(data,query):
     if start and start>until:raise Invalid('invalid_period')
     ids=selected_ids(data,query)
     cumulative=herd(data['batches'],data['movements'],until,ids)
+    scoped=any(get(k) for k in ('batch_id','barn_id','group'))
+    supported=[d for book in data.get('workbooks',[]) for row in book['plan']['rows'] for d in row['snapshots']]
+    if not scoped and supported and until<min(supported):
+        for field in ('entry','sold','culled','dead','remaining','outgoing','denominator','survival'):cumulative[field]=None
+        cumulative['historical_unknown']=True
     stats={'as_of':until,'cumulative':cumulative,'ids':ids,'interval':None,'batches':[]}
     chosen=set(ids)
     if start:
-        delta=dict(entry=sum(b['entry_count'] for b in data['batches'] if b['id'] in chosen and start<=b['entry_date']<=until),sale=0,cull=0,death=0,arrival=0,adjustment=0,transfer_in=0,transfer_out=0)
+        delta=dict(entry=sum(b['entry_count'] or 0 for b in data['batches'] if b['id'] in chosen and start<=b['entry_date']<=until),sale=0,cull=0,death=0,arrival=0,adjustment=0,transfer_in=0,transfer_out=0)
         for m in data['movements']:
             if not start<=m['date']<=until:continue
             if m['type']=='transfer':
@@ -54,6 +77,9 @@ def statistics(data,query):
                 if m['target_batch_id'] in chosen and m['batch_id'] not in chosen:delta['transfer_in']+=m['quantity']
             elif m['batch_id'] in chosen:delta[m['type']]+=m['quantity']
         stats['interval']=delta
+        if any(b['id'] in chosen and b.get('legacy_group') and start<=b['legacy_group']['as_of'] and until>=b['entry_date'] for b in data['batches']) or (not scoped and supported and until<min(supported)):
+            stats['legacy_interval_unknown']=True
+            stats['interval']={key:None for key in delta}
     scoped=any(get(k) for k in ('batch_id','barn_id','group'))
     deliveries=[d for d in data['deliveries'] if d['date']<=until and (not start or d['date']>=start)]
     stats['delivery_kg']=sum(sum(a['kg'] for a in d['allocations'] if a['batch_id'] in chosen) if scoped else d['kg'] for d in deliveries)
@@ -89,7 +115,7 @@ class Server(ThreadingHTTPServer):
     daemon_threads=True
     def __init__(self,address,store,secure=False):
         super().__init__(address,Handler)
-        self.store=store;self.secure=secure;self.instance=secrets.token_hex(8);self.login_attempts={};self.lock=threading.Lock()
+        self.store=store;self.secure=secure;self.instance=secrets.token_hex(8);self.login_attempts={};self.lock=threading.Lock();self.public_host=None
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -131,7 +157,7 @@ class Handler(BaseHTTPRequestHandler):
     def protect(self,user):
         if not hmac_safe(self.headers.get('X-CSRF-Token',''),user['csrf']):raise Problem('csrf_failed',403)
         origin=self.headers.get('Origin')
-        if origin and urlparse(origin).netloc!=self.headers.get('Host'):raise Problem('csrf_failed',403)
+        if origin and (urlparse(origin).netloc!=self.headers.get('Host') or (self.server.public_host and urlparse(origin).scheme!='https')):raise Problem('csrf_failed',403)
     def do_GET(self):self.run('GET')
     def do_POST(self):self.run('POST')
     def do_PUT(self):self.run('PUT')
@@ -147,6 +173,8 @@ class Handler(BaseHTTPRequestHandler):
     def dispatch(self,method):
         url=urlparse(self.path);path=url.path;query=parse_qs(url.query,keep_blank_values=True)
         store=self.server.store
+        if self.server.public_host and self.headers.get('Host')!=self.server.public_host:
+            raise Problem('invalid_host',403)
         if path=='/api/health' and method=='GET':
             db=store.connect()
             try:db.execute('SELECT 1').fetchone()
@@ -154,7 +182,7 @@ class Handler(BaseHTTPRequestHandler):
             return self.send({'ok':True,'version':VERSION,'profile_id':hashlib.sha256(str(store.path.resolve()).encode()).hexdigest()[:16]})
         if path=='/api/login' and method=='POST':
             origin=self.headers.get('Origin')
-            if origin and urlparse(origin).netloc!=self.headers.get('Host'):raise Problem('csrf_failed',403)
+            if origin and (urlparse(origin).netloc!=self.headers.get('Host') or (self.server.public_host and urlparse(origin).scheme!='https')):raise Problem('csrf_failed',403)
             body=self.body();username=body.get('username','');password=body.get('password','')
             if not isinstance(username,str) or not isinstance(password,str) or len(password)>512:raise Problem('invalid_credentials',401)
             key=(self.client_address[0],username)
@@ -219,17 +247,29 @@ class Handler(BaseHTTPRequestHandler):
                 store.require(user,True)
                 return self.send(store.export_backup(),headers={'Content-Disposition':'attachment; filename="pigledger-'+VERSION+'-'+date.today().isoformat()+'.json"'})
             if path=='/api/import' and method=='POST':return self.send(store.import_backup(user,self.body()))
+            if path=='/api/workbook/preview' and method=='POST':
+                store.require(user,True)
+                cleaned=store.validate('workbooks',self.body(),store.snapshot(),user)
+                return self.send({'filename':cleaned['filename'],'sha256':cleaned['sha256'],'report':cleaned['report'],'plan':cleaned['plan']})
+            if path=='/api/workbook/import' and method=='POST':
+                return self.send(store.import_workbook(user,self.body(),self.headers.get('Idempotency-Key')),201)
+            if path.startswith('/api/workbooks/') and path.endswith('/file') and method=='GET':
+                import base64
+                from urllib.parse import quote
+                rid=path.split('/')[3];book=next((b for b in store.snapshot()['workbooks'] if b['id']==rid),None)
+                if not book:raise Problem('not_found',404)
+                return self.send(base64.b64decode(book['base64']),content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',headers={'Content-Disposition':"attachment; filename*=UTF-8''"+quote(book['filename'])})
             if path=='/api/export' and method=='GET':
                 kind=query.get('kind',['movements'])[0]
                 if kind not in ('movements','deliveries','usages','weights'):raise Problem('unknown_kind')
                 data=store.snapshot();rows=filter_rows(kind,data,query)
                 batches={b['id']:b for b in data['batches']};barns={b['id']:b['name'] for b in data['barns']}
                 out=io.StringIO();writer=csv.writer(out)
-                writer.writerow(['id','revision','date','end_exclusive','barn','batch','type_or_source','quantity','unit','mean_kg','age_days','vendor','item','note','allocations','status','sample_count','individual_weights_kg','pen','selected_allocated_kg'])
+                writer.writerow(['id','revision','date','end_exclusive','barn','batch','type_or_source','quantity','unit','mean_kg','age_days','vendor','item','note','allocations','status','sample_count','individual_weights_kg','pen','selected_allocated_kg','calculation_source','source_cell'])
                 for r in rows:
                     batch=batches.get(r.get('batch_id'),{})
                     q=consumption(r,data['deliveries']) if kind=='usages' else r.get('quantity',r.get('kg',r.get('total_kg','')))
-                    values=[r['id'],r['revision'],r.get('date',r.get('start','')),r.get('end',''),barns.get(batch.get('barn_id'),''),batch.get('name',''),r.get('type',r.get('method','sample' if kind=='weights' else 'delivery')),q,'heads' if kind=='movements' else 'kg',r['total_kg']/r['count'] if kind=='weights' else '',r.get('age_days',''),r.get('vendor',''),r.get('item',''),r.get('note',''),encode(r.get('allocations',[])),('active' if r['active'] else 'excluded') if kind=='usages' else '',r.get('count',''),encode(r.get('individual_kg',[])),r.get('pen',''),sum(a['kg'] for a in r.get('allocations',[]) if a['batch_id'] in set(selected_ids(data,query)))]
+                    values=[r['id'],r['revision'],r.get('date',r.get('start','')),r.get('end',''),barns.get(batch.get('barn_id'),''),batch.get('name',r.get('legacy_batch','')),r.get('type',r.get('method','sample' if kind=='weights' else 'delivery')),q,'heads' if kind=='movements' else 'kg',r['total_kg']/r['count'] if kind=='weights' else '',r.get('age_days',''),r.get('vendor',''),r.get('item',''),r.get('note',''),encode(r.get('allocations',[])),('active' if r['active'] else 'excluded') if kind=='usages' else '',r.get('count',''),encode(r.get('individual_kg',[])),r.get('pen',''),sum(a['kg'] for a in r.get('allocations',[]) if a['batch_id'] in set(selected_ids(data,query))) ,'legacy_excel_readonly' if r.get('legacy_source') else r.get('method','recorded'),r.get('source_cell','')]
                     # Spreadsheet formula injection protection; original fields remain intact in backups.
                     writer.writerow(["'"+v if isinstance(v,str) and v.startswith(('=','+','-','@','\t','\r')) else v for v in values])
                 return self.send(('\ufeff'+out.getvalue()).encode(),content_type='text/csv; charset=utf-8',headers={'Content-Disposition':'attachment; filename="'+kind+'-'+VERSION+'.csv"'})

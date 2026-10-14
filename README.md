@@ -1,46 +1,39 @@
-# 肉豬紀錄管理 App — PigLedger 1.1.0
+# 肉豬紀錄管理 App — PigLedger 1.2.0
 
-**只有 Windows 筆電？下載筆電版，全部解壓縮後雙擊 `START_WINDOWS.bat`。**
+**Windows 筆電使用 START_WINDOWS.bat；手機外出使用 START_PHONE.bat。**
 
-- **[下載 Windows 筆電版 v1.1.0](https://github.com/aa0985854612-pixel/555/raw/refs/heads/main/release/pigledger-windows-1.1.0.zip)**（內附 Python，不必安裝 Docker／另租主機）
-- [Windows 操作說明](WINDOWS_README.txt)
-- [本版測試及資料保留](docs/TEST_REPORT_1.1.0.md)
-- [完整原始碼包](https://github.com/aa0985854612-pixel/555/raw/refs/heads/main/release/pigledger-1.1.0.zip)
+- [下載 Windows／手機版 v1.2.0](https://github.com/aa0985854612-pixel/555/raw/refs/heads/main/release/pigledger-windows-1.2.0.zip)，全部解壓縮後啟動，內附官方 Python 與 Cloudflare 連線程式。
+- [Windows／手機操作說明](WINDOWS_README.txt)
+- [Excel 移入說明](docs/EXCEL_IMPORT.md)
+- [本版測試結果與限制](docs/TEST_REPORT_1.2.0.md)
+- [完整原始碼包](https://github.com/aa0985854612-pixel/555/raw/refs/heads/main/release/pigledger-1.2.0.zip)
 
-首次啟動在黑色視窗設定帳號與至少12字元密碼，瀏覽器自動開啟後登入。密碼輸入不顯示字元是正常的。再次開啟沿用帳號與資料。使用時保留啟動視窗，按Ctrl+C可停止。
+首次啟動設定管理員與至少12字元密碼；再次啟動沿用帳號與資料。資料固定存在 %LOCALAPPDATA%\PigLedger\data\pigledger.sqlite3，換版本資料夾不重建。schema2→3 自動先備份，保留帳號、原始紀錄與歷程。程式包不包含使用者工作簿、農場資料或密碼。
 
-Windows 資料固定放在 `%LOCALAPPDATA%\PigLedger\data\pigledger.sqlite3`，與解壓的版本資料夾分開。更新前備份、關掉舊視窗，再雙擊新版。之前雲端開發環境的帳號不會跟程式包搬到筆電；下載包沒有正式密碼或農場資料。備份可匯入同一 App 的雲端部署。
+手机模式取得臨時 HTTPS 網址，Safari／Chrome 可用行動網路登入。啟動器檢查公開健康狀態成功才顯示可用網址。筆電必須開機、連網、不睡眠；Ctrl+C 只停止自己的服務。Cloudflare Quick Tunnel 沒有全天候服務保證，重啟可能換網址。固定正式網址使用[雲端部署](docs/DEPLOY.md)。本雲端網路阻擋 Cloudflare API，Windows雙擊及真正外出手機連線仍待實機驗收。
 
-這是同一套六頁 App、資料模型及權限。Windows 版本僅新增啟動器，沒有另寫一套不相通的計算。支援繁體中文／越南語，豬隻異動、到料與耗料分開、加權均重、ADG、FCR、CSV、備份、更正歷程及重送／衝突處理。沒有自動叫料、配送或採食量預測。
+六頁共用一份 SQLite：每日登記、週期統計、歷史紀錄、飼料紀錄、秤重紀錄、設定。繁體中文／越南語、角色、修訂衝突、重送去重、CSV、備份與計算沿用共用程式。沒有自動叫料、配送或採食量預測。
 
-## 雲端部署
+設定內可預覽與匯入「肉豬各周存欄頭數」原始 XLSX。填實際盤點日與概略分棟數，按原表總數核對。來源累計不再次扣除；分棟分配標示暫定，缺各棟進場分母／死亡時育成率未知。原檔、舊表、公式與備註保存於私密備份。來源歷史／CSV標示唯讀及儲存格；缺日期或样本頭數的內容不變成假異動或假秤重。合併批次用首次進場日計齡，保留原始明細。
 
-Docker 原有方式保留，參考[部署說明](docs/DEPLOY.md)。正式使用手機／多人遠端操作，需部署到HTTPS網站；不要開HTML檔案預覽。單機 Windows 版僅提供筆電自己的 loopback 連線，不提供公開網址。
+## 開發與重建
 
-- [日常登記指南](docs/USER_GUIDE.md)
-- [資料模型及備份](docs/DATA.md)
-- [舊版1.0.0測試報告](docs/TEST_REPORT.md)
-
-## 開發驗證
-
-共用應用使用 Python 3.12+ 標準函式庫，無第三方應用依賴。
+App 使用 Python3.12+ 標準函式庫，XLSX解析不需 openpyxl。瀏覽器測試需 Playwright／Chromium，TLS測試需 OpenSSL。
 
 ```sh
 ./scripts/check.sh
 python3 tests/browser_smoke.py
+python3 tests/legacy_browser.py
 python3 tests/pwa_test.py
 ```
 
-本機啟動器可在已有Python環境執行 `python3 -m app.desktop`；啟動器會依作業系統決定資料位置。測試用 `--data-dir`指定隔離暫存位置，不寫入正式資料。Linux/macOS可用啟動器，但本次交付的內附執行環境ZIP為Windows x64。
-
-Windows runtime 來源為 CPython 官方 Windows 文件推薦的 PSF NuGet `python` 套件。打包時以官方catalog SHA-512核對完整原包，保留 NuGet 原包及逐檔校驗資料，不修改DLL。原生Windows雙擊操作尚未在本雲端Linux機驗收，詳見本版報告。
-
-重建Windows交付包：
-
 ```sh
 python3 scripts/fetch_windows_runtime.py
+python3 scripts/fetch_cloudflared.py --platform windows-amd64
 python3 scripts/package.py
 python3 scripts/package_windows.py
 ```
 
-打包腳本會核對已下載的PSF原包SHA-512，拒絕不一致的檔案；不會把使用者資料夾放進程式包。
+PSF NuGet Python3.14.8 原包以官方catalog SHA-512核對，保留原包、signature及逐檔SHA-256。cloudflared2026.10.0 以官方release SHA-256核對，與winget manifest相符，啟動前再驗證；二進位不修改、不停用TLS、不自動升級connector，Apache授權隨包保存。
+
+Linux開發可用 python3 -m app.desktop --data-dir /tmp/isolated-farm。手機啟動器額外指定已驗證的Linux connector。測試使用隔離資料，不更改正式農場。歷史版本程式包與報告保留。
