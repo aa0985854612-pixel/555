@@ -21,6 +21,7 @@ TABLES=('records','users','requests','audit')
 CLOUD_SCHEMA='''
 CREATE TABLE IF NOT EXISTS cloud_backups(id TEXT PRIMARY KEY, timestamp TEXT NOT NULL, label TEXT NOT NULL, data TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS cloud_login_attempts(key TEXT PRIMARY KEY, data TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS cloud_metadata(key TEXT PRIMARY KEY, value TEXT NOT NULL);
 '''
 
 def endpoint(database_url):
@@ -172,9 +173,15 @@ class CloudStore(Store):
     def assert_ready(self):
         db=self.connect()
         try:
-            version=db.execute('PRAGMA user_version').fetchone()[0]
-            if version!=3:raise Problem('cloud_database_uninitialized',503)
-            if not db.execute("SELECT 1 FROM sqlite_master WHERE type='table' AND name='cloud_backups'").fetchone():
+            tables={row['name'] for row in db.execute("SELECT name FROM sqlite_master WHERE type='table' AND name IN ('cloud_metadata','cloud_backups')")}
+            if 'cloud_backups' not in tables:raise Problem('cloud_database_uninitialized',503)
+            if 'cloud_metadata' in tables:
+                row=db.execute("SELECT value FROM cloud_metadata WHERE key='schema_version'").fetchone()
+                version=row['value'] if row else None
+                if version!='3':raise Problem('cloud_database_uninitialized',503)
+            elif db.execute('PRAGMA user_version').fetchone()[0]!=3:
+                # Read compatibility for previously migrated libSQL databases.
+                # Never create or update schema from a normal API request.
                 raise Problem('cloud_database_uninitialized',503)
         finally:db.close()
     def backup_sqlite(self,db=None,label='backup'):
@@ -221,11 +228,16 @@ def migrate(source,cloud):
     try:
         db.execute('BEGIN IMMEDIATE')
         tables={r['name'] for r in db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+        if 'cloud_metadata' in tables:
+            marker=db.execute("SELECT value FROM cloud_metadata WHERE key='schema_version'").fetchone()
+            if marker and marker['value']!='3':raise Problem('cloud_migration_conflict',409)
         if any(t in tables for t in TABLES):
             if not set(TABLES).issubset(tables):raise Problem('cloud_migration_conflict',409)
             current=read_document(db)
             if any(current.values()):
                 if fingerprint(current)!=fingerprint(document):raise Problem('cloud_migration_conflict',409)
+                db.executescript(CLOUD_SCHEMA)
+                db.execute("INSERT INTO cloud_metadata(key,value) VALUES('schema_version','3') ON CONFLICT(key) DO UPDATE SET value=excluded.value")
                 db.commit()
                 return {'already_migrated':True,'source_backup':str(backup),'counts':{k:len(v) for k,v in document.items()}}
         db.executescript(SCHEMA);db.executescript(CLOUD_SCHEMA)
@@ -234,7 +246,9 @@ def migrate(source,cloud):
                 columns=list(row)
                 db.execute('INSERT INTO '+table+'('+','.join(columns)+') VALUES('+','.join('?' for _ in columns)+')',tuple(row.values()))
         if fingerprint(read_document(db))!=fingerprint(document):raise Problem('cloud_migration_verification',500)
-        db.execute('PRAGMA user_version=3')
+        # Turso can reject PRAGMA assignments while allowing normal table writes.
+        # Keep the cloud schema marker in the same verified migration transaction.
+        db.execute("INSERT INTO cloud_metadata(key,value) VALUES('schema_version','3') ON CONFLICT(key) DO UPDATE SET value=excluded.value")
         db.execute('INSERT INTO cloud_backups VALUES(?,?,?,?)',(str(uuid.uuid4()),now(),'initial-vercel-migration',encode(document)))
         db.commit()
         return {'already_migrated':False,'source_backup':str(backup),'counts':{k:len(v) for k,v in document.items()}}

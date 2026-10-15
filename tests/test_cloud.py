@@ -53,6 +53,39 @@ class CloudDeploymentTests(unittest.TestCase):
         self.cloud=CloudStore('libsql://test.turso.io','synthetic-token',self.fixture)
         migrate(self.local,self.cloud)
     def tearDown(self):self.fixture.close();self.temp.cleanup()
+    def test_migration_works_when_provider_rejects_pragma(self):
+        target=HranaFixture(self.path/'no-pragma.db')
+        def no_pragma(url,payload):
+            for request in payload['requests']:
+                statements=[request['stmt']] if request['type']=='execute' else [step['stmt'] for step in request['batch']['steps']] if request['type']=='batch' else []
+                if any(stmt['sql'].strip().upper().startswith('PRAGMA') for stmt in statements):
+                    return {'baton':payload.get('baton'),'results':[{'type':'error','error':{'code':'SQL_PARSE_ERROR'}}]}
+            return target(url,payload)
+        cloud=CloudStore('libsql://test.turso.io','synthetic-token',no_pragma)
+        try:
+            result=migrate(self.local,cloud)
+            self.assertFalse(result['already_migrated'])
+            cloud.assert_ready()
+            self.assertTrue(migrate(self.local,cloud)['already_migrated'])
+            self.assertEqual(cloud.snapshot(),self.local.snapshot())
+        finally:target.close()
+    def test_legacy_cloud_version_stays_readable_without_schema_writes(self):
+        db=sqlite3.connect(self.fixture.path)
+        db.execute('DROP TABLE cloud_metadata');db.execute('PRAGMA user_version=3');db.commit();db.close()
+        self.cloud.assert_ready()
+        db=sqlite3.connect(self.fixture.path)
+        self.assertIsNone(db.execute("SELECT name FROM sqlite_master WHERE name='cloud_metadata'").fetchone());db.close()
+        self.assertTrue(migrate(self.local,self.cloud)['already_migrated'])
+        self.cloud.assert_ready()
+    def test_newer_or_invalid_cloud_marker_cannot_be_overwritten(self):
+        db=self.cloud.connect()
+        db.execute("UPDATE cloud_metadata SET value='4' WHERE key='schema_version'");db.commit();db.close()
+        with self.assertRaises(Problem):self.cloud.assert_ready()
+        with self.assertRaises(Problem) as error:migrate(self.local,self.cloud)
+        self.assertEqual(error.exception.code,'cloud_migration_conflict')
+        db=self.cloud.connect()
+        try:self.assertEqual(db.execute("SELECT value FROM cloud_metadata WHERE key='schema_version'").fetchone()[0],'4')
+        finally:db.close()
     def test_migration_repeat_and_conflict_preserve_cloud_changes(self):
         self.assertTrue(migrate(self.local,self.cloud)['already_migrated'])
         self.cloud.mutate(self.admin,'barns',{'name':'9棟','group':''},str(uuid.uuid4()))
@@ -142,7 +175,7 @@ class CloudDeploymentTests(unittest.TestCase):
             threading.Thread(target=server.serve_forever,daemon=True).start()
             base='http://127.0.0.1:'+str(server.server_port)
             try:
-                with urllib.request.urlopen(base+'/') as r:self.assertIn(b'1.3.0',r.read())
+                with urllib.request.urlopen(base+'/') as r:self.assertIn(b'1.3.1',r.read())
                 with urllib.request.urlopen(base+'/api/health') as r:self.assertTrue(json.load(r)['ok'])
                 body=json.dumps({'username':'reader','password':'synthetic-test-password'}).encode()
                 with urllib.request.urlopen(urllib.request.Request(base+'/api/login',data=body,headers={'Content-Type':'application/json'})) as r:

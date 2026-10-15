@@ -1,15 +1,19 @@
-# 肉豬紀錄管理 App — PigLedger 1.3.0
+# 肉豬紀錄管理 App — PigLedger 1.3.1
 
 **建議部署至 Vercel，手機與電腦共用固定 HTTPS 網址；筆電不必保持開機。**
 
 - [在 Vercel 匯入此專案](https://vercel.com/new/import?s=https%3A%2F%2Fgithub.com%2Faa0985854612-pixel%2F555)
 - [Vercel 設定與原資料移入](docs/VERCEL.md)
-- [本版測試結果與部署狀態](docs/TEST_REPORT_1.3.0.md)
-- [完整 Vercel／Docker 原始碼包 v1.3.0](https://github.com/aa0985854612-pixel/555/raw/refs/heads/main/release/pigledger-1.3.0.zip)
+- [本版測試結果與部署狀態](docs/TEST_REPORT_1.3.1.md)
+- [完整 Vercel／Docker 原始碼包 v1.3.1](https://github.com/aa0985854612-pixel/555/raw/refs/heads/main/release/pigledger-1.3.1.zip)
 
 Vercel 版使用持久 Turso/libSQL 資料庫，沿用同一套頁面、批次、統計與伺服器權限。原 SQLite 移入工具先備份，再完整保留帳號密碼雜湊、原始 Excel、紀錄 ID、修訂、操作歷程與去重紀錄；重複移入不新增，已有不同資料時拒絕覆蓋。新網址需重新登入，不重設密碼。
 
-**使用者已部署網站 [555-rho-nine.vercel.app](https://555-rho-nine.vercel.app/)，目前登入畫面顯示雲端資料庫尚未連接，還不能正式使用。** 此進度依使用者截圖，維護環境尚未完成公網驗證，也未取得 Vercel 授權與 Turso 連線。請依部署說明從 Turso 官網建立資料庫；先前提供的 Vercel Marketplace Turso 連結顯示404，不再使用。GitHub 程式包不含私人農場資料，必須完成私密資料移入。
+**正式網址：[555-rho-nine.vercel.app](https://555-rho-nine.vercel.app/)。2026-10-15，1.3.1 已在 Vercel 部署為 Ready，原資料與帳號已私密搬入 Turso。** 真實 Turso 的完整內容核對、重複搬移及既有帳號後端登入已通過。維護環境到正式網站的直接連線仍被網路代理403阻擋，未宣稱正式 HTTPS 瀏覽器登入或實體手機已驗收。詳細範圍見本版測試報告。
+
+日常使用：用手機 Safari／Chrome 開上述網址，以原帳號登入；每日登記豬隻異動，到料／實際耗料及秤重數字分別到對應頁面。加入主畫面後可直接開啟；筆電可以關機。[簡短操作說明](docs/USER_GUIDE.md)。`farmadmin` 密碼沿用原設定，程式包與 GitHub 不包含密碼或私人資料。
+
+1.3.1 修正實際 Turso 拒絕寫入 `PRAGMA user_version` 的相容性問題：雲端版本標記改存 `cloud_metadata`，與搬移資料同一交易提交；讀取時仍相容舊雲端版本標記。本地 SQLite 的 schema3、原始資料及帳號不重建。
 
 原筆電版仍可使用：
 
