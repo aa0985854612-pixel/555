@@ -39,7 +39,7 @@ def herd(batches, movements, on, selected=None, before=False):
     # Entry stocks exist at the beginning of the entry day.
     entry = sum(b['entry_count'] for b in batches if b['id'] in ids and b['entry_date'] <= on and not b.get('legacy_group'))
     result = dict(entry=entry, added=0, sold=0, culled=0, dead=0, transfer_in=0, transfer_out=0, adjustment=0)
-    baseline_remaining=0;unknown_remaining=False;unknown_fields=set();seen=set();legacy=False
+    baseline_remaining=0;unknown_remaining=False;unknown_fields=set();seen=set();legacy=False;unallocated_out=0
     for b in batches:
         if b['id'] not in ids or b['entry_date']>on or not b.get('legacy_group'):continue
         legacy=True;group=b['legacy_group'];key=group['id']
@@ -62,6 +62,13 @@ def herd(batches, movements, on, selected=None, before=False):
                 for field in ('entry','sold','culled','dead'):
                     if known.get(field) is None:unknown_fields.add(field)
                     else:result[field]+=known[field]
+        for event in group.get('unallocated_events',[]):
+            if not valid(event['date']):continue
+            field={'sale':'sold','cull':'culled','death':'dead'}[event['type']]
+            if complete:
+                result[field]+=event['quantity'];unallocated_out+=event['quantity']
+            else:
+                unknown_remaining=True;unknown_fields.add(field)
     for m in movements:
         if not valid(m['date']):
             continue
@@ -81,7 +88,7 @@ def herd(batches, movements, on, selected=None, before=False):
     # movements enter the balance a second time; original group totals stay exact.
     operational=[m for m in movements if valid(m['date'])]
     out_delta=sum(m['quantity'] for m in operational if m['batch_id'] in ids and m['type'] in ('sale','cull','death'))
-    result['remaining'] = None if unknown_remaining else entry+baseline_remaining+result['added']+result['transfer_in']-result['transfer_out']+result['adjustment']-out_delta
+    result['remaining'] = None if unknown_remaining else entry+baseline_remaining+result['added']+result['transfer_in']-result['transfer_out']+result['adjustment']-out_delta-unallocated_out
     if not legacy:
         result['remaining']=entry+result['added']+result['transfer_in']-result['transfer_out']+result['adjustment']-result['sold']-result['culled']-result['dead']
     for field in unknown_fields:result[field]=None
@@ -95,17 +102,27 @@ def herd(batches, movements, on, selected=None, before=False):
 def combined_weights(weights, batch_id=None):
     groups = {}
     for w in weights:
+        if not w.get('date'):continue
         if batch_id and w['batch_id'] != batch_id:
             continue
         key = w['date']
         g = groups.setdefault(key, dict(date=key, count=0, total_kg=0, representative=True, sources=[]))
+        if not w.get('count') or w.get('total_kg') is None:
+            if w.get('mean_kg') is not None:g.setdefault('source_means',[]).append(w)
+            continue
         g['count'] += w['count']
         g['total_kg'] += w['total_kg']
         g['representative'] &= bool(w.get('representative'))
         g['sources'].append(w['id'])
+    results=[]
     for g in groups.values():
-        g['mean'] = g['total_kg'] / g['count']
-    return sorted(groups.values(), key=lambda g:g['date'])
+        if g['count']:g['mean']=g['total_kg']/g['count'];g['source']='weighted_sample'
+        elif len(g.get('source_means',[]))==1:
+            source=g['source_means'][0]
+            g.update(count=None,total_kg=None,mean=source['mean_kg'],representative=False,sources=[source['id']],source='source_mean')
+        else:continue
+        results.append(g)
+    return sorted(results, key=lambda g:g['date'])
 
 
 def consumption(usage, deliveries):
@@ -117,6 +134,13 @@ def consumption(usage, deliveries):
 
 def performance(batch, batches, movements, weights, usages, deliveries, until, start=None, end=None):
     ws = [w for w in combined_weights(weights, batch['id']) if w['date'] <= until]
+    if batch.get('entry_mean_kg') is not None:
+        measured=batch.get('entry_mean_date') or batch['entry_date']
+        if measured<=until and not any(w['date']==measured for w in ws):
+            ws.append({'date':measured,'mean':batch['entry_mean_kg'],'count':None,'total_kg':None,
+                'representative':False,'sources':['entry:'+batch['id']],'source':'entry_mean',
+                'source_note':batch.get('entry_mean_source','')})
+            ws.sort(key=lambda w:w['date'])
     if start or end:
         ws = [w for w in ws if (not start or w['date'] >= start) and (not end or w['date'] <= end)]
     result = dict(adg=None, fcr=None, gain=None, feed=None, reasons=[], composition_changed=False, estimated=True)

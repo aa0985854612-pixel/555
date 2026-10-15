@@ -4,27 +4,31 @@ from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs
 from http.cookies import SimpleCookie
 from pathlib import Path
-from datetime import date
+from datetime import date,datetime,timezone,timedelta
 from .store import Store, Problem, VERSION, KINDS, encode, verify_password
 from .domain import herd, age, combined_weights, consumption, performance, day, Invalid
+from .history import source_history,source_rows,cohort_key
 
 STATIC=Path(__file__).parent/'static'
 
 def selected_ids(data, query):
     def get(key):return query.get(key,[''])[0]
-    return [b['id'] for b in data['batches'] if (not get('batch_id') or b['id']==get('batch_id')) and (not get('barn_id') or b['barn_id']==get('barn_id')) and (not get('group') or (b.get('group') or next((x['group'] for x in data['barns'] if x['id']==b['barn_id']),''))==get('group'))]
+    return [b['id'] for b in data['batches'] if (not get('batch_id') or b['id']==get('batch_id')) and (not get('barn_id') or b['barn_id']==get('barn_id')) and (not get('cohort') or cohort_key(b)==get('cohort')) and (not get('group') or (b.get('group') or next((x['group'] for x in data['barns'] if x['id']==b['barn_id']),''))==get('group'))]
 
 
 def filter_rows(kind,data,query):
     get=lambda key:query.get(key,[''])[0]
-    ids=set(selected_ids(data,query));scoped=any(get(k) for k in ('batch_id','barn_id','group'))
+    ids=set(selected_ids(data,query));scoped=any(get(k) for k in ('batch_id','barn_id','group','cohort'))
     rows=[]
-    candidates=data[kind]+legacy_history_rows(data) if kind=='movements' else data[kind]
+    candidates=list({r['id']:r for r in ((source_history(data,kind)+data[kind]) if kind in ('movements','weights') else data[kind])}.values())
     for r in candidates:
-        rd=r.get('date') or r.get('start') or r.get('entry_date','')
+        rd=r.get('entry_date','') if kind=='batches' else r.get('date') or r.get('start') or ''
+        if get('missing')=='1' and r.get('date') and not r.get('unresolved') and not (r.get('source_mean') and r.get('count') is None):continue
+        if (get('from') or get('to')) and not rd:continue
         if get('from') and (r['end']<=get('from') if kind=='usages' else rd<get('from')):continue
         if get('to') and rd>get('to'):continue
-        if get('type') and r.get('type')!=get('type'):continue
+        if kind=='movements' and get('type') and r.get('type')!=get('type'):continue
+        if get('cohort') and r.get('cohort') and r['cohort']!=get('cohort'):continue
         if get('vendor') and r.get('vendor')!=get('vendor'):continue
         if get('item') and get('item').lower() not in r.get('item','').lower():continue
         if kind=='deliveries':
@@ -33,54 +37,61 @@ def filter_rows(kind,data,query):
             if r['id'] not in ids:continue
         elif r.get('batch_id') and r['batch_id'] not in ids and r.get('target_batch_id') not in ids:continue
         elif r.get('legacy_source') and not r.get('batch_id') and scoped:
-            if get('batch_id') or get('barn_id') or not (set(r['legacy_members'])&ids):continue
+            if get('batch_id'):continue
+            if get('barn_id'):
+                if r.get('barn_id')!=get('barn_id'):continue
+            elif get('cohort'):
+                if r.get('cohort')!=get('cohort'):continue
+            elif not (set(r['legacy_members'])&ids):continue
         rows.append(r)
-    return sorted(rows,key=lambda r:r.get('date') or r.get('start') or r.get('entry_date',''),reverse=True)
+    return sorted(rows,key=lambda r:r.get('date') or r.get('start') or '',reverse=True)
 
 def legacy_history_rows(data):
-    """Read-only source events; excluded from live deltas already in baseline stock."""
-    import uuid
-    output=[]
-    for book in data.get('workbooks',[]):
-        for source in book['report']['rows']:
-            members=[b for b in data['batches'] if b.get('legacy_source')==book['id'] and b.get('legacy_row')==source['key']]
-            for index,event in enumerate(source['events']):
-                allocations=event['allocations'] or [{'barn':None,'quantity':event['quantity']}]
-                for allocation in allocations:
-                    batch=next((b for b in members if b['legacy_barn']==allocation['barn']),None)
-                    rid=str(uuid.uuid5(uuid.NAMESPACE_URL,book['id']+':'+event['cell']+':'+str(index)+':'+str(allocation['barn'])))
-                    output.append({'id':rid,'revision':1,'date':event['date'],'type':event['type'],'quantity':allocation['quantity'],'batch_id':batch['id'] if batch else None,'legacy_batch':source['name'],'legacy_members':[b['id'] for b in members],'legacy_source':book['id'],'source_cell':book['report']['sheet']+'!'+event['cell'],'note':event['text']+(' [以儲存公式的正常出豬數為準，死亡另計]' if event.get('formula_count_corrected') else '')})
-    return output
+    return source_history(data,'movements')
 
 
 def statistics(data,query):
     get=lambda k:query.get(k,[''])[0]
-    until=get('to') or date.today().isoformat();start=get('from')
+    until=get('to') or datetime.now(timezone(timedelta(hours=8))).date().isoformat();start=get('from')
     day(until)
     if start:day(start)
     if start and start>until:raise Invalid('invalid_period')
     ids=selected_ids(data,query)
     cumulative=herd(data['batches'],data['movements'],until,ids)
-    scoped=any(get(k) for k in ('batch_id','barn_id','group'))
+    scoped=any(get(k) for k in ('batch_id','barn_id','group','cohort'))
     supported=[d for book in data.get('workbooks',[]) for row in book['plan']['rows'] for d in row['snapshots']]
     if not scoped and supported and until<min(supported):
         for field in ('entry','sold','culled','dead','remaining','outgoing','denominator','survival'):cumulative[field]=None
         cumulative['historical_unknown']=True
     stats={'as_of':until,'cumulative':cumulative,'ids':ids,'interval':None,'batches':[]}
     chosen=set(ids)
+    if get('summary')=='1':
+        stats['batches']=[{'id':b['id'],'age_days':age(b,until),'herd':herd(data['batches'],data['movements'],until,[b['id']])} for b in data['batches'] if b['id'] in chosen]
+        return stats
     if start:
         delta=dict(entry=sum(b['entry_count'] or 0 for b in data['batches'] if b['id'] in chosen and start<=b['entry_date']<=until),sale=0,cull=0,death=0,arrival=0,adjustment=0,transfer_in=0,transfer_out=0)
-        for m in data['movements']:
+        for m in filter_rows('movements',data,{k:v for k,v in query.items() if k!='type'}|{'from':[start],'to':[until]}):
+            if m.get('archive') or not m.get('date'):continue
             if not start<=m['date']<=until:continue
             if m['type']=='transfer':
                 if m['batch_id'] in chosen and m['target_batch_id'] not in chosen:delta['transfer_out']+=m['quantity']
                 if m['target_batch_id'] in chosen and m['batch_id'] not in chosen:delta['transfer_in']+=m['quantity']
-            elif m['batch_id'] in chosen:delta[m['type']]+=m['quantity']
+            elif m['batch_id'] in chosen or (m.get('legacy_members') and set(m['legacy_members'])<=chosen):delta[m['type']]+=m['quantity']
         stats['interval']=delta
-        if any(b['id'] in chosen and b.get('legacy_group') and start<=b['legacy_group']['as_of'] and until>=b['entry_date'] for b in data['batches']) or (not scoped and supported and until<min(supported)):
+        unresolved=[r for r in source_history(data) if r.get('unresolved') and set(r.get('legacy_members',[]))&chosen]
+        partial=[r for r in source_history(data) if r.get('date') and start<=r['date']<=until and not r.get('batch_id') and set(r.get('legacy_members',[]))&chosen and not set(r.get('legacy_members',[]))<=chosen]
+        missing={r['type'] for r in unresolved+partial}
+        if any(b['id'] in chosen and b.get('legacy_group') and start<=b['entry_date']<=until and b['entry_count'] is None for b in data['batches']):
+            groups={b['legacy_group']['id']:b for b in data['batches'] if b['id'] in chosen and b.get('legacy_group') and start<=b['entry_date']<=until}
+            for batch in groups.values():
+                group=batch['legacy_group']
+                if set(group['members'])<=chosen:delta['entry']+=group['snapshots'][group['as_of']]['entry']-sum(b['entry_count'] or 0 for b in data['batches'] if b['id'] in group['members'])
+                else:missing.add('entry')
+        if missing or (not scoped and supported and until<min(supported)):
             stats['legacy_interval_unknown']=True
-            stats['interval']={key:None for key in delta}
-    scoped=any(get(k) for k in ('batch_id','barn_id','group'))
+            stats['known_interval']=dict(delta)
+            stats['interval']={key:(None if key in missing or (not scoped and supported and until<min(supported)) else value) for key,value in delta.items()}
+    scoped=any(get(k) for k in ('batch_id','barn_id','group','cohort'))
     deliveries=[d for d in data['deliveries'] if d['date']<=until and (not start or d['date']>=start)]
     stats['delivery_kg']=sum(sum(a['kg'] for a in d['allocations'] if a['batch_id'] in chosen) if scoped else d['kg'] for d in deliveries)
     stats['unallocated_kg']=sum(d['kg'] for d in deliveries if not d['allocations'])
@@ -93,7 +104,10 @@ def statistics(data,query):
     perfs=[]
     for b in data['batches']:
         if b['id'] not in chosen or b['entry_date']>until:continue
-        p=performance(b,data['batches'],data['movements'],data['weights'],data['usages'],data['deliveries'],until,start,until)
+        source_weights=[w for w in source_history(data,'weights') if w.get('batch_id')==b['id'] and not w.get('archive')]
+        p=performance(b,data['batches'],data['movements'],data['weights']+source_weights,data['usages'],data['deliveries'],until,start,until)
+        if p.get('first') and any(r.get('date') and p['first']['date']<=r['date']<=p['last']['date'] and b['id'] in r.get('legacy_members',[]) for r in source_history(data)):
+            p['composition_changed']=True
         perfs.append(p)
         stats['batches'].append({'id':b['id'],'age_days':age(b,until),'herd':herd(data['batches'],data['movements'],until,[b['id']]),'performance':p})
     periods={(p['first']['date'],p['last']['date']) for p in perfs if p.get('first') and p.get('last')}
@@ -119,12 +133,45 @@ def statistics(data,query):
     else:stats['aggregate_fcr']=None
     stats['incomplete_fcr_batches']=sum(p['fcr'] is None for p in perfs)
     stats['fcr_period_mismatch']=bool(perfs) and not comparable
+    stats['cohorts']=[]
+    for key in dict.fromkeys(cohort_key(b) for b in data['batches'] if b['id'] in chosen):
+        members=[b for b in data['batches'] if b['id'] in chosen and cohort_key(b)==key]
+        weights=[w for w in source_history(data,'weights') if w.get('cohort')==key and w.get('date') and w['date']<=until and (not start or w['date']>=start)]
+        means=combined_weights(weights)
+        estimate=None
+        if len(means)>=2:
+            first,last=means[0],means[-1];days=(day(last['date'])-day(first['date'])).days
+            estimate={'first':first,'last':last,'days':days,'delta':last['mean']-first['mean'],
+                'adg':(last['mean']-first['mean'])/days,'source':'source_mean','estimated':True,'fcr':None,
+                'composition_changed':any(r.get('date') and first['date']<=r['date']<=last['date'] and r.get('cohort')==key for r in source_history(data))}
+        death_query={'cohort':[key],'from':[start or '0001-01-01'],'to':[until],'type':['death']}
+        for field in ('barn_id','batch_id'):
+            if get(field):death_query[field]=[get(field)]
+        deaths=filter_rows('movements',data,death_query)
+        ages={age(b,until) for b in members}
+        uncertain=[r for r in source_history(data) if r.get('cohort')==key and r.get('type')=='death' and (not r.get('date') or (start or '0001-01-01')<=r['date']<=until) and not r.get('batch_id')]
+        unknown_cohort=any(not r.get('date') or not set(r.get('legacy_members',[]))<=chosen for r in uncertain)
+        stats['cohorts'].append({'cohort':key,'name':members[0]['name'],'herd':herd(data['batches'],data['movements'],until,[b['id'] for b in members]),
+            'age_days':next(iter(ages)) if len(ages)==1 else None,'period_deaths':None if unknown_cohort else sum(r['quantity'] for r in deaths if not r.get('archive')),
+            'barns':[{'id':b['id'],'barn_id':b['barn_id'],'herd':herd(data['batches'],data['movements'],until,[b['id']]),
+                'period_deaths':None if uncertain else sum(r['quantity'] for r in deaths if r.get('batch_id')==b['id'])} for b in members],
+            'source_performance':estimate if not get('barn_id') and not get('batch_id') else None,
+            'missing_fields':[field for field in ('entry','dead') if any(herd(data['batches'],data['movements'],until,[b['id']])[field] is None for b in members)]})
     return stats
 
 
 def next_day(s):
     from datetime import timedelta
     return (day(s)+timedelta(days=1)).isoformat()
+
+
+def client_snapshot(snapshot,cursor):
+    dashboard=statistics(snapshot,{'summary':['1']})
+    cohorts={cohort_key(b):{'key':cohort_key(b),'name':b['name'],'entry_date':b['entry_date'],'archive':False} for b in snapshot['batches']}
+    for source in source_rows(snapshot,archives=True):
+        if source['archive']:cohorts.setdefault(cohort_key(source['row']),{'key':cohort_key(source['row']),'name':source['row']['name'],'entry_date':source['row']['entry_date'],'archive':True})
+    return snapshot|{'cohorts':list(cohorts.values()),'dashboard':dashboard,'version':VERSION,'cursor':cursor,
+        'workbooks':[{k:b.get(k) for k in ('id','revision','filename','sha256','base_book_id','pending_cohorts')}|{'as_of':b['report']['as_of']} for b in snapshot['workbooks']]}
 
 
 class Server(ThreadingHTTPServer):
@@ -166,7 +213,7 @@ class Handler(BaseHTTPRequestHandler):
         if token:
             db=self.server.store.connect()
             try:
-                row=db.execute('SELECT u.id,u.username,u.role,u.active,s.csrf FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=? AND s.expires>?',(hashlib.sha256(token.value.encode()).hexdigest(),time.time())).fetchone()
+                row=db.execute('SELECT u.id,u.username,u.role,u.active,u.revision,s.csrf,COALESCE(a.must_change,0) AS must_change FROM sessions s JOIN users u ON u.id=s.user_id LEFT JOIN account_security a ON a.user_id=u.id WHERE s.token_hash=? AND s.expires>?',(hashlib.sha256(token.value.encode()).hexdigest(),time.time())).fetchone()
                 if row and row['active']:return dict(row)
             finally:db.close()
         if required:raise Problem('login_required',401)
@@ -196,6 +243,15 @@ class Handler(BaseHTTPRequestHandler):
             try:db.execute('SELECT 1').fetchone()
             finally:db.close()
             return self.send({'ok':True,'version':VERSION,'profile_id':hashlib.sha256(str(store.path.resolve()).encode()).hexdigest()[:16]})
+        if path=='/api/activate' and method=='POST':
+            origin=self.headers.get('Origin')
+            if origin and urlparse(origin).netloc!=self.headers.get('Host'):raise Problem('csrf_failed',403)
+            body=self.body();username=body.get('username','')
+            if hasattr(store,'reserve_login_attempt'):store.reserve_login_attempt(('activate',self.client_address[0],username))
+            from .accounts import activate
+            result=activate(store,username,body.get('token'),body.get('password'))
+            if hasattr(store,'clear_login_attempts'):store.clear_login_attempts(('activate',self.client_address[0],username))
+            return self.send(result)
         if path=='/api/login' and method=='POST':
             origin=self.headers.get('Origin')
             if origin and (urlparse(origin).netloc!=self.headers.get('Host') or (self.server.public_host and urlparse(origin).scheme!='https')):raise Problem('csrf_failed',403)
@@ -220,12 +276,19 @@ class Handler(BaseHTTPRequestHandler):
                 if hasattr(store,'clear_login_attempts'):store.clear_login_attempts(key)
                 else:
                     with self.server.lock:self.server.login_attempts.pop(key,None)
-                return self.send({'id':user['id'],'username':user['username'],'role':user['role'],'csrf':csrf,'version':VERSION},headers={'Set-Cookie':'session='+token+'; HttpOnly; SameSite=Strict; Path=/; Max-Age=43200'+('; Secure' if self.server.secure else '')})
+                security=db.execute('SELECT must_change FROM account_security WHERE user_id=?',(user['id'],)).fetchone()
+                return self.send({'id':user['id'],'username':user['username'],'role':user['role'],'revision':user['revision'],
+                    'must_change':bool(security and security['must_change']),'csrf':csrf,'version':VERSION},headers={'Set-Cookie':'session='+token+'; HttpOnly; SameSite=Strict; Path=/; Max-Age=43200'+('; Secure' if self.server.secure else '')})
             finally:db.close()
         if path.startswith('/api/'):
             user=self.session()
+            if user.get('must_change') and path not in ('/api/me','/api/logout','/api/password'):raise Problem('password_change_required',403)
             if method!='GET':self.protect(user)
             if path=='/api/me' and method=='GET':return self.send(user|{'version':VERSION})
+            if path=='/api/password' and method=='POST':
+                from .accounts import change_password
+                body=self.body();result=change_password(store,user,body.get('current_password'),body.get('new_password'))
+                return self.send(result,headers={'Set-Cookie':'session=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0'})
             if path=='/api/logout' and method=='POST':
                 db=store.connect();db.execute('DELETE FROM sessions WHERE user_id=? AND csrf=?',(user['id'],user['csrf']));db.commit();db.close()
                 return self.send({'ok':True},headers={'Set-Cookie':'session=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0'})
@@ -235,9 +298,10 @@ class Handler(BaseHTTPRequestHandler):
                     db.execute('BEGIN')
                     revision=self.server.instance+':'+str(db.execute('SELECT COALESCE(MAX(seq),0) FROM audit').fetchone()[0])
                     if query.get('since',[''])[0]==revision:return self.send({'unchanged':True,'version':VERSION,'cursor':revision})
-                    return self.send(store.snapshot(db)|{'version':VERSION,'cursor':revision})
+                    snapshot=store.snapshot(db,include_source=False)
+                    return self.send(client_snapshot(snapshot,revision))
                 finally:db.close()
-            if path=='/api/statistics' and method=='GET':return self.send(statistics(store.snapshot(),query))
+            if path=='/api/statistics' and method=='GET':return self.send(statistics(store.snapshot(include_source=False),query))
             if path=='/api/audit' and method=='GET':
                 store.require(user,True);db=store.connect()
                 try:return self.send([dict(r) for r in db.execute('SELECT a.*,u.username FROM audit a LEFT JOIN users u ON a.user_id=u.id ORDER BY seq DESC LIMIT 500')])
@@ -246,12 +310,15 @@ class Handler(BaseHTTPRequestHandler):
                 store.require(user,True)
                 if method=='GET':
                     db=store.connect()
-                    try:return self.send([dict(r) for r in db.execute('SELECT id,username,role,active,revision FROM users')])
+                    try:return self.send([dict(r) for r in db.execute('SELECT u.id,u.username,u.role,u.active,u.revision,COALESCE(s.must_change,0) AS must_change FROM users u LEFT JOIN account_security s ON s.user_id=u.id')])
                     finally:db.close()
                 if method=='POST':
-                    b=self.body();return self.send(store.create_user(b.get('username'),b.get('password'),b.get('role'),user['id']),201)
+                    b=self.body();return self.send(store.create_user(b.get('username'),b.get('password'),b.get('role'),user['id'],must_change=True),201)
+            if path.startswith('/api/users/') and path.endswith('/setup') and method=='POST':
+                from .accounts import issue_setup
+                b=self.body();return self.send(issue_setup(store,user,path.split('/')[3],b.get('revision')))
             if path.startswith('/api/users/') and method=='PUT':
-                store.require(user,True);rid=path.split('/')[-1];b=self.body();db=store.connect()
+                store.require(user,True);rid=path.split('/')[-1];b=self.body();store.backup_sqlite(label='before-user-update');db=store.connect()
                 try:
                     db.execute('BEGIN IMMEDIATE');old=db.execute('SELECT id,username,role,active,revision FROM users WHERE id=?',(rid,)).fetchone()
                     if not old:raise Problem('not_found',404)
@@ -262,8 +329,13 @@ class Handler(BaseHTTPRequestHandler):
                         if not 12<=len(b['password'])<=512:raise Problem('invalid_user')
                         from .store import password_hash
                         db.execute('UPDATE users SET hash=? WHERE id=?',(password_hash(b['password']),rid))
+                        db.execute('INSERT INTO account_security(user_id,must_change) VALUES(?,1) ON CONFLICT(user_id) DO UPDATE SET must_change=1,setup_hash=NULL,setup_expires=NULL',(rid,))
+                    username=b.get('username',old['username'])
+                    if not isinstance(username,str) or not 1<=len(username.strip())<=80:raise Problem('invalid_user')
+                    if db.execute('SELECT 1 FROM users WHERE username=? AND id<>?',(username.strip(),rid)).fetchone():raise Problem('username_exists',409)
+                    db.execute('UPDATE users SET username=? WHERE id=?',(username.strip(),rid))
                     db.execute('UPDATE users SET role=?,active=?,revision=revision+1 WHERE id=?',(b['role'],b['active'],rid));db.execute('DELETE FROM sessions WHERE user_id=?',(rid,))
-                    store.audit(db,user['id'],'update','users',rid,dict(old),{'role':b['role'],'active':b['active']});db.commit();return self.send({'ok':True})
+                    store.audit(db,user['id'],'update','users',rid,dict(old),{'username':username.strip(),'role':b['role'],'active':b['active'],'password_changed':bool(b.get('password'))});db.commit();return self.send({'ok':True})
                 finally:db.close()
             if path=='/api/backup' and method=='GET':
                 store.require(user,True)
@@ -271,36 +343,46 @@ class Handler(BaseHTTPRequestHandler):
             if path=='/api/import' and method=='POST':return self.send(store.import_backup(user,self.body()))
             if path=='/api/workbook/preview' and method=='POST':
                 store.require(user,True)
-                cleaned=store.validate('workbooks',self.body(),store.snapshot(),user)
-                return self.send({'filename':cleaned['filename'],'sha256':cleaned['sha256'],'report':cleaned['report'],'plan':cleaned['plan']})
+                cleaned=store.validate('workbooks',self.body(),store.snapshot(include_source=False),user)
+                return self.send({'filename':cleaned['filename'],'sha256':cleaned['sha256'],'report':cleaned['report'],'plan':cleaned['plan'],'update_summary':cleaned.get('update_summary')})
             if path=='/api/workbook/import' and method=='POST':
                 return self.send(store.import_workbook(user,self.body(),self.headers.get('Idempotency-Key')),201)
             if path.startswith('/api/workbooks/') and path.endswith('/file') and method=='GET':
                 import base64
                 from urllib.parse import quote
-                rid=path.split('/')[3];book=next((b for b in store.snapshot()['workbooks'] if b['id']==rid),None)
+                rid=path.split('/')[3];db=store.connect()
+                try:row=db.execute("SELECT data FROM records WHERE id=? AND kind='workbooks' AND deleted=0",(rid,)).fetchone();book=json.loads(row['data']) if row else None
+                finally:db.close()
                 if not book:raise Problem('not_found',404)
                 return self.send(base64.b64decode(book['base64']),content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',headers={'Content-Disposition':"attachment; filename*=UTF-8''"+quote(book['filename'])})
+            if path.startswith('/api/workbooks/') and path.endswith('/details') and method=='GET':
+                rid=path.split('/')[3];book=next((b for b in store.snapshot(include_source=False)['workbooks'] if b['id']==rid),None)
+                if not book:raise Problem('not_found',404)
+                return self.send(book)
             if path=='/api/export' and method=='GET':
                 kind=query.get('kind',['movements'])[0]
                 if kind not in ('movements','deliveries','usages','weights'):raise Problem('unknown_kind')
-                data=store.snapshot();rows=filter_rows(kind,data,query)
+                data=store.snapshot(include_source=False);rows=filter_rows(kind,data,query)
                 batches={b['id']:b for b in data['batches']};barns={b['id']:b['name'] for b in data['barns']}
                 out=io.StringIO();writer=csv.writer(out)
                 writer.writerow(['id','revision','date','end_exclusive','barn','batch','type_or_source','quantity','unit','mean_kg','age_days','vendor','item','note','allocations','status','sample_count','individual_weights_kg','pen','selected_allocated_kg','calculation_source','source_cell'])
                 for r in rows:
                     batch=batches.get(r.get('batch_id'),{})
                     q=consumption(r,data['deliveries']) if kind=='usages' else r.get('quantity',r.get('kg',r.get('total_kg','')))
-                    values=[r['id'],r['revision'],r.get('date',r.get('start','')),r.get('end',''),barns.get(batch.get('barn_id'),''),batch.get('name',r.get('legacy_batch','')),r.get('type',r.get('method','sample' if kind=='weights' else 'delivery')),q,'heads' if kind=='movements' else 'kg',r['total_kg']/r['count'] if kind=='weights' else '',r.get('age_days',''),r.get('vendor',''),r.get('item',''),r.get('note',''),encode(r.get('allocations',[])),('active' if r['active'] else 'excluded') if kind=='usages' else '',r.get('count',''),encode(r.get('individual_kg',[])),r.get('pen',''),sum(a['kg'] for a in r.get('allocations',[]) if a['batch_id'] in set(selected_ids(data,query))) ,'legacy_excel_readonly' if r.get('legacy_source') else r.get('method','recorded'),r.get('source_cell','')]
+                    mean=(r.get('mean_kg') if r.get('source_mean') else r['total_kg']/r['count']) if kind=='weights' else ''
+                    values=[r['id'],r['revision'],r.get('date',r.get('start','')),r.get('end',''),barns.get(batch.get('barn_id') or r.get('barn_id'),r.get('barn_number') or ''),batch.get('name',r.get('legacy_batch','')),r.get('type',r.get('method','sample' if kind=='weights' else 'delivery')),q,'heads' if kind=='movements' else 'kg',mean,r.get('age_days',''),r.get('vendor',''),r.get('item',''),r.get('note',''),encode(r.get('allocations',[])),('active' if r['active'] else 'excluded') if kind=='usages' else '',r.get('count',''),encode(r.get('individual_kg',[])),r.get('pen',''),sum(a['kg'] for a in r.get('allocations',[]) if a['batch_id'] in set(selected_ids(data,query))) ,'source_mean' if r.get('source_mean') else 'legacy_excel_readonly' if r.get('legacy_source') else r.get('method','recorded'),r.get('source_cell','')]
                     # Spreadsheet formula injection protection; original fields remain intact in backups.
                     writer.writerow(["'"+v if isinstance(v,str) and v.startswith(('=','+','-','@','\t','\r')) else v for v in values])
                 return self.send(('\ufeff'+out.getvalue()).encode(),content_type='text/csv; charset=utf-8',headers={'Content-Disposition':'attachment; filename="'+kind+'-'+VERSION+'.csv"'})
             parts=path.strip('/').split('/')
             if len(parts) in (2,3) and parts[1] in KINDS:
                 kind=parts[1];rid=parts[2] if len(parts)==3 else None
-                if method=='GET':return self.send(filter_rows(kind,store.snapshot(),query))
+                if method=='GET':return self.send(filter_rows(kind,store.snapshot(include_source=False),query))
                 if (method=='POST' and not rid) or (method in ('PUT','DELETE') and rid):
-                    result=store.mutate(user,kind,self.body(),self.headers.get('Idempotency-Key'),rid,method=='DELETE')
+                    result=store.mutate(user,kind,self.body(),self.headers.get('Idempotency-Key'),rid,method=='DELETE',return_snapshot=True)
+                    if '_snapshot' in result:
+                        snapshot=result.pop('_snapshot');sequence=result.pop('_sequence')
+                        result['sync']=client_snapshot(snapshot,self.server.instance+':'+str(sequence))
                     return self.send(result,201 if method=='POST' else 200)
             raise Problem('not_found',404)
         if method!='GET':raise Problem('not_found',404)

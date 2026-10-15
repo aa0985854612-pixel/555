@@ -93,7 +93,7 @@ def review(raw):
         for rr in range(r,r+4):
             mean=value(f'I{rr}')
             if isinstance(mean,(int,float)) and mean>0 and value(f'H{rr}') is not None:
-                weights.append({'date':iso(value(f'H{rr}')),'mean_kg':mean,'sample_count':None,'cell':f'I{rr}','formula':cells[f'I{rr}'].get('formula')})
+                weights.append({'date':iso(value(f'H{rr}')),'mean_kg':mean,'sample_count':None,'cell':f'I{rr}','formula':cells[f'I{rr}'].get('formula'),'entry_measurement':rr==r,'age_weeks_hint':value(f'J{rr}')})
             typ={'死亡':'death','賣汰':'cull','售出':'sale'}.get(value(f'AC{rr}'))
             if not typ:continue
             for ref,c in cells.items():
@@ -124,7 +124,9 @@ def review(raw):
                     for e,n in zip(parsed,terms):
                         if e['quantity']!=n:e['quantity']=n;e['allocations']=[];e['formula_count_corrected']=True
                 if sum(e['quantity'] for e in parsed)!=c['value']:
-                    unresolved.append({'cell':ref,'quantity':c['value'],'comment':c.get('comment','')})
+                    known=sum(e['quantity'] for e in parsed)
+                    unresolved.append({'cell':ref,'type':typ,'quantity':c['value'],'unresolved_quantity':c['value']-known if known<=c['value'] else c['value'],'comment':c.get('comment','')})
+                    if known<=c['value']:events.extend(parsed)
                 else:events.extend(parsed)
         rows.append({'key':str(r),'name':name,'barns':barns,'barn_text':barn_text,'birth_date':birth,'entry_date':entry,'entry_age_days':(date.fromisoformat(entry)-date.fromisoformat(birth)).days,'totals':totals,'weights':weights,'events':events,'unresolved_cells':unresolved,'comments':comments})
     if not rows:raise Invalid('unsupported_workbook')
@@ -133,7 +135,61 @@ def review(raw):
     totals={k:sum(row['totals'][k] for row in rows) for k in ('entry','remaining','sold','dead','culled','missing')}
     for key,col in [('entry','R'),('remaining','S'),('sold','T'),('dead','Z'),('culled','AA'),('missing','AB')]:
         if count(col+'4')!=totals[key]:raise Invalid('workbook_balance_mismatch')
-    return {'format':'alice-workbook-review-1','source_sha256':hashlib.sha256(raw).hexdigest(),'as_of':as_of,'sheet':current['name'],'sheets':[s['name'] for s in sheets],'totals':totals,'rows':rows,'issues':issues,'historical_sheet_preserved':True}
+    return {'format':'alice-workbook-review-1','source_sha256':hashlib.sha256(raw).hexdigest(),'as_of':as_of,'sheet':current['name'],'sheets':[s['name'] for s in sheets],'totals':totals,'rows':rows,'archive_rows':archive_review(sheets,epoch),'issues':issues,'historical_sheet_preserved':True}
+
+
+def archive_review(sheets,epoch):
+    """Old sheets are source history only; weekly weights have no invented date."""
+    rows=[]
+    for sheet in sheets:
+        if '肉豬各周存欄頭數(舊)' not in sheet['name'].replace('（','(').replace('）',')'):continue
+        cells=sheet['cells']
+        def value(ref):return cells.get(ref,{}).get('value')
+        def iso(v):return (epoch+timedelta(days=int(v))).isoformat() if isinstance(v,(int,float)) and not isinstance(v,bool) else None
+        anchors=sorted(int(ref[1:]) for ref in cells if re.fullmatch(r'A\d+',ref) and str(value(ref) or '').startswith('JD-'))
+        for r in anchors:
+            entry=iso(value(f'C{r}'));birth=iso(value(f'B{r}'));text=str(value(f'R{r}') or '')
+            barns=[int(x) for x in re.findall(r'\d+',text)]
+            if not entry or not barns:continue
+            weights=[];events=[];unresolved=[]
+            for rr in range(r,r+3):
+                mean=value(f'G{rr}')
+                if isinstance(mean,(int,float)) and mean>0:
+                    weights.append({'date':None,'mean_kg':mean,'sample_count':None,'cell':f'G{rr}',
+                        'age_weeks_hint':value(f'F{rr}'),'formula':cells[f'G{rr}'].get('formula')})
+                typ={'死亡':'death','賣汰':'cull','售出':'sale'}.get(value(f'V{rr}'))
+                if not typ:continue
+                for ref,cell in cells.items():
+                    match=re.fullmatch(r'([A-Z]+)(\d+)',ref)
+                    if not match or int(match[2])!=rr:continue
+                    column=0
+                    for ch in match[1]:column=column*26+ord(ch)-64
+                    q=cell.get('value')
+                    if column<23 or not isinstance(q,(int,float)) or q<=0 or int(q)!=q:continue
+                    parsed=[]
+                    for line in cell.get('comment','').splitlines():
+                        dm=re.match(r'\s*(\d{1,2})/(\d{1,2})\s*(.*)',line)
+                        if not dm:continue
+                        verb={'death':r'死(?:亡)?','cull':r'淘汰|賣汰','sale':r'出(?:豬)?|售'}[typ]
+                        quantities=re.findall(r'(?:'+verb+r')\s*(\d+)\s*(?:頭|隻)',re.split(r'[（(]',dm[3],1)[0])
+                        if not quantities:continue
+                        candidates=[]
+                        for year in (int(entry[:4]),int(entry[:4])+1):
+                            try:d=date(year,int(dm[1]),int(dm[2]))
+                            except ValueError:continue
+                            if date.fromisoformat(entry)<=d<=date.fromisoformat(entry)+timedelta(days=300):candidates.append(d.isoformat())
+                        quantity=sum(map(int,quantities));alloc=[{'barn':int(b),'quantity':int(n)} for b,n in re.findall(r'(\d+)棟\s*[＊*]\s*(\d+)',dm[3])]
+                        if not alloc and (bm:=re.search(r'[（(]\s*(\d+)棟\s*[)）]',dm[3])):alloc=[{'barn':int(bm[1]),'quantity':quantity}]
+                        parsed.append({'date':candidates[0] if len(candidates)==1 else None,'type':typ,'quantity':quantity,
+                            'allocations':alloc,'cell':ref,'text':line.strip(),'year_from_entry_context':True})
+                    known=sum(e['quantity'] for e in parsed)
+                    if known<=q:events.extend(parsed)
+                    if known!=q:unresolved.append({'cell':ref,'type':typ,'quantity':int(q),
+                        'unresolved_quantity':int(q)-known if known<q else int(q),'comment':cell.get('comment','') or str(value(match[1]+'3') or '')})
+            rows.append({'key':str(r),'name':value(f'A{r}'),'entry_date':entry,'birth_date':birth,
+                'barns':barns,'barn_text':text,'sheet':sheet['name'],'weights':weights,'events':events,'unresolved_cells':unresolved,
+                'totals':{k:value(f'{c}{r}') for k,c in [('entry','M'),('remaining','N'),('sold','O'),('dead','S'),('culled','T')]}})
+    return rows
 
 def allocate(total,weights):
     keys=sorted(weights);denominator=sum(weights.values())

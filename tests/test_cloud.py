@@ -71,7 +71,7 @@ class CloudDeploymentTests(unittest.TestCase):
         finally:target.close()
     def test_legacy_cloud_version_stays_readable_without_schema_writes(self):
         db=sqlite3.connect(self.fixture.path)
-        db.execute('DROP TABLE cloud_metadata');db.execute('PRAGMA user_version=3');db.commit();db.close()
+        db.execute('DROP TABLE cloud_metadata');db.execute('PRAGMA user_version=4');db.commit();db.close()
         self.cloud.assert_ready()
         db=sqlite3.connect(self.fixture.path)
         self.assertIsNone(db.execute("SELECT name FROM sqlite_master WHERE name='cloud_metadata'").fetchone());db.close()
@@ -79,12 +79,12 @@ class CloudDeploymentTests(unittest.TestCase):
         self.cloud.assert_ready()
     def test_newer_or_invalid_cloud_marker_cannot_be_overwritten(self):
         db=self.cloud.connect()
-        db.execute("UPDATE cloud_metadata SET value='4' WHERE key='schema_version'");db.commit();db.close()
+        db.execute("UPDATE cloud_metadata SET value='5' WHERE key='schema_version'");db.commit();db.close()
         with self.assertRaises(Problem):self.cloud.assert_ready()
         with self.assertRaises(Problem) as error:migrate(self.local,self.cloud)
         self.assertEqual(error.exception.code,'cloud_migration_conflict')
         db=self.cloud.connect()
-        try:self.assertEqual(db.execute("SELECT value FROM cloud_metadata WHERE key='schema_version'").fetchone()[0],'4')
+        try:self.assertEqual(db.execute("SELECT value FROM cloud_metadata WHERE key='schema_version'").fetchone()[0],'5')
         finally:db.close()
     def test_migration_repeat_and_conflict_preserve_cloud_changes(self):
         self.assertTrue(migrate(self.local,self.cloud)['already_migrated'])
@@ -175,7 +175,7 @@ class CloudDeploymentTests(unittest.TestCase):
             threading.Thread(target=server.serve_forever,daemon=True).start()
             base='http://127.0.0.1:'+str(server.server_port)
             try:
-                with urllib.request.urlopen(base+'/') as r:self.assertIn(b'1.3.1',r.read())
+                with urllib.request.urlopen(base+'/') as r:self.assertIn(b'1.4.0',r.read())
                 with urllib.request.urlopen(base+'/api/health') as r:self.assertTrue(json.load(r)['ok'])
                 body=json.dumps({'username':'reader','password':'synthetic-test-password'}).encode()
                 with urllib.request.urlopen(urllib.request.Request(base+'/api/login',data=body,headers={'Content-Type':'application/json'})) as r:

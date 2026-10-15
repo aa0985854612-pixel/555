@@ -179,7 +179,9 @@ class PhoneHttpsTests(unittest.TestCase):
         self.login();key=str(uuid.uuid4());headers={'Idempotency-Key':key}
         first=self.request('POST','/api/barns',{'name':'手機9棟','group':''},headers)
         repeat=self.request('POST','/api/barns',{'name':'手機9棟','group':''},headers)
-        self.assertEqual(first[0],201);self.assertEqual(first[1],repeat[1])
+        self.assertEqual(first[0],201);self.assertEqual(repeat[0],201)
+        sync=first[1].pop('sync');self.assertEqual(sync['barns'][0]['id'],first[1]['id'])
+        self.assertEqual(first[1],repeat[1])
         laptop=Store(self.store.path);self.assertEqual(len(laptop.snapshot()['barns']),1)
         backup=laptop.backup_sqlite(label='phone-test');self.assertTrue(backup.exists())
         self.assertEqual(self.request('GET','/api/snapshot')[1]['barns'][0]['id'],first[1]['id'])

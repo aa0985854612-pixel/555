@@ -162,7 +162,7 @@ class AppTests(unittest.TestCase):
         self.move('death',1)
         db=self.store.connect();before=[tuple(r) for r in db.execute('SELECT id,username,hash,role FROM users')];db.execute('ALTER TABLE users DROP COLUMN revision');db.execute('PRAGMA user_version=1');db.commit();db.close()
         upgraded=Store(self.store.path);db=upgraded.connect()
-        self.assertEqual(db.execute('PRAGMA user_version').fetchone()[0],3)
+        self.assertEqual(db.execute('PRAGMA user_version').fetchone()[0],4)
         self.assertEqual([tuple(r) for r in db.execute('SELECT id,username,hash,role FROM users')],before);db.close()
         self.assertEqual(len(upgraded.snapshot()['movements']),1)
         self.assertTrue(list((Path(self.temp.name)/'backups').glob('before-migration*.sqlite3')))

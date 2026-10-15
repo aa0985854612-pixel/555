@@ -15,9 +15,9 @@ from pathlib import Path
 from urllib.parse import urlsplit, urlunsplit
 from urllib.request import Request, build_opener, HTTPRedirectHandler
 from urllib.error import URLError, HTTPError
-from .store import Store, Problem, SCHEMA, encode, now
+from .store import Store, Problem, SCHEMA, SCHEMA_VERSION, encode, now
 
-TABLES=('records','users','requests','audit')
+TABLES=('records','users','requests','audit','account_security')
 CLOUD_SCHEMA='''
 CREATE TABLE IF NOT EXISTS cloud_backups(id TEXT PRIMARY KEY, timestamp TEXT NOT NULL, label TEXT NOT NULL, data TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS cloud_login_attempts(key TEXT PRIMARY KEY, data TEXT NOT NULL);
@@ -149,15 +149,18 @@ class Connection:
         finally:self.closed=True;self.baton=None;self.in_transaction=False;self.pending=[]
 
 def fingerprint(document):
-    return hashlib.sha256(encode({table:sorted(document[table],key=encode) for table in TABLES}).encode()).hexdigest()
+    return hashlib.sha256(encode({table:sorted(document.get(table,[]),key=encode) for table in TABLES}).encode()).hexdigest()
 
 def read_document(db):
+    available={row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+    tables=[table for table in TABLES if table in available]
     if isinstance(db,Connection):
         if db.pending:
             statements=db.pending;db.pending=[];db.batch(statements)
-        cursors=db.batch([('SELECT * FROM '+table,()) for table in TABLES])
-        return {table:[dict(r) for r in cursor] for table,cursor in zip(TABLES,cursors)}
-    return {table:[dict(r) for r in db.execute('SELECT * FROM '+table)] for table in TABLES}
+        cursors=db.batch([('SELECT * FROM '+table,()) for table in tables])
+        result={table:[dict(r) for r in cursor] for table,cursor in zip(tables,cursors)}
+    else:result={table:[dict(r) for r in db.execute('SELECT * FROM '+table)] for table in tables}
+    return {table:result.get(table,[]) for table in TABLES}
 
 class CloudStore(Store):
     def __init__(self,url=None,token=None,transport=None):
@@ -173,13 +176,13 @@ class CloudStore(Store):
     def assert_ready(self):
         db=self.connect()
         try:
-            tables={row['name'] for row in db.execute("SELECT name FROM sqlite_master WHERE type='table' AND name IN ('cloud_metadata','cloud_backups')")}
-            if 'cloud_backups' not in tables:raise Problem('cloud_database_uninitialized',503)
+            tables={row['name'] for row in db.execute("SELECT name FROM sqlite_master WHERE type='table' AND name IN ('cloud_metadata','cloud_backups','account_security')")}
+            if not {'cloud_backups','account_security'}<=tables:raise Problem('cloud_database_uninitialized',503)
             if 'cloud_metadata' in tables:
                 row=db.execute("SELECT value FROM cloud_metadata WHERE key='schema_version'").fetchone()
                 version=row['value'] if row else None
-                if version!='3':raise Problem('cloud_database_uninitialized',503)
-            elif db.execute('PRAGMA user_version').fetchone()[0]!=3:
+                if version not in ('3',str(SCHEMA_VERSION)):raise Problem('cloud_database_uninitialized',503)
+            elif db.execute('PRAGMA user_version').fetchone()[0]!=SCHEMA_VERSION:
                 # Read compatibility for previously migrated libSQL databases.
                 # Never create or update schema from a normal API request.
                 raise Problem('cloud_database_uninitialized',503)
@@ -230,14 +233,14 @@ def migrate(source,cloud):
         tables={r['name'] for r in db.execute("SELECT name FROM sqlite_master WHERE type='table'")}
         if 'cloud_metadata' in tables:
             marker=db.execute("SELECT value FROM cloud_metadata WHERE key='schema_version'").fetchone()
-            if marker and marker['value']!='3':raise Problem('cloud_migration_conflict',409)
-        if any(t in tables for t in TABLES):
-            if not set(TABLES).issubset(tables):raise Problem('cloud_migration_conflict',409)
+            if marker and marker['value'] not in ('3',str(SCHEMA_VERSION)):raise Problem('cloud_migration_conflict',409)
+        if any(t in tables for t in TABLES[:4]):
+            if not set(TABLES[:4]).issubset(tables):raise Problem('cloud_migration_conflict',409)
             current=read_document(db)
             if any(current.values()):
                 if fingerprint(current)!=fingerprint(document):raise Problem('cloud_migration_conflict',409)
-                db.executescript(CLOUD_SCHEMA)
-                db.execute("INSERT INTO cloud_metadata(key,value) VALUES('schema_version','3') ON CONFLICT(key) DO UPDATE SET value=excluded.value")
+                db.executescript(SCHEMA);db.executescript(CLOUD_SCHEMA)
+                db.execute("INSERT INTO cloud_metadata(key,value) VALUES('schema_version',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",(str(SCHEMA_VERSION),))
                 db.commit()
                 return {'already_migrated':True,'source_backup':str(backup),'counts':{k:len(v) for k,v in document.items()}}
         db.executescript(SCHEMA);db.executescript(CLOUD_SCHEMA)
@@ -248,8 +251,23 @@ def migrate(source,cloud):
         if fingerprint(read_document(db))!=fingerprint(document):raise Problem('cloud_migration_verification',500)
         # Turso can reject PRAGMA assignments while allowing normal table writes.
         # Keep the cloud schema marker in the same verified migration transaction.
-        db.execute("INSERT INTO cloud_metadata(key,value) VALUES('schema_version','3') ON CONFLICT(key) DO UPDATE SET value=excluded.value")
+        db.execute("INSERT INTO cloud_metadata(key,value) VALUES('schema_version',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",(str(SCHEMA_VERSION),))
         db.execute('INSERT INTO cloud_backups VALUES(?,?,?,?)',(str(uuid.uuid4()),now(),'initial-vercel-migration',encode(document)))
         db.commit()
         return {'already_migrated':False,'source_backup':str(backup),'counts':{k:len(v) for k,v in document.items()}}
+    finally:db.close()
+
+
+def upgrade_cloud(cloud,finalize=True):
+    """Explicit, backed-up schema-only update. Never called by normal requests."""
+    cloud.backup_sqlite(label='before-schema-4')
+    db=cloud.connect()
+    try:
+        db.execute('BEGIN IMMEDIATE');before=read_document(db)
+        marker=db.execute("SELECT value FROM cloud_metadata WHERE key='schema_version'").fetchone()
+        if not marker or marker['value'] not in ('3',str(SCHEMA_VERSION)):raise Problem('cloud_migration_conflict',409)
+        db.executescript(SCHEMA);db.executescript(CLOUD_SCHEMA)
+        if fingerprint(read_document(db))!=fingerprint(before):raise Problem('cloud_migration_verification',500)
+        if finalize:db.execute("UPDATE cloud_metadata SET value=? WHERE key='schema_version'",(str(SCHEMA_VERSION),))
+        db.commit();return {'schema':SCHEMA_VERSION,'original_document_unchanged':True}
     finally:db.close()

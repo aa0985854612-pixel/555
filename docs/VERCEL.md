@@ -1,48 +1,42 @@
-# PigLedger 1.3.1：固定雲端網址
+# PigLedger 1.4.0：固定雲端網址與保留資料的更新
 
-正式網站：[https://555-rho-nine.vercel.app/](https://555-rho-nine.vercel.app/)。Vercel 團隊 pig13、專案555、GitHub aa0985854612-pixel/555 的 main。2026-10-15：普通 App 原始碼部署已 Ready；Turso 已連接並私密搬入原帳號、原始 Excel、紀錄與操作歷程，沒有清空原庫。
+正式網站：[555-rho-nine.vercel.app](https://555-rho-nine.vercel.app/)，沿用 Vercel pig13／555、GitHub aa0985854612-pixel/555 的 main、既有 Turso。原farmadmin保留，沒有清空資料或重新建庫。手機Safari／Chrome開網址、登入、加入主畫面；筆電不用保持開機。
 
-真實雲端的搬移、內容核對與既有帳號後端登入已完成；正式網址瀏覽器登入、跨裝置與實體手機驗收尚未完成。維護環境直接連線正式網站被網路代理403阻擋。詳見 [1.3.1 測試報告](TEST_REPORT_1.3.1.md)，不要將 Ready 誤當全部使用情境都已驗收。
+## 一般程式更新
 
-## 手機及每日使用
-
-Safari 或 Chrome 開正式 HTTPS 網址，登入原帳號，再使用「加入主畫面」。手機不用下載 ZIP、執行 bat 或透過檔案預覽開 HTML；筆電不用保持開機。
-
-每日登記頁填豬隻異動；飼料頁分別登記到料及實際耗料；秤重頁登記頭數與重量；週期統計自動整理。資料不足顯示「—」或資料不足。完整說明見 [USER_GUIDE.md](USER_GUIDE.md)。
-
-## 後續程式更新
-
-以 GitHub main 部署 repository 根目錄（`vercel.json`、`pyproject.toml`、`api/`、`app/`）。Framework Preset 為 Other，Python3.12，無須指定其他 framework 或輸出目錄。保留 Production 的兩項伺服器環境變數：
+推送 GitHub main 會由既有Vercel Git整合自動部署。根目錄`./`、Framework Other、Python3.12、原`vercel.json`，沒有前端建置命令或輸出目錄。保留Production伺服器環境變數：
 
 | 名稱 | 內容 |
 | --- | --- |
-| `TURSO_DATABASE_URL` | 原 Turso 資料庫的 libsql／HTTPS 網址 |
-| `TURSO_AUTH_TOKEN` | 同一資料庫的可讀寫金鑰，使用敏感值 |
+| TURSO_DATABASE_URL | 既有資料庫libsql／HTTPS網址 |
+| TURSO_AUTH_TOKEN | 同一資料庫可讀寫金鑰，敏感值 |
 
-環境變數修改後需重新部署才生效。不要把 token 放入聊天、GitHub、網址或 `NEXT_PUBLIC_` 欄位。維護代理的 VERCEL_TOKEN、TURSO_API_TOKEN 與 App 登入密碼不同，不需要放入 App 網站。
+修改環境變數需要重新部署。不要填NEXT_PUBLIC、不把資料庫金鑰放進前端／GitHub。VERCEL_TOKEN是維護用途，不是App密碼，日常伺服器不需要。Git部署不會自動上傳本地農場資料、Excel或變更正式資料庫結構。
 
-更新沿用相同雲端資料庫，不重新建庫、不重新匯入過時備份、不重設帳號。需要重新登入不代表資料遺失。1.3.1 的雲端版本標記使用 `cloud_metadata`，避免提供者拒絕 `PRAGMA user_version=3`；本地 schema3 不變，舊雲端版本標記仍可讀。
+## schema3→4更新（本次已執行，勿重新搬舊資料）
 
-## 首次搬移到另一個空白資料庫（維護人員）
-
-目前正式資料庫已搬移完成；以下只適用受控搬家，不是每次部署步驟。先停用日常寫入，確認目標是正確空白資料庫，使用原資料庫的 SQLite Backup API 製作備份。安全提供目標的 TURSO_DATABASE_URL、TURSO_AUTH_TOKEN，在 repository 根目錄執行：
+先備份正式資料，使用受保護執行環境的原資料庫金鑰：
 
 ```sh
-python3 scripts/migrate_cloud.py --db /private/path/pigledger.sqlite3
+python3 scripts/upgrade_cloud.py --prepare --ensure-role-accounts
+# 新版部署Ready後完成版本標記
+python3 scripts/upgrade_cloud.py
 ```
 
-來源檔不存在時拒絕建立新庫。工具先備份，於遠端單一交易移入 schema3、records、users、requests、audit，保留 ID、密碼雜湊、角色、修訂、刪除標記、原工作簿與操作歷程；完整內容雜湊相同才提交。重複移入相同內容安全略過，目標已有不同內容或較新版本標記時拒絕覆蓋。sessions 不搬移，使用者重新登入。
+工具先建立持久雲端備份，交易內新增account_security，核對原records／users／requests／audit不變。準備階段保留schema3標記讓新舊部署交接，完成後標記4。一般API不執行schema修改；新版相容準備階段，舊版1.3.1不能直接回滾到標記4資料庫。回滾需使用相容schema4的修正版，或經明確維護安排還原完整備份，不能覆蓋後續正式登記。
 
-本次使用 Vercel 受保護的建置環境讀取敏感資料庫金鑰完成搬移，不讀出該金鑰、不提供公開搬移 API。私密建置輸入在工作完成時移除；暫時驗證用敏感環境變數及失敗建置也已清理。正常部署只包含 App 程式，沒有來源資料庫或登入密碼檔。
+`--ensure-role-accounts`只建立缺少的farmviewer／farmeditor／farmmanager，使用不同的隨機未知臨時密碼並要求設定，不重設同名帳號或原farmadmin。原管理員於「設定」產生一次性密碼設定連結，私下交給各人。密碼只存雜湊，管理員不能查看原密碼。
 
-管理員可以下載完整 JSON 備份。雲端內部更正前備份與正式資料在同一資料庫，不代替另外保存的災難復原備份。資料與工作簿留在受保護的資料庫及維護環境 .data，沒有放入公開程式包。
+本次更新前已建立雲端備份，另以公開憑證加密取回離線備份，私鑰留在受保護維護環境；更新後再次備份。原55筆紀錄、原帳號保留，新增一份新版Excel來源，補登一筆有來源的入場均重；沒有新增重複棟舍、批次或日常異動。原管理員雜湊逐欄核對未變。詳細農場數字與私密備份不放入公開程式包。
 
-## 驗收與限制
+新版Excel先以現況產生預覽與修訂指紋，再交易內核對並套用無爭議來源。已手動登記的事件不重複入帳；衝突批次保留App，來源原文仍可下載。再次匯入相同來源略過。不要把本地過時SQLite再次移入正式庫。
 
-已做：真實 Turso HTTPS交易、內容核對、重複搬移、後端既有帳號登入與登出、未登入拒絕、CSRF拒絕、兩個歷史日期統計；正常 Vercel Production 部署 Ready。
+## 備份與搬家
 
-尚待：正式網址瀏覽器 HTTPS登入、重新部署後公開介面重讀、多人／跨裝置同步、真實 Android／iPhone／iPad 與行動網路、加入主畫面。本版 Docker/Caddy 未重跑。不能把過去版本或模擬服務測試當成這些項目已通過。
+管理員在「設定」下載完整JSON備份並私下保管；唯讀不能下載包含帳號的備份。內部備份與正式資料同庫，請另行保存離線副本。普通程式包不含任何農場資料。`scripts/migrate_cloud.py --db /private/existing.sqlite3`僅供搬到另一個空白資料庫；已使用的正式庫不是每次部署都重跑搬移。
 
-## 最後使用哪個檔案
+## 驗證及交付
 
-日常直接使用正式網址。維護原始碼使用 GitHub main；離線交付使用 **release/pigledger-1.3.1.zip** 及同名 sha256。舊版本程式包與報告保留，不與新版本同名覆蓋。
+真實雲端已完成更新、原資料比對、原帳號後端登入／登出、來源重複匯入、歷史／CSV與來源均重讀取。Vercel Ready不等於所有手機情境通過。本環境對正式網域的直接連線遭代理CONNECT403；公開HTTPS瀏覽器、實體手機及跨裝置仍待現場驗收。詳見[1.4.0測試報告](TEST_REPORT_1.4.0.md)。
+
+日常使用正式網址。完整程式與Docker／Vercel部署檔使用**release/pigledger-1.4.0.zip**及同名sha256。原始碼在GitHub main，舊版包保留不同檔名。

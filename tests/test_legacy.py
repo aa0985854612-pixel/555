@@ -70,7 +70,8 @@ class LegacyTests(unittest.TestCase):
         self.assertEqual(sum(r['quantity'] for r in rows),5);self.assertTrue(any(r['batch_id'] is None for r in rows))
         first=next(b for b in d['batches'] if b['legacy_barn']==1)
         scoped=filter_rows('movements',d,{'barn_id':[first['barn_id']],'type':['sale']});self.assertEqual(sum(r['quantity'] for r in scoped),2)
-        self.assertEqual(statistics(d,{'from':['2026-10-12'],'to':['2026-10-14']})['interval']['death'],None)
+        self.assertEqual(statistics(d,{'from':['2026-10-12'],'to':['2026-10-14']})['interval']['death'],3)
+        self.assertIsNone(statistics(d,{'from':['2026-10-12'],'to':['2026-10-14'],'barn_id':[first['barn_id']]})['interval']['sale'])
     def test_new_and_legacy_same_barn_batches_do_not_mix(self):
         self.apply();d=self.store.snapshot();old=d['batches'][0]
         new=self.store.mutate(self.admin,'batches',{'barn_id':old['barn_id'],'name':'New batch','group':'','entry_date':'2026-10-15','entry_count':10,'entry_age_days':None,'status':'active'},str(uuid.uuid4()))
