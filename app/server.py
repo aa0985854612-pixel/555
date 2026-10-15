@@ -144,12 +144,12 @@ def statistics(data,query):
             estimate={'first':first,'last':last,'days':days,'delta':last['mean']-first['mean'],
                 'adg':(last['mean']-first['mean'])/days,'source':'source_mean','estimated':True,'fcr':None,
                 'composition_changed':any(r.get('date') and first['date']<=r['date']<=last['date'] and r.get('cohort')==key for r in source_history(data))}
-        death_query={'cohort':[key],'from':[start or '0001-01-01'],'to':[until],'type':['death']}
+        death_query={'cohort':[key],'from':[start or until],'to':[until],'type':['death']}
         for field in ('barn_id','batch_id'):
             if get(field):death_query[field]=[get(field)]
         deaths=filter_rows('movements',data,death_query)
         ages={age(b,until) for b in members}
-        uncertain=[r for r in source_history(data) if r.get('cohort')==key and r.get('type')=='death' and (not r.get('date') or (start or '0001-01-01')<=r['date']<=until) and not r.get('batch_id')]
+        uncertain=[r for r in source_history(data) if r.get('cohort')==key and r.get('type')=='death' and (not r.get('date') or (start or until)<=r['date']<=until) and not r.get('batch_id')]
         unknown_cohort=any(not r.get('date') or not set(r.get('legacy_members',[]))<=chosen for r in uncertain)
         stats['cohorts'].append({'cohort':key,'name':members[0]['name'],'herd':herd(data['batches'],data['movements'],until,[b['id'] for b in members]),
             'age_days':next(iter(ages)) if len(ages)==1 else None,'period_deaths':None if unknown_cohort else sum(r['quantity'] for r in deaths if not r.get('archive')),
@@ -157,6 +157,13 @@ def statistics(data,query):
                 'period_deaths':None if uncertain else sum(r['quantity'] for r in deaths if r.get('batch_id')==b['id'])} for b in members],
             'source_performance':estimate if not get('barn_id') and not get('batch_id') else None,
             'missing_fields':[field for field in ('entry','dead') if any(herd(data['batches'],data['movements'],until,[b['id']])[field] is None for b in members)]})
+    death_start=start or until
+    scope={k:v for k,v in query.items() if k in ('batch_id','barn_id','cohort','group')}
+    death_rows=filter_rows('movements',data,scope|{'from':[death_start],'to':[until],'type':['death']})
+    relevant=[r for r in source_history(data) if r['type']=='death' and (not scoped or (r.get('batch_id') in chosen or set(r.get('legacy_members',[]))&chosen or get('cohort')==r.get('cohort')))]
+    incomplete=any((not r.get('date') and (not r.get('archive') or get('cohort')==r.get('cohort'))) or (r.get('date') and death_start<=r['date']<=until and scoped and not r.get('batch_id') and not set(r.get('legacy_members',[]))<=chosen) for r in relevant)
+    known=sum(r['quantity'] for r in death_rows)
+    stats['death_summary']={'from':death_start,'to':until,'known':known,'total':None if incomplete else known,'rows':death_rows}
     return stats
 
 
@@ -170,6 +177,11 @@ def client_snapshot(snapshot,cursor):
     cohorts={cohort_key(b):{'key':cohort_key(b),'name':b['name'],'entry_date':b['entry_date'],'archive':False} for b in snapshot['batches']}
     for source in source_rows(snapshot,archives=True):
         if source['archive']:cohorts.setdefault(cohort_key(source['row']),{'key':cohort_key(source['row']),'name':source['row']['name'],'entry_date':source['row']['entry_date'],'archive':True})
+    for key,c in cohorts.items():
+        c['barns']=[b['name'] for b in snapshot['barns'] if any(x['barn_id']==b['id'] and cohort_key(x)==key for x in snapshot['batches'])]
+        if c['archive']:
+            row=next((x['row'] for x in source_rows(snapshot,archives=True) if cohort_key(x['row'])==key),None)
+            c['barns']=[str(n)+'棟' for n in row['barns']] if row else []
     return snapshot|{'cohorts':list(cohorts.values()),'dashboard':dashboard,'version':VERSION,'cursor':cursor,
         'workbooks':[{k:b.get(k) for k in ('id','revision','filename','sha256','base_book_id','pending_cohorts')}|{'as_of':b['report']['as_of']} for b in snapshot['workbooks']]}
 
@@ -284,6 +296,15 @@ class Handler(BaseHTTPRequestHandler):
             user=self.session()
             if user.get('must_change') and path not in ('/api/me','/api/logout','/api/password'):raise Problem('password_change_required',403)
             if method!='GET':self.protect(user)
+            if path=='/api/void-preview' and method=='GET':
+                from .operations import void_preview
+                return self.send(void_preview(store,user,store.snapshot(include_source=False),query.get('kind',[''])[0],query.get('id',[''])[0]))
+            if path in ('/api/void','/api/weighings') and method=='POST':
+                from .operations import void_record,save_weighing
+                result=(void_record if path=='/api/void' else save_weighing)(store,user,self.body(),self.headers.get('Idempotency-Key'))
+                if '_snapshot' in result:
+                    snapshot=result.pop('_snapshot');seq=result.pop('_sequence');result['sync']=client_snapshot(snapshot,self.server.instance+':'+str(seq))
+                return self.send(result,201)
             if path=='/api/me' and method=='GET':return self.send(user|{'version':VERSION})
             if path=='/api/password' and method=='POST':
                 from .accounts import change_password
@@ -365,12 +386,12 @@ class Handler(BaseHTTPRequestHandler):
                 data=store.snapshot(include_source=False);rows=filter_rows(kind,data,query)
                 batches={b['id']:b for b in data['batches']};barns={b['id']:b['name'] for b in data['barns']}
                 out=io.StringIO();writer=csv.writer(out)
-                writer.writerow(['id','revision','date','end_exclusive','barn','batch','type_or_source','quantity','unit','mean_kg','age_days','vendor','item','note','allocations','status','sample_count','individual_weights_kg','pen','selected_allocated_kg','calculation_source','source_cell'])
+                writer.writerow(['id','revision','date','end_exclusive','barn','batch','type_or_source','quantity','unit','mean_kg','age_days','vendor','item','note','allocations','status','sample_count','individual_weights_kg','pen','selected_allocated_kg','calculation_source','source_cell','section','weighing_session_id','weighing_session_number'])
                 for r in rows:
                     batch=batches.get(r.get('batch_id'),{})
                     q=consumption(r,data['deliveries']) if kind=='usages' else r.get('quantity',r.get('kg',r.get('total_kg','')))
                     mean=(r.get('mean_kg') if r.get('source_mean') else r['total_kg']/r['count']) if kind=='weights' else ''
-                    values=[r['id'],r['revision'],r.get('date',r.get('start','')),r.get('end',''),barns.get(batch.get('barn_id') or r.get('barn_id'),r.get('barn_number') or ''),batch.get('name',r.get('legacy_batch','')),r.get('type',r.get('method','sample' if kind=='weights' else 'delivery')),q,'heads' if kind=='movements' else 'kg',mean,r.get('age_days',''),r.get('vendor',''),r.get('item',''),r.get('note',''),encode(r.get('allocations',[])),('active' if r['active'] else 'excluded') if kind=='usages' else '',r.get('count',''),encode(r.get('individual_kg',[])),r.get('pen',''),sum(a['kg'] for a in r.get('allocations',[]) if a['batch_id'] in set(selected_ids(data,query))) ,'source_mean' if r.get('source_mean') else 'legacy_excel_readonly' if r.get('legacy_source') else r.get('method','recorded'),r.get('source_cell','')]
+                    values=[r['id'],r['revision'],r.get('date',r.get('start','')),r.get('end',''),barns.get(batch.get('barn_id') or r.get('barn_id'),r.get('barn_number') or ''),batch.get('name',r.get('legacy_batch','')),r.get('type',r.get('method','sample' if kind=='weights' else 'delivery')),q,'heads' if kind=='movements' else 'kg',mean,r.get('age_days',''),r.get('vendor',''),r.get('item',''),r.get('note',''),encode(r.get('allocations',[])),('active' if r['active'] else 'excluded') if kind=='usages' else '',r.get('count',''),encode(r.get('individual_kg',[])),r.get('pen',''),sum(a['kg'] for a in r.get('allocations',[]) if a['batch_id'] in set(selected_ids(data,query))) ,'source_mean' if r.get('source_mean') else 'legacy_excel_readonly' if r.get('legacy_source') else r.get('method','recorded'),r.get('source_cell',''),r.get('section',''),r.get('session_id',''),r.get('session_number','')]
                     # Spreadsheet formula injection protection; original fields remain intact in backups.
                     writer.writerow(["'"+v if isinstance(v,str) and v.startswith(('=','+','-','@','\t','\r')) else v for v in values])
                 return self.send(('\ufeff'+out.getvalue()).encode(),content_type='text/csv; charset=utf-8',headers={'Content-Disposition':'attachment; filename="'+kind+'-'+VERSION+'.csv"'})
@@ -379,6 +400,8 @@ class Handler(BaseHTTPRequestHandler):
                 kind=parts[1];rid=parts[2] if len(parts)==3 else None
                 if method=='GET':return self.send(filter_rows(kind,store.snapshot(include_source=False),query))
                 if (method=='POST' and not rid) or (method in ('PUT','DELETE') and rid):
+                    if method=='DELETE':
+                        store.require(user,True);raise Problem('void_preview_required')
                     result=store.mutate(user,kind,self.body(),self.headers.get('Idempotency-Key'),rid,method=='DELETE',return_snapshot=True)
                     if '_snapshot' in result:
                         snapshot=result.pop('_snapshot');sequence=result.pop('_sequence')

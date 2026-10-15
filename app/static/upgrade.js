@@ -177,5 +177,4 @@ enter=async user=>{
  $$('.filters').forEach(f=>{for(const key of ['from','to','scope_type','cohort','group','barn_id'])if(sharedFilters[key])f.elements[key].value=sharedFilters[key];if(!sharedFilters.scope_type&&sharedFilters.barn_id)f.elements.scope_type.value='barn';updateFilterBatch(f);if(sharedFilters.batch_id)f.elements.batch_id.value=sharedFilters.batch_id;filterScope(f);});
  await renderCurrent();restorePending();persistPending();
 };
-boot();
 })();

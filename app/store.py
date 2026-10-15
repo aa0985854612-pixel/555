@@ -3,9 +3,9 @@ from pathlib import Path
 from datetime import datetime, timezone
 from .domain import Invalid, day, number, herd, consumption, age
 
-VERSION='1.4.0'
+VERSION='1.5.0'
 SCHEMA_VERSION=4
-KINDS=('barns','batches','movements','deliveries','usages','weights','workbooks')
+KINDS=('barns','batches','movements','deliveries','usages','weights','workbooks','source_voids')
 SCHEMA='''
 CREATE TABLE IF NOT EXISTS records(kind TEXT NOT NULL, id TEXT PRIMARY KEY, revision INTEGER NOT NULL, deleted INTEGER NOT NULL DEFAULT 0, data TEXT NOT NULL);
 CREATE INDEX IF NOT EXISTS records_kind ON records(kind,deleted);
@@ -107,7 +107,7 @@ class Store:
             if not row or not plan:continue
             b['_cohort_key']=row['name']+'|'+row['entry_date']
             members=[x['id'] for x in data['batches'] if x.get('legacy_source')==book['id'] and x.get('legacy_row')==row['key']]
-            b['legacy_group']={'id':book['id']+':'+row['key'],'members':members,'expected_members':len(row['barns']),'snapshots':plan['snapshots'],'as_of':book['report']['as_of']}
+            b['legacy_group']={'id':book['id']+':'+row['key'],'members':members,'expected_members':len(row['barns']),'snapshots':json.loads(encode(plan['snapshots'])),'as_of':book['report']['as_of']}
             b['legacy_heads']={book['report']['as_of']:plan['current'].get(str(b['legacy_barn']),plan['current'].get(b['legacy_barn']))}
             if book['plan']['counts_as_of']!=book['report']['as_of']:
                 b['legacy_heads'][book['plan']['counts_as_of']]=plan['before'].get(str(b['legacy_barn']),plan['before'].get(b['legacy_barn']))
@@ -120,6 +120,8 @@ class Store:
                     complete=sum(e['quantity'] for e in all_events)==row['totals'][field] and all(sum(a['quantity'] for a in e['allocations'])==e['quantity'] for e in dated)
                     values[field]=sum(a['quantity'] for e in dated for a in e['allocations'] if a['barn']==b['legacy_barn']) if complete else None
                 b['legacy_values'][snapshot_date]=values
+        from .operations import apply_source_voids
+        apply_source_voids(data)
         from .history import derived_movements
         data['movements']=[m for m in data['movements'] if not m.get('_source_derived')]+derived_movements(data)
 
@@ -187,7 +189,8 @@ class Store:
             'movements':{'date','batch_id','type','quantity','note','target_batch_id','total_weight_kg'},
             'deliveries':{'date','kg','display_unit','vendor','item','note','allocations'},
             'usages':{'start','end','batch_id','method','kg','opening','closing','transfer_in','transfer_out','loss','note','active','vendor','item'},
-            'weights':{'date','batch_id','age_days','pen','count','total_kg','individual_kg','sampling','note','representative'},
+            'weights':{'date','batch_id','age_days','pen','count','total_kg','individual_kg','sampling','note','representative','section','session_id','session_number','session_fingerprint'},
+            'source_voids':{'target_kind','source_row_id','source_record','reason'},
             'workbooks':{'filename','base64','counts_text','counts_as_of','closed_barns','source_url','sha256','report','plan','review_decisions'},
         }[kind]
         d={k:v for k,v in d.items() if k in allowed}
@@ -277,7 +280,11 @@ class Store:
             else:raise Invalid('invalid_method')
             overlap=[u['id'] for u in data['usages'] if d['active'] and u['active'] and u['batch_id']==d['batch_id'] and u['start']<d['end'] and u['end']>d['start']]
             if overlap:raise Problem('overlapping_usage',409,overlap)
+        elif kind=='source_voids':
+            if user['role']!='admin' or d.get('target_kind') not in ('weights','movements') or not isinstance(d.get('source_record'),dict) or d['source_record'].get('id')!=d.get('source_row_id') or not isinstance(d.get('reason'),str) or not d['reason'].strip():raise Invalid('invalid_backup')
         elif kind=='weights':
+            text('section')
+            if d['section'] not in ('','head','middle','tail'):raise Invalid('invalid_weighing')
             day(d.get('date'));b=batch();text('pen');text('sampling');text('note')
             values=d.get('individual_kg')
             if values:
@@ -354,6 +361,16 @@ class Store:
                 members=[b for b in data['batches'] if b.get('legacy_source')==book['id'] and b.get('legacy_row')==row['key']]
                 if len(members)!=len(row['barns']) or {b['legacy_barn'] for b in members}!=set(row['barns']):raise Invalid('legacy_source_conflict')
                 if all(b['entry_count'] is not None for b in members) and sum(b['entry_count'] for b in members)!=row['totals']['entry']:raise Invalid('legacy_entry_total_mismatch')
+        from .history import source_history
+        known={r['id']:r for kind in ('movements','weights') for r in source_history(data,kind,include_voided=True,include_matched=True)}
+        for void in data.get('source_voids',[]):
+            row=void['source_record'];original=known.get(void['source_row_id']) or next((r for r in known.values() if row.get('source_anchor') and r.get('source_anchor')==row['source_anchor']),None)
+            if not original or any(row.get(k)!=original.get(k) for k in ('cohort','archive')) or (original and row.get('source_cell','').split('!')[-1]!=original.get('source_cell','').split('!')[-1]):raise Invalid('invalid_backup')
+            if void['target_kind']=='movements':
+                number(row.get('quantity'),True,True)
+                batch=next((b for b in data['batches'] if b['id']==row.get('batch_id')),None)
+                if batch and row.get('date') and row['date']<=batch['legacy_group']['as_of'] and any(row.get(k)!=original.get(k) for k in ('date','type','quantity','batch_id')):raise Invalid('invalid_backup')
+                if not row.get('archive') and not row.get('date'):raise Invalid('source_void_unassigned')
         active_by_batch={}
         for u in data['usages']:
             if u['active']:active_by_batch.setdefault(u['batch_id'],[]).append(u)
@@ -364,7 +381,7 @@ class Store:
     def mutate(self, user, kind, payload, request_key, rid=None, delete=False, return_snapshot=False):
         self.require(user,admin=kind in ('barns','batches','workbooks') or delete)
         if kind not in KINDS:raise Problem('unknown_kind',404)
-        if kind=='workbooks':raise Problem('legacy_source_readonly',403)
+        if kind in ('workbooks','source_voids'):raise Problem('legacy_source_readonly',403)
         if not isinstance(payload,dict) or not isinstance(request_key,str) or not 16<=len(request_key)<=128:raise Problem('idempotency_required')
         fingerprint=hashlib.sha256(encode([kind,rid,delete,payload]).encode()).hexdigest()
         db=self.connect()
@@ -390,6 +407,10 @@ class Store:
                 db.execute('UPDATE records SET deleted=1,revision=revision+1,data=? WHERE id=?',(encode(tombstone),rid))
             else:
                 cleaned=self.validate(kind,payload,data,user)
+                if kind=='weights':
+                    for field in ('session_id','session_number','session_fingerprint'):
+                        cleaned.pop(field,None)
+                        if previous and field in previous:cleaned[field]=previous[field]
                 output=cleaned|{'id':rid,'revision':previous['revision']+1 if previous else 1,'created_at':previous.get('created_at',now()) if previous else now(),'created_by':previous.get('created_by',user['id']) if previous else user['id'],'updated_at':now()}
                 data[kind].append(output)
                 db.execute('INSERT INTO records(kind,id,revision,data) VALUES(?,?,?,?) ON CONFLICT(id) DO UPDATE SET revision=excluded.revision,data=excluded.data',(kind,rid,output['revision'],encode(output)))
@@ -516,7 +537,7 @@ class Store:
                         continue
                     others={k:[x for x in rows if not (k==kind and x['id']==r['id'])] for k,rows in data.items()}
                     cleaned=self.validate(kind,r,others,user)
-                    if any((r.get(k, '') if k in ('vendor','item','entry_mean_source','entry_mean_note','entry_count_source') else r.get(k))!=v for k,v in cleaned.items()):raise Problem('invalid_backup')
+                    if any((r.get(k, '') if k in ('vendor','item','entry_mean_source','entry_mean_note','entry_count_source','section') else r.get(k))!=v for k,v in cleaned.items()):raise Problem('invalid_backup')
             self.validate_global(data)
             for u in document.get('users',[]):
                 if str(uuid.UUID(u['id']))!=u['id']:raise Problem('invalid_backup')

@@ -1,19 +1,22 @@
-# PigLedger 1.4.0：固定雲端網址與保留資料的更新
+# PigLedger 1.5.0：部署與保留資料
 
-正式網站：[555-rho-nine.vercel.app](https://555-rho-nine.vercel.app/)，沿用 Vercel pig13／555、GitHub aa0985854612-pixel/555 的 main、既有 Turso。原farmadmin保留，沒有清空資料或重新建庫。手機Safari／Chrome開網址、登入、加入主畫面；筆電不用保持開機。
+正式網址：https://555-rho-nine.vercel.app/ 。沿用GitHub aa0985854612-pixel/555 main、Vercel pig13／555及既有Turso。
 
-## 一般程式更新
+1.5.0沒有SQL結構變更，沿用schema4，不需重建資料庫或重跑初次搬移。新秤重作業欄位及source_voids存於既有records，原紀錄、帳號及安全設定保留。來源作廢是1.5新類型，使用1.5以上程式讀取與還原本版備份。
 
-推送 GitHub main 會由既有Vercel Git整合自動部署。根目錄`./`、Framework Other、Python3.12、原`vercel.json`，沒有前端建置命令或輸出目錄。保留Production伺服器環境變數：
+純程式更新推送main由既有Git整合自動部署。根目錄`./`、Framework Other、Python3.12、保留vercel.json。Production保留TURSO_DATABASE_URL及敏感TURSO_AUTH_TOKEN；不要放NEXT_PUBLIC或前端。環境變數改動需重新部署。
 
-| 名稱 | 內容 |
-| --- | --- |
-| TURSO_DATABASE_URL | 既有資料庫libsql／HTTPS網址 |
-| TURSO_AUTH_TOKEN | 同一資料庫可讀寫金鑰，敏感值 |
+資料更新另走「設定→Excel預覽／匯入」，不是只推前端。本次已備份、核對並保存新版Excel來源；檔名日期與內部統計日不同，使用表內可靠日期。舊歷史表未在新檔出現時仍保留既有來源歷史；人工確認的差異不靜默覆蓋。
 
-修改環境變數需要重新部署。不要填NEXT_PUBLIC、不把資料庫金鑰放進前端／GitHub。VERCEL_TOKEN是維護用途，不是App密碼，日常伺服器不需要。Git部署不會自動上傳本地農場資料、Excel或變更正式資料庫結構。
+更新前後雲端備份已建立，另保留加密離線副本。測試的真實Turso秤重／作廢交易已回滾，沒有永久測試農場紀錄。維護用一次性建置輸入在執行後移除並排除在函式包外，正常Git部署只有程式。
 
-## schema3→4更新（本次已執行，勿重新搬舊資料）
+日常用正式網址；完整維護包為**release/pigledger-1.5.0.zip**及同名sha256。手機用Safari／Chrome開啟並加入主畫面。帳號密碼沿用目前設定，不能以程式包中的示範測試帳號登入正式網站。
+
+完整真實測試／模擬／尚未驗收範圍見[1.5.0測試報告](TEST_REPORT_1.5.0.md)。維護環境到正式網域的直接連線受限，正式HTTPS瀏覽器與手機實機尚待驗收。
+
+以下保留前次schema3→4及搬家說明；不是本版日常部署步驟。
+
+## schema3→4歷史更新（已完成，勿重新搬舊資料）
 
 先備份正式資料，使用受保護執行環境的原資料庫金鑰：
 
@@ -35,8 +38,3 @@ python3 scripts/upgrade_cloud.py
 
 管理員在「設定」下載完整JSON備份並私下保管；唯讀不能下載包含帳號的備份。內部備份與正式資料同庫，請另行保存離線副本。普通程式包不含任何農場資料。`scripts/migrate_cloud.py --db /private/existing.sqlite3`僅供搬到另一個空白資料庫；已使用的正式庫不是每次部署都重跑搬移。
 
-## 驗證及交付
-
-真實雲端已完成更新、原資料比對、原帳號後端登入／登出、來源重複匯入、歷史／CSV與來源均重讀取。Vercel Ready不等於所有手機情境通過。本環境對正式網域的直接連線遭代理CONNECT403；公開HTTPS瀏覽器、實體手機及跨裝置仍待現場驗收。詳見[1.4.0測試報告](TEST_REPORT_1.4.0.md)。
-
-日常使用正式網址。完整程式與Docker／Vercel部署檔使用**release/pigledger-1.4.0.zip**及同名sha256。原始碼在GitHub main，舊版包保留不同檔名。

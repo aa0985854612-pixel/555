@@ -34,7 +34,7 @@ def source_rows(data,archives=False):
                 if replacement:current_book,current_row=version,replacement
             yield {'base':base,'base_row':row,'book':current_book,'row':current_row,'matched':matched,'archive':False}
         if archives:
-            latest=versions[-1] if versions else base
+            latest=next((b for b in reversed([base,*versions]) if b['report'].get('archive_rows')),base)
             for row in latest['report'].get('archive_rows',[]):
                 yield {'base':base,'base_row':row,'book':latest,'row':row,'matched':{},'archive':True}
 
@@ -103,7 +103,7 @@ def update_preview(report,data):
                 [(b['id'],b['revision']) for b in data['workbooks']]],sort_keys=True).encode()).hexdigest()}
 
 
-def source_history(data,kind='movements'):
+def source_history(data,kind='movements',include_voided=False,include_matched=False):
     output=[]
     for source in source_rows(data,archives=True):
         row=source['row'];members=[] if source['archive'] else members_for(data,source)
@@ -111,8 +111,11 @@ def source_history(data,kind='movements'):
                 'cohort':cohort_key(row),'legacy_members':[b['id'] for b in members],
                 'archive':source['archive'],'entry_date':row['entry_date']}
         if kind=='movements':
+            positions=defaultdict(int)
             for eid,event in event_keys(row):
-                if eid in source['matched']:continue
+                ordinal=positions[event['cell']];positions[event['cell']]+=1
+                anchor=source['base']['id']+cohort_key(row)+event['cell']+str(ordinal)
+                if eid in source['matched'] and not include_matched:continue
                 allocations=event['allocations'] or ([{'barn':row['barns'][0],'quantity':event['quantity']}] if len(row['barns'])==1 else [{'barn':None,'quantity':event['quantity']}])
                 for allocation in allocations:
                     batch=next((b for b in members if b['legacy_barn']==allocation['barn']),None)
@@ -121,7 +124,7 @@ def source_history(data,kind='movements'):
                         'date':event.get('date'),'type':event['type'],'quantity':allocation['quantity'],
                         'batch_id':batch['id'] if batch else None,'barn_id':barn['id'] if barn else None,'barn_number':allocation['barn'],
                         'source_cell':row.get('sheet',source['book']['report']['sheet'])+'!'+event['cell'],
-                        'note':event['text'],'event_key':eid,'source_mean':False})
+                        'note':event['text'],'event_key':eid,'source_anchor':hashlib.sha256((anchor+str(allocation['barn'])).encode()).hexdigest(),'matched_manual':source['matched'].get(eid,[]),'source_mean':False})
             for cell in row.get('unresolved_cells',[]):
                 if cell.get('unresolved_quantity',cell['quantity'])<=0:continue
                 output.append(common|{'id':str(uuid.uuid5(uuid.NAMESPACE_URL,source['base']['id']+row.get('sheet','')+cell['cell']+':undated')),
@@ -139,7 +142,9 @@ def source_history(data,kind='movements'):
                     'pen':'','sampling':'source_mean','representative':False,'age_days':None,
                     'age_weeks_hint':weight.get('age_weeks_hint'),'source_cell':row.get('sheet',source['book']['report']['sheet'])+'!'+weight['cell'],
                     'note':weight.get('formula') or '', 'entry_measurement':weight.get('entry_measurement',False)})
-    return output
+    voided={v['source_row_id'] for v in data.get('source_voids',[]) if v['target_kind']==kind}
+    anchors={v['source_record'].get('source_anchor') for v in data.get('source_voids',[]) if v['target_kind']==kind};anchors.discard(None)
+    return output if include_voided else [r for r in output if r['id'] not in voided and r.get('source_anchor') not in anchors]
 
 
 def derived_movements(data):

@@ -1,18 +1,20 @@
-# 肉豬紀錄管理 App — PigLedger 1.4.0
+# 肉豬紀錄管理 App — PigLedger 1.5.0
 
-正式網址：**[555-rho-nine.vercel.app](https://555-rho-nine.vercel.app/)**。沿用原 Vercel 專案、Turso 資料庫及 farmadmin；手機 Safari／Chrome 開啟後可加入主畫面，筆電不用開機。
+**[開啟正式網站：555-rho-nine.vercel.app](https://555-rho-nine.vercel.app/)**。沿用你目前的帳號、密碼、Vercel專案及Turso資料庫。
 
-- [完整原始碼與 Docker／Vercel 程式包 v1.4.0](https://github.com/aa0985854612-pixel/555/raw/refs/heads/main/release/pigledger-1.4.0.zip)
-- [操作說明](docs/USER_GUIDE.md)／[部署及資料庫更新](docs/VERCEL.md)
-- [本版實際測試範圍與限制](docs/TEST_REPORT_1.4.0.md)
+- [完整原始碼／Docker／Vercel程式包 v1.5.0](https://github.com/aa0985854612-pixel/555/raw/refs/heads/main/release/pigledger-1.5.0.zip)
+- [簡短操作說明](docs/USER_GUIDE.md)／[部署說明](docs/VERCEL.md)
+- [1.5.0測試報告與驗收限制](docs/TEST_REPORT_1.5.0.md)
 
-本版新增入場均重與估計日增重、跨棟批次／單棟歷史查詢、新版 Excel 對照及來源均重歷史、自助改密碼與一次性帳號設定連結。登入先顯示每日登記表單。日常同步只傳索引與必要資料，來源工作簿詳情按需讀取；成功儲存回傳一致的最新資料，省去額外整份讀取。
+本版改為深藍、米白及灰色，放大字體；首頁每個飼養中批次顯示可靠單棟育成率。週期統計以期間死亡為主，批次名稱連同棟舍顯示，點死亡數字可查明細；零死亡的其他批次可展開查看。
 
-原始 Excel、帳號、農場資料、密碼與備份不在 GitHub 或程式包。新版 Excel 先核對預覽，保留人工更正；不重複扣除基準存欄內的歷史事件，不從概略存欄倒推出分棟進場數。未知分母、樣本頭數或耗料繼續顯示未知，不製造 FCR。
+秤重頁採紙本作業方式：日期與棟舍／批次→各欄（頭部／中部／尾部、欄號）→各隻重量或頭數＋總重量。預設6格，可增減，空白不算0，合計按實際樣本加權。多欄整次原子儲存、失敗不留半份；同日多次分開編號，保留單筆快速登記與更正。
 
-farmviewer 唯讀、farmeditor 新增及更正自己登記的日常資料、farmmanager 管理設定／帳號。原管理員登入「設定」可為各人產生48小時有效的一次性密碼設定連結，私下交付；沒有公開預設密碼。所有角色都能修改自己的密碼，伺服器驗證角色與版本，密碼變更後舊登入失效。
+管理員可在異動、飼料、秤重及來源明細旁按「刪除／作廢」，先核對影響並填原因。原值與操作歷程保留，來源更正採獨立識別，不刪整份Excel，重匯不復活；無法可靠調整基準存欄時先補資料。編輯人員不能自行取得刪除權，唯讀不提供寫入功能。
 
-正式資料更新需先執行保留資料的 schema4 更新；GitHub 推送本身不代替資料庫更新。Vercel Ready 代表部署完成，不代表實體手機或公開 HTTPS 全流程已驗收。本環境到正式網址直接連線受到網路代理限制；詳細證據見本版報告。
+日常手機Safari／Chrome開正式HTTPS網址，加入主畫面；每人使用自己的帳號。原管理員於設定管理帳號，私下發送一次性設定密碼連結。原始Excel、農場資料、密碼、金鑰及備份不在GitHub或程式包。
+
+本版沿用schema4，新增秤重作業欄位與來源作廢紀錄類型，沒有重建資料庫。純程式推送main會自動觸發Vercel部署；Excel更新仍先預覽核對再匯入。Vercel Ready與真實後端測試不等於實體手機或公開HTTPS全流程已驗收，詳見報告。
 
 原筆電版仍可使用：
 
@@ -39,6 +41,7 @@ python3 tests/browser_smoke.py
 python3 tests/legacy_browser.py
 python3 tests/pwa_test.py
 python3 tests/upgrade_browser.py
+python3 tests/redesign_browser.py
 ```
 
 ```sh

@@ -4,3 +4,4 @@ cd "$(dirname "$0")/.."
 python3 -m unittest discover -s tests -v
 node --check app/static/app.js
 node --check app/static/upgrade.js
+node --check app/static/redesign.js
