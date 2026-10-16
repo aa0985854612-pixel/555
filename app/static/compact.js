@@ -129,4 +129,3 @@ clickAction=e=>{
  return base.clickAction(e);
 };
 })();
-boot();

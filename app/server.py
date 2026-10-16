@@ -197,6 +197,8 @@ def statistics(data,query):
         stats['death_groups'].append({'cohort':key,'name':row['name'],'entry_date':row['entry_date'],'archive':True,
             'age_days':None,'period_deaths':None if undated else sum(r['quantity'] for r in rows),
             'known_period_deaths':sum(r['quantity'] for r in rows),'barns':barns})
+    from .review import check_coverage
+    stats['death_check_coverage']=check_coverage(data,ids,death_start,until)
     return stats
 
 
@@ -215,7 +217,8 @@ def client_snapshot(snapshot,cursor):
         if c['archive']:
             row=next((x['row'] for x in source_rows(snapshot,archives=True) if cohort_key(x['row'])==key),None)
             c['barns']=[str(n)+'棟' for n in row['barns']] if row else []
-    return snapshot|{'cohorts':list(cohorts.values()),'dashboard':dashboard,'version':VERSION,'cursor':cursor,
+    from .review import daily_review, data_quality
+    return snapshot|{'daily_review':daily_review(snapshot,dashboard['as_of']),'data_quality':data_quality(snapshot,dashboard['as_of'],dashboard), 'cohorts':list(cohorts.values()),'dashboard':dashboard,'version':VERSION,'cursor':cursor,
         'workbooks':[{k:b.get(k) for k in ('id','revision','filename','sha256','base_book_id','pending_cohorts')}|{'as_of':b['report']['as_of']} for b in snapshot['workbooks']]}
 
 
@@ -355,6 +358,9 @@ class Handler(BaseHTTPRequestHandler):
                     snapshot=store.snapshot(db,include_source=False)
                     return self.send(client_snapshot(snapshot,revision))
                 finally:db.close()
+            if path=='/api/daily-review' and method=='GET':
+                from .review import daily_review, farm_today
+                return self.send(daily_review(store.snapshot(include_source=False),query.get('date',[farm_today()])[0]))
             if path=='/api/statistics' and method=='GET':return self.send(statistics(store.snapshot(include_source=False),query))
             if path=='/api/weekly-report' and method=='GET':
                 from .weekly import weekly_report

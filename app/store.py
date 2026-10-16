@@ -3,9 +3,9 @@ from pathlib import Path
 from datetime import datetime, timezone
 from .domain import Invalid, day, number, herd, consumption, age
 
-VERSION='1.8.5'
+VERSION='1.9.0'
 SCHEMA_VERSION=4
-KINDS=('barns','batches','movements','feed_orders','deliveries','usages','weights','workbooks','source_voids')
+KINDS=('barns','batches','movements','feed_orders','deliveries','usages','weights','workbooks','source_voids','daily_checks')
 SCHEMA='''
 CREATE TABLE IF NOT EXISTS records(kind TEXT NOT NULL, id TEXT PRIMARY KEY, revision INTEGER NOT NULL, deleted INTEGER NOT NULL DEFAULT 0, data TEXT NOT NULL);
 CREATE INDEX IF NOT EXISTS records_kind ON records(kind,deleted);
@@ -221,6 +221,7 @@ class Store:
             'deliveries':{'date','kg','display_unit','vendor','item','note','allocations'},
             'usages':{'start','end','batch_id','method','kg','opening','closing','transfer_in','transfer_out','loss','note','active','vendor','item'},
             'weights':{'date','batch_id','age_days','pen','count','total_kg','individual_kg','sampling','note','representative','section','session_id','session_number','session_fingerprint'},
+            'daily_checks':{'date','batch_id','status','note'},
             'source_voids':{'target_kind','source_row_id','source_record','reason'},
             'workbooks':{'filename','base64','counts_text','counts_as_of','closed_barns','source_url','sha256','report','plan','review_decisions'},
         }[kind]
@@ -272,6 +273,17 @@ class Store:
                 if d['entry_age_days'] is None:
                     d.update(entry_age_days=source['entry_age_days'],age_date=source['age_date'])
             elif not d.get('legacy_source'): d['cohort_id']=None
+        elif kind=='daily_checks':
+            from .review import farm_today, death_state
+            day(d.get('date'));b=batch();text('note')
+            if d['date']>farm_today():raise Invalid('future_daily_check')
+            if d.get('status') not in ('no_deaths','cancelled'):raise Invalid('invalid_status')
+            if d['status']=='cancelled' and not d['note']:raise Invalid('check_reason_required')
+            if d['status']=='no_deaths':
+                if b.get('legacy_group') and d['date']<=b['legacy_group']['as_of']:raise Invalid('check_legacy_period')
+                state=death_state(data,b,d['date'])
+                if state['known'] or state['uncertain']:raise Invalid('daily_death_conflict')
+            if any(r['batch_id']==d['batch_id'] and r['date']==d['date'] for r in data.get('daily_checks',[])):raise Problem('daily_check_exists',409)
         elif kind=='movements':
             day(d.get('date'));b=batch();text('note')
             k=d.get('type')
@@ -364,6 +376,13 @@ class Store:
         barns={b['id'] for b in data['barns']}
         for b in data['batches']:
             if b['barn_id'] not in barns:raise Invalid('referenced_record')
+        check_slots=set()
+        for check in data.get('daily_checks',[]):
+            slot=(check['batch_id'],check['date'])
+            if slot in check_slots:raise Invalid('daily_check_exists')
+            check_slots.add(slot)
+            if check['batch_id'] not in bid:raise Invalid('referenced_record')
+            if check['date']<bid[check['batch_id']]['entry_date']:raise Invalid('before_entry')
         for kind in ('movements','weights','usages'):
             for r in data[kind]:
                 if r['batch_id'] not in bid:raise Invalid('referenced_record')
@@ -447,6 +466,8 @@ class Store:
                 if user['role']=='staff' and previous.get('created_by')!=user['id']:raise Problem('forbidden',403)
                 if payload.get('revision')!=previous['revision']:raise Problem('revision_conflict',409,previous)
                 data[kind]=[r for r in data[kind] if r['id']!=rid]
+            if kind=='daily_checks' and previous and any(payload.get(k)!=previous[k] for k in ('date','batch_id')):raise Problem('daily_check_identity_locked')
+            if kind=='daily_checks' and delete:raise Problem('daily_check_cancel_required')
             rid=rid or str(uuid.uuid4())
             if delete:
                 output={'id':rid,'deleted':True,'revision':previous['revision']+1}
@@ -470,6 +491,12 @@ class Store:
                 data[kind].append(output)
                 db.execute('INSERT INTO records(kind,id,revision,data) VALUES(?,?,?,?) ON CONFLICT(id) DO UPDATE SET revision=excluded.revision,data=excluded.data',(kind,rid,output['revision'],encode(output)))
             self.validate_global(data)
+            if kind=='movements' and not delete and output.get('type')=='death':
+                for check in data.get('daily_checks',[]):
+                    if check['batch_id']==output['batch_id'] and check['date']==output['date'] and check['status']=='no_deaths':
+                        old=dict(check);check.update(status='cancelled',note='補登死亡後自動撤銷無死亡確認',revision=check['revision']+1,updated_at=now())
+                        db.execute('UPDATE records SET revision=?,data=? WHERE id=?',(check['revision'],encode(check),check['id']))
+                        self.audit(db,user['id'],'supersede-zero-check','daily_checks',check['id'],old,check)
             if return_snapshot:self.enrich_legacy(data)
             self.audit(db,user['id'],'delete' if delete else 'update' if previous else 'create',kind,rid,previous,output)
             db.execute('INSERT INTO requests VALUES(?,?,?,?)',(user['id'],request_key,fingerprint,encode(output)))

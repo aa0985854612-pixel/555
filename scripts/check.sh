@@ -11,3 +11,4 @@ node --check app/static/feed.js
 node --check app/static/weighing-report.js
 node --check app/static/weekly-report.js
 node --check app/static/cohort-link.js
+node --check app/static/review.js
