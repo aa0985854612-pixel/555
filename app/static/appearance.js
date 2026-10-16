@@ -6,10 +6,12 @@
  try { const saved=localStorage.getItem('pig-text-size');if(sizes.includes(saved))selected=saved; } catch(e) {}
  document.documentElement.dataset.textSize=selected;
  Object.assign(words,{
-  textSize:['字體大小','Cỡ chữ'],fontSmall:['小','Nhỏ'],fontMedium:['中','Vừa'],fontLarge:['大','Lớn'],fontDevice:['自動記住這台裝置的選擇','Tự nhớ lựa chọn trên thiết bị này'],sourceDisclosure:['資料來源與計算說明','Nguồn dữ liệu và cách tính']
+  app:['嘉得肉豬紀錄','Gia Đắc'],coverArtAlt:['嘉得豬場Q版休息豬群插畫','Minh họa đàn heo dễ thương đang nghỉ tại trại Gia Đắc'],textSize:['字體大小','Cỡ chữ'],fontSmall:['小','Nhỏ'],fontMedium:['中','Vừa'],fontLarge:['大','Lớn'],fontDevice:['自動記住這台裝置的選擇','Tự nhớ lựa chọn trên thiết bị này'],sourceDisclosure:['資料來源與計算說明','Nguồn dữ liệu và cách tính']
  });
  const control=document.querySelector('#font-control'),buttons=Array.from(control.querySelectorAll('[data-text-size]'));
  function labels(){
+  document.querySelector('.cover-art')?.setAttribute('alt',t('coverArtAlt'));
+  document.title=lang==='vi'?'Nhật ký heo thịt Gia Đắc':'嘉得肉豬紀錄';
   control.querySelector('summary').setAttribute('aria-label',t('textSize'));
   control.querySelector('[role=group]').setAttribute('aria-label',t('textSize'));
   buttons.forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.textSize===selected)));

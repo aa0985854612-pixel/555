@@ -253,3 +253,24 @@ body [hidden] { display: none !important; }
   td, th { font-size: 12px; padding: 6px; }
   .print-target { break-inside: avoid; }
 }
+
+/* Jia De illustrated login cover; the working pages keep their compact layout. */
+.login { max-width: 1080px; display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 48px; align-items: center; margin: 48px auto; padding: 0 28px; }
+.login-cover { min-width: 0; }
+.login-cover h1 { font-size: 2rem; }
+.login-cover > p { font-size: .96rem; margin: 10px 0 18px; }
+.cover-art { display: block; width: 100%; height: auto; border-radius: 18px; background: #fff9ed; }
+.login #login-form { margin-top: 0; }
+#activation-form { grid-column: 1 / -1; width: min(490px, 100%); justify-self: center; }
+@media (max-width: 760px) {
+  .login { display: block; max-width: 470px; padding: 0 20px; margin: 20px auto 30px; }
+  .login-cover .eyebrow { display: none; }
+  .login-cover h1 { font-size: 1.65rem; margin: 0; }
+  .login-cover > p { font-size: .88rem; margin: 6px 0 10px; }
+  .cover-art { height: 170px; width: 100%; object-fit: cover; object-position: 50% 65%; border-radius: 12px; margin-bottom: 16px; }
+  .login #login-form { padding: 20px; gap: 14px; }
+  .login #login-form > h2 { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0, 0, 0, 0); }
+  .login #login-form > p.hint { font-size: .84rem; margin: 0; }
+  #activation-form { margin-top: 16px; }
+}
+@media (max-width: 359px) { .brand { font-size: 14px; } }
