@@ -1,0 +1,45 @@
+"""Weekly report preview, real CSV/PDF downloads and authenticated read API."""
+import csv,io,json,sys,tempfile,threading,uuid
+from pathlib import Path
+sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
+from app.store import Store,VERSION
+from app.server import Server
+from playwright.sync_api import sync_playwright
+root=Path(__file__).resolve().parents[1];checks=[]
+def passed(s):checks.append(s);print('PASS',s,flush=True)
+with tempfile.TemporaryDirectory() as tmp:
+ store=Store(Path(tmp)/'db');admin=store.create_user('owner','83000011');store.create_user('reader','83000012','viewer')
+ def add(k,**d):return store.mutate(admin,k,d,str(uuid.uuid4()))
+ barns=[add('barns',name=f'{n}棟',group='') for n in (1,2)];batches=[add('batches',name='DEMO-WEEKLY',barn_id=b['id'],entry_date='2026-10-09',entry_age_days=71,entry_count=100,status='active',entry_mean_kg=22) for b in barns]
+ for on,typ,n,b in [('2026-10-09','death',1,0),('2026-10-15','death',2,1),('2026-10-16','death',1,0),('2026-10-12','sale',15,0),('2026-10-13','cull',2,1)]:add('movements',date=on,type=typ,quantity=n,batch_id=batches[b]['id'])
+ for b,kg in zip(batches,(1000,2000)):add('feed_orders',date='2026-10-14',kg=kg,display_unit='ton',vendor='',allocations=[{'batch_id':b['id'],'kg':kg}])
+ original=store.export_backup();server=Server(('127.0.0.1',0),store);threading.Thread(target=server.serve_forever,daemon=True).start();url=f'http://127.0.0.1:{server.server_port}'
+ try:
+  with sync_playwright() as p:
+   browser=p.chromium.launch(executable_path='/usr/bin/chromium',args=['--no-sandbox']);page=browser.new_page(viewport={'width':390,'height':844},timezone_id='Asia/Taipei');errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
+   def login(name,password):page.locator('#login-form [name=username]').fill(name);page.locator('#login-form [name=password]').fill(password);page.locator('#login-form button').click();page.wait_for_selector('#workspace:not([hidden])')
+   def generate():page.locator('#weekly-generate').click();page.wait_for_selector('#weekly-export-actions:not([hidden])')
+   page.goto(url);login('owner','83000011');page.locator('#movement-form [name=barn_id]').select_option(barns[0]['id']);page.locator('#open-daily-weekly-report').click();assert page.locator('#weekly-cohort').input_value()=='DEMO-WEEKLY|2026-10-09' and page.locator('#weekly-barn').input_value()==barns[0]['id'];page.locator('#weekly-barn').select_option('');page.locator('#weekly-to').fill('2026-10-16');generate();sheet=page.locator('#weekly-sheet-body');assert sheet.locator('.weekly-table thead th').all_text_contents()==['週期','第11週','第12週'];assert sheet.locator('.weekly-death td').all_text_contents()==['3','1'];assert sheet.locator('.weekly-sale td').all_text_contents()==['15','0'];assert sheet.locator('.weekly-cull td').all_text_contents()==['2','0'];assert sheet.locator('.weekly-feed_orders td').all_text_contents()==['3.000','0.000'];assert '98.00%' in sheet.inner_text();passed('daily form scope opens one cohort report; exact 7-day columns, death/sale/cull and manual tonnes, correct cumulative survival')
+   with page.expect_download() as d:page.locator('#weekly-csv').click()
+   rows=list(csv.reader(io.StringIO(Path(d.value.path()).read_text(encoding='utf-8-sig'))));assert ['死亡數（隻）','3','1'] in rows;assert ['叫料登記量（噸）','3','0'] in rows;assert any(r and r[0]=='2026-10-15' and r[1]=='2棟' for r in rows);passed('actual CSV includes weekly matrix, period totals and dated per-barn source detail')
+   page.locator('#weekly-print').evaluate('(b)=>{window.print=()=>{};b.click()}');page.emulate_media(media='print');assert page.locator('#weekly-print-root').is_visible() and page.locator('#workspace').is_hidden() and page.locator('#weekly-report-dialog').is_hidden();page.pdf(path=str(root/'artifacts/weekly-report-synthetic.pdf'),prefer_css_page_size=True,print_background=True);page.emulate_media(media='screen');page.evaluate('dispatchEvent(new Event("afterprint"))');assert page.title()=='嘉得肉豬紀錄';passed('independent landscape PDF prints the weekly sheet without form, navigation or previous weighing report')
+   page.locator('#weekly-to').fill('2027-04-15');generate();assert sheet.locator('.weekly-table').count()==3;assert sheet.locator('.weekly-death td').last.inner_text()==''
+   page.set_viewport_size({'width':1123,'height':794});page.locator('#weekly-print').evaluate('(b)=>b.click()');page.emulate_media(media='print');assert page.locator('#weekly-print-root .weekly-table').count()==3
+   assert page.locator('#weekly-print-root .weekly-table').evaluate_all('(xs)=>xs.every(e=>e.scrollWidth<=e.clientWidth+2)'),page.locator('#weekly-print-root .weekly-table').evaluate_all('(xs)=>xs.map(e=>({width:e.clientWidth,scroll:e.scrollWidth}))')
+   page.pdf(path=str(root/'artifacts/weekly-report-full-cycle-synthetic.pdf'),prefer_css_page_size=True,print_background=True);page.emulate_media(media='screen');page.evaluate('dispatchEvent(new Event("afterprint"))');page.set_viewport_size({'width':390,'height':844});page.locator('#weekly-to').fill('2026-10-16');passed('long cycle splits into 13-column panels, future dates stay blank and landscape tables fit without shrinking the whole page')
+   page.locator('#weekly-barn').select_option(barns[0]['id']);assert page.locator('#weekly-export-actions').is_hidden();generate();assert sheet.locator('.weekly-death td').all_text_contents()==['1','1'] and sheet.locator('.weekly-feed_orders td').all_text_contents()==['1.000','0.000'];assert '2棟' not in sheet.locator('.weekly-heading').inner_text();passed('changing scope invalidates old export; one barn exports its own allocated quantities and events')
+   # Unknown common orders must not become a guessed per-barn or per-cohort feed amount.
+   add('feed_orders',date='2026-10-16',kg=4000,display_unit='ton',vendor='',allocations=[]);generate();assert sheet.locator('.weekly-feed_orders td').all_text_contents()==['1.000','—'];assert '全場叫料未指定批次' in sheet.locator('.weekly-pending').inner_text();passed('unassigned common feed order is a pending item; missing allocation is not 0 or an even split')
+   cases=0
+   for width in (320,390,768,1440):
+    page.set_viewport_size({'width':width,'height':900})
+    for language in ('zh','vi'):
+     page.evaluate('(v)=>{lang=v;translate()}',language)
+     for size in ('small','medium','large'):
+      page.evaluate('(s)=>document.documentElement.dataset.textSize=s',size);assert page.evaluate('document.documentElement.scrollWidth<=document.documentElement.clientWidth+2');assert page.locator('#weekly-report-dialog').evaluate('(e)=>e.scrollWidth<=e.clientWidth+1');cases+=1
+   page.set_viewport_size({'width':390,'height':844});page.evaluate('lang="zh";translate();document.documentElement.dataset.textSize="medium"');page.screenshot(path=str(root/'artifacts/weekly-report-mobile.png'));passed(f'{cases} language/font/mobile layouts keep the sheet in its own scrollable preview')
+   page.locator('#weekly-close').click();page.locator('#movement-form details').evaluate('(e)=>e.open=true');page.locator('#movement-form [name=note]').fill('next daily draft');page.locator('#open-daily-weekly-report').click();generate();page.locator('#weekly-close').click();assert page.locator('#movement-form [name=note]').input_value()=='next daily draft';assert page.locator('#movement-form [name=batch_id]').input_value()==batches[0]['id'];passed('generating and closing report retains next daily draft, date and batch')
+   page.locator('#logout').click();login('reader','83000012');page.locator('nav [href="#stats"]').click();page.locator('#open-weekly-report').click();page.locator('#weekly-cohort').select_option('DEMO-WEEKLY|2026-10-09');page.locator('#weekly-to').fill('2026-10-16');generate();assert page.locator('#weekly-print').is_enabled();response=page.request.get(url+'/api/weekly-report?cohort=DEMO-WEEKLY%7C2026-10-09&to=2026-10-16');assert response.status==200 and response.json()['totals']['death']==4;page.locator('#weekly-close').click();page.locator('#logout').click();assert page.request.get(url+'/api/weekly-report?cohort=x').status==401;assert store.export_backup()['users']==original['users'];assert not errors,errors;passed('viewer may query and export saved records; unauthenticated API blocked; accounts preserved and no JavaScript errors')
+   browser.close()
+ finally:server.shutdown();server.server_close()
+(root/'artifacts/weekly-report-browser-results.json').write_text(json.dumps({'version':VERSION,'mode':'real Chromium/HTTP/isolated SQLite; synthetic data, not physical mobile or printer','checks':checks},ensure_ascii=False,indent=2));print('Completed',len(checks),'weekly report scenarios')

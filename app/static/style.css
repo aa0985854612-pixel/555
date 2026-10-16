@@ -534,3 +534,64 @@ body [hidden] { display: none !important; }
 .feed-order-record .actions { margin-top: 8px; }
 #feed-order-total { color: var(--navy); font-weight: 650; font-size: 1.05rem; }
 #legacy-feed > summary { font-size: 1rem; }
+
+/* Weekly farm sheets retain the paper matrix while allowing a phone preview. */
+.weekly-entry { margin-top: 18px; border-top: 1px solid var(--line); padding-top: 16px; }
+.weekly-entry .hint { margin-bottom: 0; }
+#weekly-report-dialog { width: min(1260px, calc(100vw - 24px)); max-width: none; max-height: calc(100dvh - 32px); padding: 0; }
+.weekly-toolbar { padding: 20px 24px; border-bottom: 1px solid var(--line); background: #f4f6fa; }
+.weekly-toolbar h2 { margin: 0; font-size: 1.2rem; }
+.weekly-toolbar .grid { grid-template-columns: minmax(0,2fr) minmax(0,1fr) minmax(0,1fr) minmax(0,1fr); margin-top: 14px; }
+.weekly-toolbar .actions { margin-top: 16px; }
+#weekly-error { font-size: .94rem; margin-bottom: 0; }
+.weekly-sheet { font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans TC", sans-serif; padding: 26px; color: #162336; background: white; }
+.weekly-sheet .weekly-heading { position: static; display: block; min-height: 0; padding: 0 0 16px; border: 0; border-bottom: 2px solid #192e50; margin: 0 0 18px; }
+.weekly-heading h1 { font-size: 25px; line-height: 1.35; margin: 0 0 6px; }
+.weekly-heading p { margin: 0; overflow-wrap: anywhere; }
+.weekly-basics { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 12px 18px; margin: 0 0 20px; }
+.weekly-basics > div { min-width: 0; padding: 0; border: 0; }.weekly-basics dt { font-size: 12px; color: #526177; }.weekly-basics dd { font-size: 15px; font-weight: 650; margin: 3px 0 0; overflow-wrap: anywhere; }
+.weekly-block { margin: 0 0 20px; }.weekly-table-wrap { max-width: 100%; overflow-x: auto; }
+.weekly-table { width: 100%; min-width: 800px; border-collapse: collapse; table-layout: fixed; }
+.weekly-table th, .weekly-table td { border: 1px solid #aeb8c6; padding: 9px 5px; text-align: center; font-size: 14px; color: #162336; background: white; overflow-wrap: anywhere; white-space: normal; }
+.weekly-table th:first-child { width: 115px; }.weekly-table thead th, .weekly-table tbody th { background: #edf1f6; font-weight: 650; }
+.weekly-table .weekly-death td { font-size: 17px; font-weight: 750; }.weekly-table .weekly-note-row td { font-size: 11px; text-align: left; vertical-align: top; }
+.weekly-summary { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 24px; border-block: 2px solid #192e50; padding: 16px 0; margin-top: 24px; }
+.weekly-sheet h2 { font-size: 16px; margin: 0 0 12px; }.weekly-summary p { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 12px; margin: 7px 0; }.weekly-summary p > span { flex: 1; }.weekly-summary strong { font-size: 19px; }.weekly-summary small { font-size: 12px; color: #526177; }
+.weekly-pending { padding: 16px 0; }.weekly-pending ul { margin: 0; padding-left: 20px; font-size: 12px; overflow-wrap: anywhere; }
+.weekly-sheet .weekly-footnotes { display: block; font-size: 12px; padding: 16px 0 0; color: #526177; }.weekly-footnotes p { margin: 4px 0; }
+#weekly-print-root { display: none; }
+@media (max-width: 700px) {
+  .weekly-toolbar { padding: 16px; }.weekly-toolbar .grid { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .weekly-toolbar label:has(#weekly-cohort) { grid-column: 1 / -1; }
+  .weekly-toolbar .actions button { flex: 1; }.weekly-sheet { padding: 20px 14px; }.weekly-heading h1 { font-size: 22px; }
+  .weekly-basics { grid-template-columns: repeat(2,minmax(0,1fr)); }.weekly-summary { grid-template-columns: 1fr; gap: 12px; }
+}
+@media print {
+  body:has(#weekly-print-root:not(:empty)) > #weighing-print-root { display: none !important; }
+  body > #weekly-print-root:not(:empty) { display: block !important; width: 100%; }
+  html:has(#weekly-print-root:not(:empty)) { page: weekly-sheet; }
+  @page weekly-sheet { size: A4 landscape; margin: 10mm; }
+  #weekly-print-root .weekly-sheet { padding: 0; width: 100%; font-size: 11pt; }
+  #weekly-print-root .weekly-heading h1 { font-size: 20pt; }
+  #weekly-print-root .weekly-basics { grid-template-columns: repeat(4,minmax(0,1fr)); }
+  #weekly-print-root .weekly-basics dt { font-size: 9pt; }#weekly-print-root .weekly-basics dd { font-size: 11pt; }
+  #weekly-print-root .weekly-table-wrap { overflow: visible; }#weekly-print-root .weekly-table { min-width: 0; width: 100%; }
+  #weekly-print-root .weekly-table th, #weekly-print-root .weekly-table td { font-size: 10pt; padding: 2.5mm 1mm; }
+  #weekly-print-root .weekly-table th:first-child { width: 32mm; }#weekly-print-root .weekly-note-row td { font-size: 8pt; }
+  #weekly-print-root .weekly-summary { grid-template-columns: repeat(2,minmax(0,1fr)); margin-top: 5mm; padding: 4mm 0; }
+  #weekly-print-root .weekly-summary strong { font-size: 13pt; }#weekly-print-root .weekly-sheet h2 { font-size: 11pt; }
+  #weekly-print-root .weekly-footnotes { font-size: 9pt; }
+  #weekly-print-root .weekly-block, #weekly-print-root .weekly-summary, #weekly-print-root tr, #weekly-print-root .weekly-basics { break-inside: avoid; }
+  #weekly-print-root thead { display: table-header-group; }
+}
+@media print {
+  #weekly-print-root .weekly-heading { padding-bottom: 3mm; margin-bottom: 3mm; }
+  #weekly-print-root .weekly-heading h1 { font-size: 18pt; }
+  #weekly-print-root .weekly-basics { gap: 2mm 4mm; margin-bottom: 4mm; }
+  #weekly-print-root .weekly-basics dd { font-size: 10.5pt; }
+  #weekly-print-root .weekly-table th, #weekly-print-root .weekly-table td { padding: 1.5mm 1mm; }
+  #weekly-print-root .weekly-block { margin-bottom: 4mm; }
+  #weekly-print-root .weekly-summary { margin-top: 3mm; padding: 3mm 0; }
+  #weekly-print-root .weekly-summary p { margin: 3px 0; font-size: 10pt; }
+  #weekly-print-root .weekly-footnotes { padding-top: 3mm; font-size: 8.5pt; }
+}

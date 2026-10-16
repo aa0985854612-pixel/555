@@ -9,3 +9,4 @@ node --check app/static/appearance.js
 node --check app/static/compact.js
 node --check app/static/feed.js
 node --check app/static/weighing-report.js
+node --check app/static/weekly-report.js

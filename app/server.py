@@ -356,6 +356,9 @@ class Handler(BaseHTTPRequestHandler):
                     return self.send(client_snapshot(snapshot,revision))
                 finally:db.close()
             if path=='/api/statistics' and method=='GET':return self.send(statistics(store.snapshot(include_source=False),query))
+            if path=='/api/weekly-report' and method=='GET':
+                from .weekly import weekly_report
+                return self.send(weekly_report(store.snapshot(include_source=False),query))
             if path=='/api/audit' and method=='GET':
                 store.require(user,True);db=store.connect()
                 try:return self.send([dict(r) for r in db.execute('SELECT a.*,u.username FROM audit a LEFT JOIN users u ON a.user_id=u.id ORDER BY seq DESC LIMIT 500')])
