@@ -416,7 +416,8 @@ body [hidden] { display: none !important; }
 .period-count small { font-size: .88rem; font-weight: 550; }
 .period-batch { grid-column: 1; font-size: .85rem; line-height: 1.5; font-weight: 400; color: var(--muted); overflow-wrap: anywhere; }
 .period-barns { display: flex; flex-wrap: wrap; gap: 0 12px; }
-.period-barns button { min-height: 44px; padding: 4px 0; border: 0; background: transparent; color: var(--muted); text-align: left; font-size: .94rem; font-weight: 400; }
+.period-barns button, .period-barns > span { min-height: 44px; padding: 4px 0; border: 0; background: transparent; color: var(--muted); text-align: left; font-size: .94rem; font-weight: 400; }
+.period-barns > span { display: inline-flex; align-items: center; gap: 4px; }
 .period-barns button:hover { color: var(--navy); text-decoration: underline; }
 .period-barns strong { font-weight: 550; font-variant-numeric: tabular-nums; }
 .period-unknown { font-size: .88rem; margin: 0 0 6px; color: var(--red); }
