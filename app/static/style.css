@@ -596,3 +596,9 @@ body [hidden] { display: none !important; }
   #weekly-print-root tr, #weekly-print-root .weekly-basics { break-inside: avoid; }
   #weekly-print-root thead { display: table-header-group; }
 }
+.weekly-feed-entry, .weekly-feed-missing { display: block; font-size: 11px; line-height: 1.6; overflow-wrap: anywhere; }
+.weekly-table .weekly-feed_orders td { text-align: left; vertical-align: top; }
+@media print {
+  #weekly-print-root .weekly-feed-entry, #weekly-print-root .weekly-feed-missing { font-size: 8pt; line-height: 1.35; padding-block: .3mm; }
+  #weekly-print-root .weekly-feed-entry { break-inside: avoid; }
+}

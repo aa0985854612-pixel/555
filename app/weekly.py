@@ -49,10 +49,11 @@ def weekly_report(data,query,today=None):
         values={typ:sum(r['quantity'] for r in selected if r['type']==typ) for typ in FIELDS}
         missing={p['type'] for p in pending if p['type'] in FIELDS and ((p.get('date') and lo.isoformat()<=p['date']<=hi_observed.isoformat()) or (not p.get('date') and lo.isoformat()<=p['until']))}
         allocated=sum(a['kg'] for o in orders if lo.isoformat()<=o['date']<=hi_observed.isoformat() for a in o['allocations'] if a['batch_id'] in ids)
+        feed_details=[{'id':o['id'],'date':o['date'],'batch_id':a['batch_id'],'barn':barns[batches[a['batch_id']]['barn_id']],'kg':a['kg']} for o in sorted(orders,key=lambda o:o['date']) if lo.isoformat()<=o['date']<=hi_observed.isoformat() for a in o['allocations'] if a['batch_id'] in ids]
         unknown_orders=any(lo.isoformat()<=o['date']<=hi_observed.isoformat() for o in unassigned)
         weeks.append({'index':index+1,'age_week':None if entry_age is None else int(entry_age//7)+index+1,'start':lo.isoformat(),'anchor':anchor.isoformat(),'end':hi.isoformat(),'observed_to':hi_observed.isoformat() if not future else None,'future':future,'partial':lo!=anchor or hi!=anchor+timedelta(days=6) or hi>day(today),
             'values':{typ:None if future or typ in missing else n for typ,n in values.items()}|{'feed_orders':None if future or unknown_orders else allocated},'known':values|{'feed_orders':allocated},
-            'events':[{'id':r['id'],'date':r['date'],'type':r['type'],'quantity':r['quantity'],'barn':barns.get(batches.get(r.get('batch_id'),{}).get('barn_id'),''),'note':r.get('note','') if not r.get('legacy_source') else '', 'source_cell':r.get('source_cell','')} for r in selected]})
+            'feed_details':feed_details,'events':[{'id':r['id'],'date':r['date'],'type':r['type'],'quantity':r['quantity'],'barn':barns.get(batches.get(r.get('batch_id'),{}).get('barn_id'),''),'note':r.get('note','') if not r.get('legacy_source') else '', 'source_cell':r.get('source_cell','')} for r in selected]})
     totals={typ:None if not any(not w['future'] for w in weeks) or any(w['values'][typ] is None and not w['future'] for w in weeks) else sum(w['known'][typ] for w in weeks if not w['future']) for typ in (*FIELDS,'feed_orders')}
     known={typ:sum(w['known'][typ] for w in weeks if not w['future']) for typ in (*FIELDS,'feed_orders')}
     until=min(end,today);h=herd(data['batches'],data['movements'],until,ids)
