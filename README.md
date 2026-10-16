@@ -1,12 +1,14 @@
-# 肉豬紀錄管理 App — PigLedger 1.5.1
+# 肉豬紀錄管理 App — PigLedger 1.6.0
 
 **[開啟正式網站：555-rho-nine.vercel.app](https://555-rho-nine.vercel.app/)**。沿用你目前的帳號、密碼、Vercel專案及Turso資料庫。
 
-- [完整原始碼／Docker／Vercel程式包 v1.5.1](https://github.com/aa0985854612-pixel/555/raw/refs/heads/main/release/pigledger-1.5.1.zip)
+- [完整原始碼／Docker／Vercel程式包 v1.6.0](https://github.com/aa0985854612-pixel/555/raw/refs/heads/main/release/pigledger-1.6.0.zip)
 - [簡短操作說明](docs/USER_GUIDE.md)／[部署說明](docs/VERCEL.md)
-- [1.5.1測試報告與驗收限制](docs/TEST_REPORT_1.5.1.md)
+- [1.6.0測試報告與驗收限制](docs/TEST_REPORT_1.6.0.md)
 
-本版讓管理員更正單棟來源批次（如15棟）的入場頭數：設定→批次→編輯，填新頭數與更正原因，核對差額後儲存。同步重算存欄與育成率，原始Excel及操作前後值保留；不確定數量時先取消。多棟來源分配仍須對上合計，不會因此變成任意改總數。
+本版新增右上角「Aa」字體選單：小／中／大，自動記住這台裝置的選擇，登入前後及所有角色皆可使用。切換不重載頁面、不送出農場資料，也不清空正在輸入的內容。重點數字、標題、一般欄位及日期備註分層呈現；大字手機表單改為單欄，保持容易輸入。
+
+保留管理員更正單棟來源批次入場頭數的功能：設定→批次→編輯，填新頭數與更正原因，核對差額後儲存。同步重算存欄與育成率，原始Excel及操作前後值保留；不確定數量時先取消。多棟來源分配仍須對上合計。
 
 沿用深藍、米白及灰色，放大字體；首頁每個飼養中批次顯示可靠單棟育成率。週期統計以期間死亡為主，批次名稱連同棟舍顯示，點死亡數字可查明細；零死亡的其他批次可展開查看。
 
@@ -45,6 +47,7 @@ python3 tests/pwa_test.py
 python3 tests/upgrade_browser.py
 python3 tests/redesign_browser.py
 python3 tests/entry_correction_browser.py
+python3 tests/appearance_browser.py
 ```
 
 ```sh
