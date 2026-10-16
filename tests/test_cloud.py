@@ -169,6 +169,15 @@ class CloudDeploymentTests(unittest.TestCase):
         with self.assertRaises(Problem) as e:db.execute('SELECT 1')
         self.assertEqual(e.exception.code,'cloud_database_redirect')
         self.assertEqual(db.url,'https://db.turso.io/v2/pipeline');db.close()
+    def test_webp_cover_has_image_mime_without_system_mime_database(self):
+        with patch('api.index.CloudStore',side_effect=lambda:CloudStore('libsql://test.turso.io','synthetic-token',self.fixture)), patch('app.server.mimetypes.guess_type',return_value=(None,None)):
+            server=ThreadingHTTPServer(('127.0.0.1',0),handler)
+            threading.Thread(target=server.serve_forever,daemon=True).start()
+            try:
+                with urllib.request.urlopen('http://127.0.0.1:'+str(server.server_port)+'/jiade-cover.webp') as r:
+                    self.assertEqual(r.headers.get_content_type(),'image/webp')
+                    self.assertEqual(r.read(),(Path(__file__).resolve().parents[1]/'app/static/jiade-cover.webp').read_bytes())
+            finally:server.shutdown();server.server_close()
     def test_vercel_entry_routes_auth_cookie_roles_static_and_cold_start(self):
         with patch('api.index.CloudStore',side_effect=lambda:CloudStore('libsql://test.turso.io','synthetic-token',self.fixture)):
             server=ThreadingHTTPServer(('127.0.0.1',0),handler)

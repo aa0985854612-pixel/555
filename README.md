@@ -1,10 +1,10 @@
-# 肉豬紀錄管理 App — PigLedger 1.6.1
+# 肉豬紀錄管理 App — PigLedger 1.6.2
 
 **[開啟正式網站：555-rho-nine.vercel.app](https://555-rho-nine.vercel.app/)**。沿用你目前的帳號、密碼、Vercel專案及Turso資料庫。
 
-- [完整原始碼／Docker／Vercel程式包 v1.6.1](https://github.com/aa0985854612-pixel/555/raw/refs/heads/main/release/pigledger-1.6.1.zip)
+- [完整原始碼／Docker／Vercel程式包 v1.6.2](https://github.com/aa0985854612-pixel/555/raw/refs/heads/main/release/pigledger-1.6.2.zip)
 - [簡短操作說明](docs/USER_GUIDE.md)／[部署說明](docs/VERCEL.md)
-- [1.6.1測試報告與驗收限制](docs/TEST_REPORT_1.6.1.md)
+- [1.6.2測試報告與驗收限制](docs/TEST_REPORT_1.6.2.md)
 
 本版登入封面改為「嘉得肉豬紀錄」，使用依提供照片製作的Q版豬群插畫。手機採精簡橫幅，電腦以插畫搭配登入表單；網頁標題及加入主畫面名稱同步更新。
 

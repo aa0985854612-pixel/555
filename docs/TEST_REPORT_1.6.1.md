@@ -17,3 +17,8 @@
 沿用原GitHub main、Vercel專案及正式網址；版本、資產查詢參數及SW快取同步更新1.6.1。正式部署READY、正式HTTPS首頁、health、名稱、封面圖片／樣式／SW及資料保留核對保存在私密維護紀錄。舊的主畫面捷徑名稱更新由手機系統決定，必要時重新加入。
 
 尚未驗收：以使用者目前密碼完成正式HTTPS瀏覽器登入、Android／iPhone／iPad實機顯示與主畫面名稱更新。沒有為測試重設帳號或密碼。
+
+
+## 正式圖片驗證補充
+
+首輪正式驗證發現Vercel Python環境未提供WebP的系統MIME對應，導致圖片回傳application/octet-stream。此版本不作為最後交付；1.6.2明確指定image/webp，新增缺少系統MIME資料庫的回歸測試並重新驗證。

@@ -412,7 +412,8 @@ class Handler(BaseHTTPRequestHandler):
         name='index.html' if path=='/' else path.lstrip('/')
         target=(STATIC/name).resolve()
         if not target.is_relative_to(STATIC.resolve()) or not target.is_file():raise Problem('not_found',404)
-        return self.send(target.read_bytes(),content_type=mimetypes.guess_type(str(target))[0] or 'application/octet-stream')
+        content_type='image/webp' if target.suffix.lower()=='.webp' else mimetypes.guess_type(str(target))[0] or 'application/octet-stream'
+        return self.send(target.read_bytes(),content_type=content_type)
 
 
 def hmac_safe(a,b):
