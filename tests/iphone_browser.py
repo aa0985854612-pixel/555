@@ -25,7 +25,7 @@ with tempfile.TemporaryDirectory() as tmp:
    context=browser.new_context(viewport={'width':390,'height':844},device_scale_factor=3,is_mobile=True,has_touch=True,locale='zh-TW',timezone_id='Asia/Taipei')
    page=context.new_page();errors=[];page.on('pageerror',lambda e:errors.append(str(e)));page.goto(f'http://127.0.0.1:{server.server_port}')
    def login(name,password):
-    page.locator('#login-form [name=username]').fill(name);page.locator('#login-form [name=password]').fill(password);page.locator('#login-form button').tap();page.wait_for_selector('#workspace:not([hidden])');page.wait_for_selector('#barns .overview-cohort')
+    page.locator('#login-form [name=username]').fill(name);page.locator('#login-form [name=password]').fill(password);page.locator('#login-form button').tap();page.wait_for_selector('#workspace:not([hidden])');page.wait_for_selector('#barns .overview-cohort',state='attached')
    login('owner','83000011');f=page.locator('#movement-form');date_input=f.locator('[name=date]')
    def date_geometry():return date_input.evaluate('''e=>{const s=getComputedStyle(e),c=document.createElement('canvas').getContext('2d');c.font=s.fontWeight+' '+s.fontSize+' '+s.fontFamily;const r=e.getBoundingClientRect(),p=e.closest('label').getBoundingClientRect();return {width:r.width,labelWidth:p.width,chineseDateRequired:Math.ceil(c.measureText('2026年10月16日').width+parseFloat(s.paddingLeft)+parseFloat(s.paddingRight)+24),right:r.right,labelRight:p.right};}''')
    if args.baseline_css:

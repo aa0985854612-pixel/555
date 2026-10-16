@@ -332,6 +332,16 @@ class Handler(BaseHTTPRequestHandler):
             user=self.session()
             if user.get('must_change') and path not in ('/api/me','/api/logout','/api/password'):raise Problem('password_change_required',403)
             if method!='GET':self.protect(user)
+            if path=='/api/daily-checks/preview' and method=='GET':
+                from .review import bulk_check_preview, farm_today
+                store.require(user)
+                return self.send(bulk_check_preview(store.snapshot(include_source=False),user,query.get('date',[farm_today()])[0]))
+            if path=='/api/daily-checks/bulk' and method=='POST':
+                from .review import save_bulk_checks
+                result=save_bulk_checks(store,user,self.body(),self.headers.get('Idempotency-Key'))
+                if '_snapshot' in result:
+                    snapshot=result.pop('_snapshot');seq=result.pop('_sequence');result['sync']=client_snapshot(snapshot,self.server.instance+':'+str(seq))
+                return self.send(result,201)
             if path=='/api/void-preview' and method=='GET':
                 from .operations import void_preview
                 return self.send(void_preview(store,user,store.snapshot(include_source=False),query.get('kind',[''])[0],query.get('id',[''])[0]))

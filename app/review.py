@@ -96,3 +96,55 @@ def data_quality(data, on, dashboard=None):
     for o in data.get('feed_orders',[]):
         if not o['allocations']:issues.append({'id':'order:'+o['id'],'kind':'feed_orders','fields':['unassigned_feed'],'date':o['date'],'name':o.get('note',''),'record_id':o['id']})
     return {'as_of':on,'items':issues,'count':len(issues),'active_batches_with_gaps':sum(i['kind']=='batches' for i in issues)}
+
+
+def bulk_check_preview(data, user, on):
+    """Bind one user's all-farm acknowledgement to the reviewed eligible scope."""
+    import hashlib
+    from .store import encode
+    report=daily_review(data,on);eligible=[];skipped=[]
+    for row in report['rows']:
+        check=row['check']
+        own=not check or user['role']=='admin' or check['created_by']==user['id']
+        item={k:row[k] for k in ('batch_id','barn_id','barn','batch','status','deaths')}
+        if row['can_confirm'] and own:eligible.append(item)
+        else:skipped.append(item|{'reason':row['status'] if row['status']!='not_reported' else 'other_owner' if not own else 'outside_check_period'})
+    signature=[on,user['id'],user['role'],[{k:r[k] for k in ('batch_id','barn_id','barn','batch','status','deaths','can_confirm','check')} for r in report['rows']]]
+    return {'date':on,'eligible':eligible,'skipped':skipped,'preview_token':hashlib.sha256(encode(signature).encode()).hexdigest()}
+
+
+def save_bulk_checks(store, user, payload, key):
+    """One transaction for all eligible barns, including audit and request receipt."""
+    import hashlib,uuid
+    from .store import Problem,encode,now
+    store.require(user)
+    if not isinstance(payload,dict) or not isinstance(key,str) or not 16<=len(key)<=128:raise Problem('idempotency_required')
+    try:day(payload.get('date'))
+    except Invalid:raise Problem('invalid_date')
+    fp=hashlib.sha256(encode(['bulk-daily-checks',payload]).encode()).hexdigest();db=store.connect()
+    try:
+        db.execute('BEGIN IMMEDIATE')
+        prior=db.execute('SELECT * FROM requests WHERE user_id=? AND key=?',(user['id'],key)).fetchone()
+        if prior:
+            if prior['fingerprint']!=fp:raise Problem('idempotency_mismatch',409)
+            import json
+            return json.loads(prior['result'])
+        data=store.snapshot(db,include_source=False);preview=bulk_check_preview(data,user,payload['date'])
+        if payload.get('preview_token')!=preview['preview_token']:raise Problem('daily_preview_changed',409)
+        confirmed=[]
+        for item in preview['eligible']:
+            old=next((r for r in data['daily_checks'] if r['batch_id']==item['batch_id'] and r['date']==payload['date']),None)
+            others=data|{'daily_checks':[r for r in data['daily_checks'] if not old or r['id']!=old['id']]}
+            cleaned=store.validate('daily_checks',{'date':payload['date'],'batch_id':item['batch_id'],'status':'no_deaths','note':''},others,user)
+            output=cleaned|{'id':old['id'] if old else str(uuid.uuid4()),'revision':old['revision']+1 if old else 1,
+                'created_at':old['created_at'] if old else now(),'created_by':old['created_by'] if old else user['id'],'updated_at':now()}
+            db.execute('INSERT INTO records(kind,id,revision,data) VALUES(?,?,?,?) ON CONFLICT(id) DO UPDATE SET revision=excluded.revision,data=excluded.data',('daily_checks',output['id'],output['revision'],encode(output)))
+            store.audit(db,user['id'],'bulk-zero-update' if old else 'bulk-zero-create','daily_checks',output['id'],old,output)
+            data['daily_checks']=others['daily_checks']+[output];confirmed.append(output['id'])
+        store.validate_global(data)
+        result={'date':payload['date'],'confirmed_count':len(confirmed),'ids':confirmed,'skipped_count':len(preview['skipped'])}
+        db.execute('INSERT INTO requests VALUES(?,?,?,?)',(user['id'],key,fp,encode(result)))
+        snapshot=store.snapshot(db,include_source=False);sequence=db.execute('SELECT COALESCE(MAX(seq),0) FROM audit').fetchone()[0];db.commit()
+        return result|{'_snapshot':snapshot,'_sequence':sequence}
+    except Invalid as exc:raise Problem(str(exc))
+    finally:db.close()

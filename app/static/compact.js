@@ -21,6 +21,8 @@ function fold(card,label){
 }
 function showDaily(view,scroll=false){
  dailyView=view;$('#daily-entry').hidden=view==='overview';
+ if($('#daily-review'))$('#daily-review').hidden=view==='overview';
+ if($('#daily-overview'))$('#daily-overview').hidden=view!=='overview';
  $$('#daily-switch button').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.dailyView===view)));
  if(scroll)$('#daily-switch').scrollIntoView({block:'start',behavior:'smooth'});
 }
@@ -61,6 +63,9 @@ build=()=>{
  entry.id='daily-entry';split.before(entry);split.remove();daily.append(recent);const recentFold=fold(recent,'recent');recentFold.classList.add('recent-fold');
  daily.insertAdjacentHTML('afterbegin',`<div class="view-switch" id="daily-switch" role="group" aria-label="${esc(t('daily'))}"><button type="button" data-daily-view="entry" aria-pressed="true">${txt('dailyEntry')}</button><button type="button" data-daily-view="overview" aria-pressed="false">${txt('dailyOverview')}</button></div>`);
  $('#daily-switch').onclick=e=>{const button=e.target.closest('[data-daily-view]');if(button)showDaily(button.dataset.dailyView,true);};
+ const overview=document.createElement('section');overview.id='daily-overview';overview.hidden=true;
+ for(const child of Array.from(daily.children)){if(child.id!=='daily-switch'&&child.id!=='daily-entry')overview.append(child);}
+ daily.append(overview);
  $$('.filters').forEach(f=>f.classList.add('compact-filter'));
 };
 function canSwitch(id){

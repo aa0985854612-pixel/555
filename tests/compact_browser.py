@@ -30,8 +30,8 @@ with tempfile.TemporaryDirectory() as tmp:
    page.goto(f'http://127.0.0.1:{server.server_port}')
    def login(name,password):
     page.locator('#login-form [name=username]').fill(name);page.locator('#login-form [name=password]').fill(password);page.locator('#login-form button').click();page.wait_for_selector('#workspace:not([hidden])')
-   login('owner','83000011');page.wait_for_selector('#barns .overview-barn');assert page.locator('#barns .overview-barn').count()==24
-   assert page.locator('#daily-entry').is_visible();assert page.locator('#movement-form').bounding_box()['y']<page.locator('#home-metrics').bounding_box()['y']
+   login('owner','83000011');page.wait_for_selector('#barns .overview-barn',state='attached');assert page.locator('#barns .overview-barn').count()==24
+   assert page.locator('#daily-entry').is_visible();assert page.locator('#home-metrics').is_hidden();assert page.locator('#barns').is_hidden();assert page.locator('#daily-review').is_visible()
    f=page.locator('#movement-form');f.locator('[name=quantity]').fill('7');page.locator('[data-daily-view=overview]').click();assert page.locator('#daily-entry').is_hidden();assert f.locator('[name=quantity]').input_value()=='7';page.wait_for_timeout(400)
    measurements['overview_metrics_top_px']=round(page.locator('#home-metrics').bounding_box()['y']);assert measurements['overview_metrics_top_px']<260
    first=page.locator(f'[data-add-batch="{members[0]["id"]}"]');assert page.locator('.overview-barn').filter(has=first).locator('.overview-dead').inner_text()=='2';assert '99.00%' in page.locator('.overview-barn').filter(has=first).inner_text();first.click();assert page.locator('#daily-entry').is_visible();assert f.locator('[name=batch_id]').input_value()==members[0]['id'];assert f.locator('[name=quantity]').input_value()=='7';page.evaluate('finishForm(document.querySelector("#movement-form"))');passed('24-barn overview is one tap away; exact death/survival and correct barn/batch shortcut preserve quantity')
