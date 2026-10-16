@@ -3,7 +3,7 @@ from pathlib import Path
 from datetime import datetime, timezone
 from .domain import Invalid, day, number, herd, consumption, age
 
-VERSION='1.7.0'
+VERSION='1.7.1'
 SCHEMA_VERSION=4
 KINDS=('barns','batches','movements','deliveries','usages','weights','workbooks','source_voids')
 SCHEMA='''

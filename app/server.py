@@ -67,6 +67,15 @@ def statistics(data,query):
     chosen=set(ids)
     if get('summary')=='1':
         stats['batches']=[{'id':b['id'],'age_days':age(b,until),'herd':herd(data['batches'],data['movements'],until,[b['id']])} for b in data['batches'] if b['id'] in chosen]
+        # Include ended barns in the cohort, and calculate from their combined
+        # denominator/deaths. Unknown per-barn entry counts can still have a
+        # reliable complete-cohort source total; percentages must not be averaged.
+        members_by_cohort={}
+        for b in data['batches']:
+            if b['id'] in chosen:members_by_cohort.setdefault(cohort_key(b),[]).append(b)
+        stats['cohorts']=[{'cohort':key,'name':members[0]['name'],'ids':[b['id'] for b in members],
+            'herd':herd(data['batches'],data['movements'],until,[b['id'] for b in members])}
+            for key,members in members_by_cohort.items()]
         return stats
     if start:
         delta=dict(entry=sum(b['entry_count'] or 0 for b in data['batches'] if b['id'] in chosen and start<=b['entry_date']<=until),sale=0,cull=0,death=0,arrival=0,adjustment=0,transfer_in=0,transfer_out=0)

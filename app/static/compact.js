@@ -4,6 +4,9 @@
 Object.assign(words,{
  groupedSetup:['按批次設定','Cài đặt theo lứa'],groupedHint:['同批各棟集中在一起；點批次展開，再選棟舍編輯。','Các chuồng cùng lứa nằm chung; mở lứa rồi chọn chuồng để sửa.'],findBatch:['找批次／棟舍','Tìm lứa / chuồng'],newBatch:['新增單棟批次','Thêm lứa tại chuồng'],batchDetailsShort:['其他批次資料','Thông tin lứa khác'],entryMeanShort:['入場均重（kg／隻）','TB nhập (kg/con)'],knownEntry:['已填進場','Số nhập đã ghi'],missingBarns:['棟待補','chuồng cần bổ sung'],barnCount:['棟','chuồng'],editHere:['正在編輯','Đang sửa'],saveBeforeSwitch:['請先儲存或取消目前修改，再切換棟舍。','Lưu hoặc hủy thay đổi hiện tại trước khi chuyển chuồng.'],otherSettings:['其他設定','Cài đặt khác'],dailyOverview:['全場總覽','Tổng quan trại'],dailyEntry:['登記異動','Ghi biến động'],currentHeadsShort:['存欄','Tồn đàn'],cumulativeDeadShort:['累計死','Chết lũy kế'],survivalShort:['育成率','Tỷ lệ sống'],overviewHint:['每列一棟；點棟舍即可登記。死亡為截至今日累計，未知資料顯示 —。','Mỗi dòng một chuồng; chạm tên để ghi. Chết lũy kế đến hôm nay; chưa rõ hiển thị —.'],noMatchingBatch:['沒有符合的批次，可改選全部或搜尋其他棟舍。','Không có lứa phù hợp; chọn tất cả hoặc tìm chuồng khác.'],createBarnShort:['新增／編輯棟舍','Thêm / sửa chuồng'],batchSavedHint:['每棟分別儲存；不會連帶更改同批其他棟。','Lưu riêng từng chuồng; không thay đổi các chuồng khác cùng lứa.'],queryConditions:['查詢條件','Điều kiện lọc']
 });
+Object.assign(words,{
+ cohortSurvival:['整批育成率','Tỷ lệ sống cả lứa'],cohortBasis:['查看整批計算依據','Xem căn cứ tính cả lứa'],cohortIncludes:['涵蓋全部棟舍（含已出清）','Tất cả chuồng, gồm chuồng đã xuất hết'],cohortMissingEntry:['整批可靠進場分母待補','Cần bổ sung mẫu số nhập đáng tin của cả lứa'],cohortMissingDead:['整批累計死亡待補','Cần bổ sung số chết lũy kế cả lứa'],cohortZeroEntry:['尚無正的進場分母','Chưa có mẫu số nhập lớn hơn 0'],cohortFormula:['（可靠進場分母－累計死亡）÷可靠進場分母 × 100%；淘汰不降低育成率。','(Mẫu số nhập đáng tin − chết lũy kế) ÷ mẫu số nhập × 100%; loại thải không giảm tỷ lệ sống.'],customBarnGroup:['自訂組別（選填，非批號）','Nhóm tự đặt (tùy chọn, không phải mã lứa)'],barnSetupHelp:['這裡管理棟舍名稱與自訂分區；不需要分區時，組別可留空。同批豬的資料請到上方「按批次設定」。','Quản lý tên chuồng và khu vực tự đặt; có thể để trống nhóm. Sửa thông tin đàn cùng lứa ở mục cài đặt theo lứa phía trên.']
+});
 const base={build,renderHome,edit,finishForm,clickAction,enter,restorePending};
 const keyOf=b=>b._cohort_key||b.name+'|'+b.entry_date;
 const barnOf=b=>data.barns.find(x=>x.id===b.barn_id)?.name||t('unassigned');
@@ -45,6 +48,7 @@ build=()=>{
  editor.querySelector('h2').id='batch-editor-title';delete editor.querySelector('h2').dataset.i;editor.querySelector('h2').after(Object.assign(document.createElement('p'),{className:'hint',innerHTML:txt('batchSavedHint')}));
  $('#batch-search').addEventListener('input',filterGroups);$('#batch-status').addEventListener('change',filterGroups);
  $('#new-batch').onclick=()=>{if(!canSwitch())return;finishForm(form);form.reset();form.elements.entry_date.value=today();editorFields(null);$('#batch-workspace').append(editor);editor.hidden=false;editor.querySelector('h2').textContent=t('newBatch');const cancel=form.querySelector('[data-action=cancelEdit]');cancel.hidden=false;cancel.dataset.i='cancel';cancel.textContent=t('cancel');form.querySelectorAll('details').forEach(d=>d.open=false);editor.scrollIntoView({block:'start',behavior:'smooth'});};
+ const barnGroup=$('#barn-form [name=group]').closest('label').querySelector('[data-i]');barnGroup.dataset.i='customBarnGroup';barnGroup.textContent=t('customBarnGroup');$('#barn-form').before(Object.assign(document.createElement('p'),{className:'hint',innerHTML:txt('barnSetupHelp')}));
  fold(barnCard,'createBarnShort');fold($('#workbook-form').closest('.card'),'workbook');fold($('#download-backup').closest('.card'),'backup');fold($('#user-form').closest('.card'),'users');fold($('#audit-results').closest('.card'),'audit');
  // Password remains a direct child so forced first-login changes still isolate it.
  const password=$('#password-card'),passwordFold=fold(password,'passwordChange');passwordFold.id='password-card';
@@ -101,10 +105,17 @@ enter=async user=>{
  $('#password-card').open=!!user.must_change;
 };
 renderHome=async()=>{
- await base.renderHome();if(!data)return;const dashboard=data.dashboard;
+ const openDetails=new Set($$('#barns details[data-key][open]').map(el=>el.dataset.key));
+ const dashboard=await base.renderHome();if(!data||!dashboard)return;
  const result=b=>dashboard?.batches.find(x=>x.id===b.id);
  const row=b=>{const r=result(b),h=r?.herd;return `<article class="barn-card overview-barn"><button class="overview-barn-link" data-add-barn="${b.barn_id}" data-add-batch="${b.id}"><strong>${esc(barnOf(b))}</strong><small>${esc(displayAge(r?.age_days))}</small></button><strong class="overview-heads">${fmt(h?.remaining,0)}</strong><strong class="overview-dead">${fmt(h?.dead,0)}</strong><div class="barn-survival">${h?.survival==null?`<details><summary aria-label="${esc(t('sourceLimit'))}">— ⓘ</summary><p>${t('sourceLimit')}</p></details>`:`<strong>${fmt(h.survival)}%</strong>`}</div></article>`;};
- preserveBox('barns',groups().filter(g=>g.members.some(b=>b.status==='active')).map(g=>`<section class="overview-cohort"><div class="overview-cohort-heading"><h3>${esc(g.name)}</h3><span>${g.date}</span></div><div class="overview-columns"><span>${t('barn')}</span><span>${t('currentHeadsShort')}</span><span>${t('cumulativeDeadShort')}</span><span>${t('survivalShort')}</span></div>${g.members.filter(b=>b.status==='active').map(row).join('')}</section>`).join('')||empty());
+ const total=g=>{
+  const h=dashboard?.cohorts?.find(c=>c.cohort===g.key)?.herd;
+  const missing=[h?.denominator==null?t('cohortMissingEntry'):h.denominator<=0?t('cohortZeroEntry'):'',h?.dead==null?t('cohortMissingDead'):''].filter(Boolean);
+  return `<div class="cohort-total" data-cohort-total="${esc(g.key)}"><details data-key="cohort-basis-${esc(g.key)}"><summary class="cohort-total-head" aria-label="${esc(t('cohortBasis'))}"><span>${t('cohortSurvival')}</span><strong>${h?.survival==null?'—':fmt(h.survival)+'%'} <small aria-hidden="true">ⓘ</small></strong></summary><p>${t('asOf')} ${esc(dashboard.as_of)}</p><p>${t('cohortIncludes')}：${g.members.map(b=>esc(barnOf(b))).join('、')}</p><dl><div><dt>${t('denominator')}</dt><dd>${fmt(h?.denominator,0)} ${t('heads')}</dd></div><div><dt>${t('dead')}</dt><dd>${fmt(h?.dead,0)} ${t('heads')}</dd></div></dl><p>${t('cohortFormula')}</p>${missing.length?`<p class="warning-text">${missing.map(esc).join('；')}</p>`:''}</details></div>`;
+ };
+ preserveBox('barns',groups().filter(g=>g.members.some(b=>b.status==='active')).map(g=>`<section class="overview-cohort"><div class="overview-cohort-heading"><h3>${esc(g.name)}</h3><span>${g.date}</span></div>${total(g)}<div class="overview-columns"><span>${t('barn')}</span><span>${t('currentHeadsShort')}</span><span>${t('cumulativeDeadShort')}</span><span>${t('survivalShort')}</span></div>${g.members.filter(b=>b.status==='active').map(row).join('')}</section>`).join('')||empty());
+ $$('#barns details[data-key]').forEach(el=>el.open=openDetails.has(el.dataset.key));
  $('#barns').classList.add('compact-barns');
  let hint=$('#overview-hint');if(!hint){hint=document.createElement('p');hint.id='overview-hint';hint.className='hint';$('#barns').before(hint);}hint.textContent=t('overviewHint');
  showDaily(dailyView);
