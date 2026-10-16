@@ -54,6 +54,10 @@ build=()=>{
  const password=$('#password-card'),passwordFold=fold(password,'passwordChange');passwordFold.id='password-card';
  page.append(passwordFold);
  const daily=$('#page-daily'),split=$('#movement-form').closest('.split'),entry=$('#movement-form').closest('.card'),recent=$('#recent').closest('.card');
+ $$('input[type="date"]').forEach(el=>el.closest('label')?.classList.add('date-field'));
+ const movement=$('#movement-form'),typeField=movement.elements.type.closest('label'),quantityField=movement.elements.quantity.closest('label');
+ typeField.classList.add('movement-type');quantityField.classList.add('movement-quantity');typeField.after(quantityField);
+ movement.querySelector('details').append(movement.querySelector('[data-i="movementHint"]'));
  entry.id='daily-entry';split.before(entry);split.remove();daily.append(recent);const recentFold=fold(recent,'recent');recentFold.classList.add('recent-fold');
  daily.insertAdjacentHTML('afterbegin',`<div class="view-switch" id="daily-switch" role="group" aria-label="${esc(t('daily'))}"><button type="button" data-daily-view="entry" aria-pressed="true">${txt('dailyEntry')}</button><button type="button" data-daily-view="overview" aria-pressed="false">${txt('dailyOverview')}</button></div>`);
  $('#daily-switch').onclick=e=>{const button=e.target.closest('[data-daily-view]');if(button)showDaily(button.dataset.dailyView,true);};
