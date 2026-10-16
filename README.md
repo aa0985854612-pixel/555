@@ -1,12 +1,14 @@
-# 肉豬紀錄管理 App — PigLedger 1.6.2
+# 肉豬紀錄管理 App — PigLedger 1.6.3
 
 **[開啟正式網站：555-rho-nine.vercel.app](https://555-rho-nine.vercel.app/)**。沿用你目前的帳號、密碼、Vercel專案及Turso資料庫。
 
-- [完整原始碼／Docker／Vercel程式包 v1.6.2](https://github.com/aa0985854612-pixel/555/raw/refs/heads/main/release/pigledger-1.6.2.zip)
+- [完整原始碼／Docker／Vercel程式包 v1.6.3](https://github.com/aa0985854612-pixel/555/raw/refs/heads/main/release/pigledger-1.6.3.zip)
 - [簡短操作說明](docs/USER_GUIDE.md)／[部署說明](docs/VERCEL.md)
-- [1.6.2測試報告與驗收限制](docs/TEST_REPORT_1.6.2.md)
+- [1.6.3測試報告與驗收限制](docs/TEST_REPORT_1.6.3.md)
 
-本版登入封面改為「嘉得肉豬紀錄」，使用依提供照片製作的Q版豬群插畫。手機採精簡橫幅，電腦以插畫搭配登入表單；網頁標題及加入主畫面名稱同步更新。
+本版把安裝到手機主畫面的圖示更新為嘉得Q版豬，名稱為「嘉得肉豬紀錄」。Android一般圖示／圓形裁切圖示、iPhone主畫面圖示及瀏覽器圖示均使用同一隻Q版豬，換用版本化檔名避開舊圖示快取，原App識別與網址保持。
+
+已安裝的舊圖示由手機系統決定更新時間。若仍顯示舊圖：先完成手上登記及套用網站更新，再移除手機上的舊App／捷徑，從Chrome或Safari重新開正式網址並加入主畫面；不要清除網站資料。正式雲端紀錄保留，重新安裝可能需再次登入。原Q版登入封面保留。
 
 保留右上角「Aa」字體選單：小／中／大，自動記住這台裝置的選擇，登入前後及所有角色皆可使用。切換不重載頁面、不送出農場資料，也不清空正在輸入的內容。重點數字、標題、一般欄位及日期備註分層呈現；大字手機表單改為單欄，保持容易輸入。
 
@@ -50,6 +52,7 @@ python3 tests/upgrade_browser.py
 python3 tests/redesign_browser.py
 python3 tests/entry_correction_browser.py
 python3 tests/appearance_browser.py
+python3 tests/install_icon_browser.py
 ```
 
 ```sh

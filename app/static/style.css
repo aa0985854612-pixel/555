@@ -274,3 +274,6 @@ body [hidden] { display: none !important; }
   #activation-form { margin-top: 16px; }
 }
 @media (max-width: 359px) { .brand { font-size: 14px; } }
+
+.brand-icon { background: #fffaf0; overflow: hidden; }
+.brand-icon img { display: block; width: 100%; height: 100%; object-fit: cover; }

@@ -178,6 +178,20 @@ class CloudDeploymentTests(unittest.TestCase):
                     self.assertEqual(r.headers.get_content_type(),'image/webp')
                     self.assertEqual(r.read(),(Path(__file__).resolve().parents[1]/'app/static/jiade-cover.webp').read_bytes())
             finally:server.shutdown();server.server_close()
+    def test_install_manifest_and_icons_have_portable_mime(self):
+        with patch('api.index.CloudStore',side_effect=lambda:CloudStore('libsql://test.turso.io','synthetic-token',self.fixture)), patch('app.server.mimetypes.guess_type',return_value=(None,None)):
+            server=ThreadingHTTPServer(('127.0.0.1',0),handler)
+            threading.Thread(target=server.serve_forever,daemon=True).start()
+            try:
+                base='http://127.0.0.1:'+str(server.server_port)
+                with urllib.request.urlopen(base+'/manifest.webmanifest') as r:
+                    self.assertEqual(r.headers.get_content_type(),'application/manifest+json');manifest=json.load(r)
+                self.assertEqual(manifest['id'],'/');self.assertEqual(manifest['name'],'嘉得肉豬紀錄')
+                self.assertTrue(any(i['purpose']=='maskable' for i in manifest['icons']))
+                for icon in manifest['icons']:
+                    with urllib.request.urlopen(base+icon['src']) as r:
+                        self.assertEqual(r.headers.get_content_type(),'image/png');self.assertEqual(r.read()[:8],b'\x89PNG\r\n\x1a\n')
+            finally:server.shutdown();server.server_close()
     def test_vercel_entry_routes_auth_cookie_roles_static_and_cold_start(self):
         with patch('api.index.CloudStore',side_effect=lambda:CloudStore('libsql://test.turso.io','synthetic-token',self.fixture)):
             server=ThreadingHTTPServer(('127.0.0.1',0),handler)
