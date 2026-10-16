@@ -72,9 +72,12 @@ clickAction=e=>{
  if(b.dataset.deathQuery){const s=JSON.parse(decodeURIComponent(b.dataset.deathQuery)),stats=$('#stats-filter'),historyForm=$('#history-filter');for(const k of ['cohort','group','barn_id','batch_id'])historyForm.elements[k].value=s[k]||'';historyForm.elements.scope_type.value=s.cohort?'cohort':s.barn_id?'barn':s.group?'group':'all';historyForm.elements.from.value=val(stats,'from')||val(stats,'to')||today();historyForm.elements.to.value=val(stats,'to')||today();historyForm.elements.record_kind.value='movements';historyForm.elements.type.value='death';syncFilters(historyForm);location.hash='history';setPage('history',false);renderCurrent();return;}
  base.clickAction(e);
 };
-boot();
+const previousBoot=boot;
+boot=()=>{
+previousBoot();
 let lastDraftFocus=null;document.addEventListener('focusin',e=>{if(e.target.closest('form')&&e.target.matches('input,select,textarea'))lastDraftFocus=e.target;});
 $('#language').onchange=async e=>{const x=scrollX,y=scrollY,focus=lastDraftFocus?.isConnected&&lastDraftFocus.closest('.page')?.id==='page-'+current?lastDraftFocus:null;lang=e.target.value;localStorage.setItem('pig-language',lang);translate();if(data){selections(true);await renderCurrent();}$('#user-name').textContent=me?me.username+' · '+t(me.role):'';focus?.focus({preventScroll:true});window.scrollTo(x,y);};
 $('#cancel-delete').onclick=()=>$('#delete-dialog').close();
 $('#confirm-delete').onclick=()=>{if(!voidDraft)return;const reason=$('#void-reason').value.trim();if(!reason){$('#void-error').textContent=t('void_reason_required');return;}const payload={...voidDraft,reason};$('#delete-dialog').close();startWrite('/api/void','POST',payload);};
+};
 })();

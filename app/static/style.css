@@ -277,3 +277,102 @@ body [hidden] { display: none !important; }
 
 .brand-icon { background: #fffaf0; overflow: hidden; }
 .brand-icon img { display: block; width: 100%; height: 100%; object-fit: cover; }
+
+/* Compact batch workspace: shared heading, individual records and one stable editor. */
+#batch-workspace { padding: 20px; }
+.batch-tools { display: grid; grid-template-columns: minmax(0, 1fr) minmax(100px, .35fr); gap: 12px; }
+.batch-create { margin: 12px 0 18px; }
+.cohort-setting { border: 1px solid var(--line); border-radius: 12px; padding: 0; margin: 10px 0; background: #fff; }
+.cohort-setting > summary { display: grid; gap: 6px; padding: 15px 38px 15px 16px; position: relative; list-style: none; }
+.cohort-setting > summary::-webkit-details-marker { display: none; }
+.cohort-setting > summary::after { content: '+'; position: absolute; right: 15px; top: 14px; font-size: 1.3rem; color: var(--muted); }
+.cohort-setting[open] > summary::after { content: '−'; }
+.cohort-setting[open] > summary { background: #f5f7fa; border-radius: 12px 12px 0 0; }
+.cohort-title { display: flex; gap: 8px 16px; flex-wrap: wrap; align-items: baseline; font-size: 1.12rem; font-weight: 760; color: var(--navy); }
+.cohort-date { font-size: .88rem; font-weight: 500; color: var(--muted); white-space: nowrap; }
+.cohort-barns { font-size: 1rem; font-weight: 650; }
+.cohort-meta { font-size: .88rem; color: var(--muted); line-height: 1.6; }
+.cohort-members { padding: 0 14px; }
+.member-row { display: grid; grid-template-columns: 1fr 1fr 1.4fr auto; gap: 10px; align-items: center; padding: 12px 0; border-top: 1px solid var(--line); }
+.member-row:first-child { border-top: 0; }
+.member-row > div { min-width: 0; }
+.member-name { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+.member-name > strong { font-size: 1.15rem; white-space: nowrap; }
+.member-row strong { font-variant-numeric: tabular-nums; }
+.member-row small { font-size: .85rem; font-weight: 500; }
+.compact-label { display: block; color: var(--muted); font-size: .85rem; margin-bottom: 3px; }
+.member-actions button { min-height: 44px; }
+.batch-editor { margin: 8px 12px 16px; padding: 18px; background: #fafbfe; border-top: 3px solid var(--navy); scroll-margin-top: 105px; }
+.batch-editor .grid { gap: 12px; }
+.batch-editor .hint { margin: 8px 0 12px; }
+.batch-editor form > label { margin-top: 12px; }
+.settings-fold { padding: 0 20px; margin-bottom: 12px; }
+.settings-fold > summary { font-size: 1.05rem; font-weight: 700; padding: 16px 0; }
+.settings-fold[open] { padding-bottom: 20px; }
+.settings-fold > h2 { display: none; }
+.view-switch { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; padding: 5px; border: 1px solid var(--line); background: #e9edf3; border-radius: 12px; margin-bottom: 16px; scroll-margin-top: 85px; }
+.view-switch button { background: transparent; border-color: transparent; }
+.view-switch button[aria-pressed="true"] { background: var(--navy); color: #fff; box-shadow: 0 2px 6px #1625411a; }
+#daily-entry { scroll-margin-top: 100px; }
+#page-daily #home-metrics { gap: 8px; margin-bottom: 18px; }
+#page-daily #home-metrics .metric { padding: 14px; }
+#page-daily #home-metrics .value { margin: 7px 0 5px; font-size: 1.9rem; }
+#page-daily #home-metrics .feature .value { font-size: 2.15rem; }
+#barns.compact-barns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; gap: 14px; }
+.overview-cohort { border: 1px solid var(--line); background: #fff; border-radius: 12px; overflow: hidden; min-width: 0; }
+.overview-cohort-heading { padding: 13px 14px; display: flex; gap: 8px 12px; justify-content: space-between; flex-wrap: wrap; align-items: baseline; border-bottom: 1px solid var(--line); }
+.overview-cohort-heading h3 { font-size: 1.12rem; color: var(--navy); margin: 0; }
+.overview-cohort-heading > span { font-size: .85rem; color: var(--muted); white-space: nowrap; }
+.overview-columns, .barn-card.overview-barn { display: grid; grid-template-columns: 1.1fr .85fr .85fr 1.1fr; gap: 6px; align-items: center; text-align: right; }
+.overview-columns { background: #f5f7fa; padding: 7px 12px; font-size: .85rem; color: var(--muted); }
+.overview-columns > :first-child { text-align: left; }
+.barn-card.overview-barn { border: 0; border-top: 1px solid #e7ebf0; border-radius: 0; padding: 6px 12px; position: relative; }
+.overview-barn .overview-barn-link { width: auto; padding: 4px 0; margin: 0; background: transparent; border: 0; text-align: left; display: grid; gap: 1px; min-height: 48px; }
+.overview-barn-link > strong { font-size: 1.08rem; }
+.overview-barn-link > small { font-size: .85rem; font-weight: 500; line-height: 1.35; }
+.overview-heads { font-size: 1.25rem; font-variant-numeric: tabular-nums; }
+.overview-dead { font-size: 1.15rem; color: var(--red); font-variant-numeric: tabular-nums; }
+.overview-barn .barn-survival { padding: 0; display: block; }
+.overview-barn .barn-survival > strong { font-size: 1rem; white-space: nowrap; }
+.overview-barn .barn-survival details { margin: 0; padding: 0; }
+.overview-barn .barn-survival summary { padding: 10px 0; min-height: 44px; font-size: 1rem; list-style: none; }
+.overview-barn .barn-survival details p { position: relative; background: #f1f4f8; padding: 10px; margin: 0; font-size: .88rem; text-align: left; }
+.overview-barn:has(.barn-survival details[open]) { grid-template-columns: 1.1fr .85fr .85fr 1.1fr; }
+.overview-barn .barn-survival:has(details[open]) { grid-column: 1 / -1; }
+.recent-fold { margin-top: 18px; }
+@media (max-width: 1150px) { #barns.compact-barns { grid-template-columns: 1fr; } }
+@media (max-width: 700px) {
+  #batch-workspace { padding: 14px; }
+  #batch-workspace > h2 { margin-bottom: 6px; }
+  #batch-workspace > .hint { margin: 6px 0 14px; }
+  .cohort-setting > summary { padding: 12px 30px 12px 12px; gap: 4px; }
+  .cohort-setting > summary::after { right: 10px; top: 10px; }
+  .cohort-title { font-size: 1.08rem; }
+  .cohort-date, .cohort-meta { font-size: .85rem; }
+  .cohort-members { padding: 0 12px; }
+  .member-row { grid-template-columns: 1fr 1fr auto; gap: 6px 10px; }
+  .member-name { grid-column: 1 / -1; }
+  .member-row .compact-label { font-size: .88rem; }
+  .member-row > div:nth-child(3) .compact-label { max-width: 150px; }
+  .batch-editor { margin: 8px; padding: 14px; }
+  .batch-editor .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+  .batch-editor .grid > label:has([name="name"]), .batch-editor .grid > label:has([name="entry_date"]) { grid-column: 1 / -1; }
+  .batch-editor #batch-form > details .grid { grid-template-columns: 1fr; }
+  .batch-editor h2 { font-size: 1.15rem; }
+  .settings-fold { padding-left: 16px; padding-right: 16px; }
+  .compact-filter { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+  .compact-filter label:has([name=cohort]), .compact-filter label:has([name=batch_id]) { grid-column: 1 / -1; }
+  .compact-filter .actions button { flex: 1; }
+  .overview-columns, .barn-card.overview-barn { gap: 5px; padding-left: 10px; padding-right: 10px; }
+  .overview-barn-link > small { font-size: .85rem; }
+  .overview-barn .barn-survival > strong { font-size: .94rem; }
+  .death-breakdown article { padding: 5px 0 10px; }
+  .death-breakdown h3 { margin: 7px 0; }
+  .barn-deaths { gap: 6px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .barn-deaths button { padding: 7px 10px; }
+}
+@media (max-width: 359px) {
+  .batch-tools { grid-template-columns: 1fr; }
+  .batch-editor .grid { grid-template-columns: 1fr; }
+  html[data-text-size="large"] .compact-filter { grid-template-columns: 1fr; }
+}
