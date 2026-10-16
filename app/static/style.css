@@ -396,6 +396,31 @@ body [hidden] { display: none !important; }
   html[data-text-size="large"] .compact-filter { grid-template-columns: 1fr; }
 }
 
+/* Period deaths: a single compact list, including zero-death cohorts. */
+.period-deaths { padding: 0; overflow: hidden; }
+.period-deaths .period-total { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 12px; padding: 18px 20px; margin: 0; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; }
+.period-total .death-label { align-self: center; font-size: 1.2rem; line-height: 1.4; }
+.period-total > strong { grid-column: 2; grid-row: 1 / 3; align-self: center; font-size: 2.4rem; margin: 0; white-space: nowrap; }
+.period-total .death-range { grid-column: 1; }
+.period-total .death-scope, .period-total .period-hint { grid-column: 1 / -1; overflow-wrap: anywhere; }
+.period-list { padding: 0 20px; }
+.period-item { padding: 10px 0; border-bottom: 1px solid var(--line); }
+.period-item:last-child { border-bottom: 0; }
+.period-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 3px 12px; width: 100%; min-height: 48px; padding: 7px 0 0; border: 0; border-radius: 6px; background: transparent; text-align: left; white-space: normal; }
+.period-row:hover { background: #f2f5f9; }
+.period-row-title { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; min-width: 0; }
+.period-row-title > strong { font-size: 1.12rem; line-height: 1.5; overflow-wrap: anywhere; }
+.period-age { font-size: 1.05rem; font-weight: 650; color: #405c80; white-space: nowrap; }
+.period-count { grid-column: 2; grid-row: 1 / 3; align-self: center; background: #edf1f7; color: var(--red); border-radius: 30px; font-size: 1.4rem; font-variant-numeric: tabular-nums; padding: 6px 12px; white-space: nowrap; }
+.period-count.is-zero { color: #405c80; }
+.period-count small { font-size: .88rem; font-weight: 550; }
+.period-batch { grid-column: 1; font-size: .85rem; line-height: 1.5; font-weight: 400; color: var(--muted); overflow-wrap: anywhere; }
+.period-barns { display: flex; flex-wrap: wrap; gap: 0 12px; }
+.period-barns button { min-height: 44px; padding: 4px 0; border: 0; background: transparent; color: var(--muted); text-align: left; font-size: .94rem; font-weight: 400; }
+.period-barns button:hover { color: var(--navy); text-decoration: underline; }
+.period-barns strong { font-weight: 550; font-variant-numeric: tabular-nums; }
+.period-unknown { font-size: .88rem; margin: 0 0 6px; color: var(--red); }
+
 /* iPhone: localized dates need a full row; safe areas belong to fixed chrome. */
 @media (max-width: 700px) {
   html { scroll-padding-top: calc(84px + var(--safe-top)); scroll-padding-bottom: calc(112px + var(--safe-bottom)); }
@@ -408,6 +433,9 @@ body [hidden] { display: none !important; }
   .view-switch { margin-bottom: 12px; }
   .view-switch button { min-height: 44px; padding: 8px; }
   .card { padding: 16px; }
+  .card.period-deaths { padding: 0; }
+  .period-deaths .period-total { padding: 14px 16px; }
+  .period-list { padding: 0 16px; }
   .card h2 { margin-bottom: 14px; }
   label { gap: 6px; }
   input, select { min-height: 48px; height: 3rem; line-height: 1.4; font-weight: 500; }

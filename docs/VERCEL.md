@@ -1,6 +1,8 @@
-# PigLedger 1.7.2：部署與保留資料
+# PigLedger 1.7.3：部署與保留資料
 
 正式網址：https://555-rho-nine.vercel.app/ 。沿用GitHub aa0985854612-pixel/555 main、Vercel pig13／555及既有Turso。
+
+1.7.3改為精簡逐批死亡清單，保留日期、整組／批次／單棟篩選與歷史／CSV連結；零死亡直接列出，週齡依查詢結束日排序。修正分組下的同批死亡範圍及缺日期的未知判斷。無SQL結構、環境變數、Excel匯入或帳號變更。先備份目前正式庫，再推送原main，由現有Vercel自動部署Python程式、介面及新版SW快取；原HTTPS網址及Turso沿用。部署後以唯讀方式核對日期、分組、批次、單棟合計與來源歷史，核對records／users／account_security指紋相同。
 
 1.7.2修正手機日期與選單寬度、每日登記順序及iPhone安全距離；保留原生選擇器、字級與資料。無SQL結構、環境變數或匯入變更，推送原main更新CSS、compact.js與版本快取。原安裝圖示與PWA識別沿用，不必重新安裝。Chromium模擬已測，WebKit官方下載受限，Safari／iPhone實機列為未驗收。
 

@@ -144,7 +144,8 @@ def statistics(data,query):
     stats['fcr_period_mismatch']=bool(perfs) and not comparable
     stats['cohorts']=[]
     for key in dict.fromkeys(cohort_key(b) for b in data['batches'] if b['id'] in chosen):
-        members=[b for b in data['batches'] if b['id'] in chosen and cohort_key(b)==key]
+        members=[b for b in data['batches'] if b['id'] in chosen and cohort_key(b)==key and b['entry_date']<=until]
+        if not members:continue
         weights=[w for w in source_history(data,'weights') if w.get('cohort')==key and w.get('date') and w['date']<=until and (not start or w['date']>=start)]
         means=combined_weights(weights)
         estimate=None
@@ -154,25 +155,47 @@ def statistics(data,query):
                 'adg':(last['mean']-first['mean'])/days,'source':'source_mean','estimated':True,'fcr':None,
                 'composition_changed':any(r.get('date') and first['date']<=r['date']<=last['date'] and r.get('cohort')==key for r in source_history(data))}
         death_query={'cohort':[key],'from':[start or until],'to':[until],'type':['death']}
-        for field in ('barn_id','batch_id'):
+        for field in ('barn_id','batch_id','group'):
             if get(field):death_query[field]=[get(field)]
         deaths=filter_rows('movements',data,death_query)
         ages={age(b,until) for b in members}
-        uncertain=[r for r in source_history(data) if r.get('cohort')==key and r.get('type')=='death' and (not r.get('date') or (start or until)<=r['date']<=until) and not r.get('batch_id')]
+        uncertain=[r for r in source_history(data) if r.get('cohort')==key and r.get('type')=='death' and (not r.get('batch_id') or r['batch_id'] in chosen) and (not r.get('date') or ((start or until)<=r['date']<=until and not r.get('batch_id')))]
         unknown_cohort=any(not r.get('date') or not set(r.get('legacy_members',[]))<=chosen for r in uncertain)
-        stats['cohorts'].append({'cohort':key,'name':members[0]['name'],'herd':herd(data['batches'],data['movements'],until,[b['id'] for b in members]),
+        stats['cohorts'].append({'cohort':key,'name':members[0]['name'],'entry_date':members[0]['entry_date'],'herd':herd(data['batches'],data['movements'],until,[b['id'] for b in members]),
             'age_days':next(iter(ages)) if len(ages)==1 else None,'period_deaths':None if unknown_cohort else sum(r['quantity'] for r in deaths if not r.get('archive')),
+            'known_period_deaths':sum(r['quantity'] for r in deaths if not r.get('archive')),
             'barns':[{'id':b['id'],'barn_id':b['barn_id'],'herd':herd(data['batches'],data['movements'],until,[b['id']]),
-                'period_deaths':None if uncertain else sum(r['quantity'] for r in deaths if r.get('batch_id')==b['id'])} for b in members],
+                'age_days':age(b,until),'known_period_deaths':sum(r['quantity'] for r in deaths if r.get('batch_id')==b['id']),
+                'period_deaths':None if any(not r.get('batch_id') or r['batch_id']==b['id'] for r in uncertain) else sum(r['quantity'] for r in deaths if r.get('batch_id')==b['id'])} for b in members],
             'source_performance':estimate if not get('barn_id') and not get('batch_id') else None,
             'missing_fields':[field for field in ('entry','dead') if any(herd(data['batches'],data['movements'],until,[b['id']])[field] is None for b in members)]})
     death_start=start or until
     scope={k:v for k,v in query.items() if k in ('batch_id','barn_id','cohort','group')}
     death_rows=filter_rows('movements',data,scope|{'from':[death_start],'to':[until],'type':['death']})
-    relevant=[r for r in source_history(data) if r['type']=='death' and (not scoped or (r.get('batch_id') in chosen or set(r.get('legacy_members',[]))&chosen or get('cohort')==r.get('cohort')))]
+    relevant=[r for r in source_history(data) if r['type']=='death' and (not scoped or r.get('batch_id') in chosen or (not r.get('batch_id') and (set(r.get('legacy_members',[]))&chosen or get('cohort')==r.get('cohort'))))]
     incomplete=any((not r.get('date') and (not r.get('archive') or get('cohort')==r.get('cohort'))) or (r.get('date') and death_start<=r['date']<=until and scoped and not r.get('batch_id') and not set(r.get('legacy_members',[]))<=chosen) for r in relevant)
     known=sum(r['quantity'] for r in death_rows)
-    stats['death_summary']={'from':death_start,'to':until,'known':known,'total':None if incomplete else known,'rows':death_rows}
+    stats['death_summary']={'from':death_start,'to':until,'scope':{k:v[0] for k,v in scope.items()},'known':known,'total':None if incomplete else known,'rows':death_rows}
+    # The compact list uses the same scope as history/CSV, including dated
+    # archived source events. Archives never become new stock or batch records.
+    stats['death_groups']=[{k:c[k] for k in ('cohort','name','entry_date','age_days','period_deaths','known_period_deaths','barns')} for c in stats['cohorts']]
+    for source in source_rows(data,archives=True):
+        if not source['archive']:continue
+        row=source['row'];key=cohort_key(row)
+        rows=[r for r in death_rows if r.get('archive') and r.get('cohort')==key]
+        if not rows and get('cohort')!=key:continue
+        if any(c['cohort']==key for c in stats['death_groups']):continue
+        undated=any(r.get('archive') and r.get('cohort')==key and r['type']=='death' and not r.get('date') for r in relevant)
+        barns=[]
+        for number in row['barns']:
+            barn=next((b for b in data['barns'] if str(b['name']).replace('第','').replace('棟','').strip()==str(number)),None)
+            if get('barn_id') and (not barn or barn['id']!=get('barn_id')):continue
+            count=sum(r['quantity'] for r in rows if r.get('barn_number')==number)
+            barns.append({'id':None,'barn_id':barn['id'] if barn else None,'name':str(number)+'棟','age_days':None,
+                'period_deaths':None if undated or any(r.get('barn_number') is None for r in rows) else count,'known_period_deaths':count})
+        stats['death_groups'].append({'cohort':key,'name':row['name'],'entry_date':row['entry_date'],'archive':True,
+            'age_days':None,'period_deaths':None if undated else sum(r['quantity'] for r in rows),
+            'known_period_deaths':sum(r['quantity'] for r in rows),'barns':barns})
     return stats
 
 
