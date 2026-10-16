@@ -1,7 +1,7 @@
 """Local desktop launcher. Binds to loopback and keeps data outside version folders."""
 import argparse, getpass, hashlib, json, os, sys, threading, urllib.request, webbrowser
 from pathlib import Path
-from .store import Store, Problem, VERSION
+from .store import Store, Problem, VERSION, validate_password
 from .server import Server
 
 
@@ -37,10 +37,11 @@ def create_first_account(store, read_name=input, read_password=getpass.getpass):
     print('The cloud development account is not copied to this laptop.')
     username=read_name('Username [farmadmin]: ').strip() or 'farmadmin'
     while True:
-        password=read_password('Choose a password (at least 12 characters; typing is hidden): ')
+        password=read_password('Choose a password (4 to 8 digits; typing is hidden): ')
         confirm=read_password('Enter the same password again: ')
         if password!=confirm:print('Passwords differ. Please try again.');continue
-        if not 12<=len(password)<=512:print('Password must have 12 to 512 characters.');continue
+        try:validate_password(password)
+        except Problem:print('Password must contain 4 to 8 digits (0-9).');continue
         try:
             store.create_initial_admin(username,password)
         except Problem as e:

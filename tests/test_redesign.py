@@ -11,7 +11,7 @@ from legacy_fixture import workbook_fixture
 
 class RedesignTests(unittest.TestCase):
  def setUp(self):
-  self.temp=tempfile.TemporaryDirectory();self.root=Path(self.temp.name);self.store=Store(self.root/'farm.db');self.admin=self.store.create_user('owner','synthetic-owner-password');self.staff=self.store.create_user('editor','synthetic-editor-password','staff');self.viewer=self.store.create_user('reader','synthetic-viewer-password','viewer')
+  self.temp=tempfile.TemporaryDirectory();self.root=Path(self.temp.name);self.store=Store(self.root/'farm.db');self.admin=self.store.create_user('owner','83000011');self.staff=self.store.create_user('editor','83000009','staff');self.viewer=self.store.create_user('reader','83000018','viewer')
   self.barn=self.add('barns',name='19棟',group='A');self.batch=self.add('batches',name='JD-TEST',barn_id=self.barn['id'],entry_date='2026-01-01',entry_count=100,entry_age_days=70,status='active')
  def tearDown(self):self.temp.cleanup()
  def add(self,kind,**values):return self.store.mutate(self.admin,kind,values,str(uuid.uuid4()))
@@ -57,7 +57,7 @@ class RedesignTests(unittest.TestCase):
 
 class SourceVoidTests(unittest.TestCase):
  def setUp(self):
-  self.temp=tempfile.TemporaryDirectory();self.root=Path(self.temp.name);self.store=Store(self.root/'farm.db');self.admin=self.store.create_user('owner','synthetic-owner-password');self.payload={'filename':'source.xlsx','base64':base64.b64encode(workbook_fixture()).decode(),'counts_as_of':'2026-10-12','counts_text':'1/50\n2/49'};self.store.import_workbook(self.admin,self.payload,str(uuid.uuid4()))
+  self.temp=tempfile.TemporaryDirectory();self.root=Path(self.temp.name);self.store=Store(self.root/'farm.db');self.admin=self.store.create_user('owner','83000011');self.payload={'filename':'source.xlsx','base64':base64.b64encode(workbook_fixture()).decode(),'counts_as_of':'2026-10-12','counts_text':'1/50\n2/49'};self.store.import_workbook(self.admin,self.payload,str(uuid.uuid4()))
  def tearDown(self):self.temp.cleanup()
  def target(self):return next(r for r in source_history(self.store.snapshot()) if r['type']=='death' and r.get('batch_id') and r['date']=='2026-10-14')
  def test_baseline_source_void_adds_back_once_and_keeps_source_file(self):

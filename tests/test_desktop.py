@@ -13,26 +13,26 @@ class DesktopTests(unittest.TestCase):
         with patch('app.desktop.sys.platform','win32'),patch.dict(os.environ,{'LOCALAPPDATA':str(self.folder)},clear=False):
             self.assertEqual(data_directory(),self.folder/'PigLedger')
     def test_first_run_creates_real_admin_without_storing_plaintext(self):
-        password='desktop-test-password';values=iter([password,password])
+        password='83000004';values=iter([password,password])
         self.assertTrue(create_first_account(self.store,lambda _: '',lambda _:next(values)))
         db=self.store.connect();row=db.execute('SELECT username,role,hash FROM users').fetchone();db.close()
         self.assertEqual(row['username'],'farmadmin');self.assertEqual(row['role'],'admin');self.assertNotEqual(row['hash'],password);self.assertTrue(verify_password(password,row['hash']))
     def test_repeat_launch_preserves_account_and_avoids_prompts(self):
-        self.store.create_initial_admin('farmer','desktop-test-password')
+        self.store.create_initial_admin('farmer','83000004')
         def should_not_prompt(_):raise AssertionError('Unexpected prompt')
         self.assertFalse(create_first_account(self.store,should_not_prompt,should_not_prompt))
     def test_invalid_password_retry(self):
-        values=iter(['short','short','desktop-test-password','wrong-password','desktop-test-password','desktop-test-password'])
+        values=iter(['short','short','83000004','wrong-password','83000004','83000004'])
         self.assertTrue(create_first_account(self.store,lambda _:'farmer',lambda _:next(values)))
     def test_concurrent_initialization_can_create_only_one_admin(self):
         def go(i):
-            try:return self.store.create_initial_admin('user'+str(i),'desktop-test-password')
+            try:return self.store.create_initial_admin('user'+str(i),'83000004')
             except Problem as e:return e.code
         with ThreadPoolExecutor(max_workers=2) as pool:r=list(pool.map(go,range(2)))
         self.assertEqual(sum(isinstance(x,dict) for x in r),1);self.assertIn('already_initialized',r)
     def test_existing_any_role_never_creates_another_admin(self):
-        self.store.create_user('viewer','desktop-test-password','viewer')
-        with self.assertRaises(Problem):self.store.create_initial_admin('farmer','desktop-test-password')
+        self.store.create_user('viewer','83000004','viewer')
+        with self.assertRaises(Problem):self.store.create_initial_admin('farmer','83000004')
     def test_profile_matching_does_not_open_another_farm(self):
         server=Server(('127.0.0.1',0),self.store);thread=threading.Thread(target=server.serve_forever,daemon=True);thread.start()
         try:
@@ -40,7 +40,7 @@ class DesktopTests(unittest.TestCase):
             self.assertIsNone(existing_instance(port,'another-profile'))
         finally:server.shutdown();server.server_close()
     def test_real_launcher_login_records_restart_and_preservation(self):
-        self.store.create_initial_admin('farmer','desktop-test-password')
+        self.store.create_initial_admin('farmer','83000004')
         # Choose an available fixed loopback port; the launcher may select the next one if raced.
         import socket
         with socket.socket() as s:s.bind(('127.0.0.1',0));port=s.getsockname()[1]
@@ -58,7 +58,7 @@ class DesktopTests(unittest.TestCase):
         op=urllib.request.build_opener(urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()))
         proc,log=start()
         try:
-            req=urllib.request.Request(f'http://127.0.0.1:{port}/api/login',data=json.dumps({'username':'farmer','password':'desktop-test-password'}).encode(),headers={'Content-Type':'application/json'})
+            req=urllib.request.Request(f'http://127.0.0.1:{port}/api/login',data=json.dumps({'username':'farmer','password':'83000004'}).encode(),headers={'Content-Type':'application/json'})
             with op.open(req) as r:me=json.load(r)
             headers={'Content-Type':'application/json','X-CSRF-Token':me['csrf'],'Idempotency-Key':'desktop-test-request-0001'}
             body=json.dumps({'name':'Laptop barn','group':''}).encode()

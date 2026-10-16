@@ -5,7 +5,7 @@ from urllib.parse import urlparse, parse_qs
 from http.cookies import SimpleCookie
 from pathlib import Path
 from datetime import date,datetime,timezone,timedelta
-from .store import Store, Problem, VERSION, KINDS, encode, verify_password
+from .store import Store, Problem, VERSION, KINDS, encode, verify_password, validate_password
 from .domain import herd, age, combined_weights, consumption, performance, day, Invalid
 from .history import source_history,source_rows,cohort_key
 
@@ -346,8 +346,9 @@ class Handler(BaseHTTPRequestHandler):
                     if b.get('role') not in ('admin','staff','viewer') or not isinstance(b.get('active'),bool):raise Problem('invalid_user')
                     if old['role']=='admin' and old['active'] and (b['role']!='admin' or not b['active']) and db.execute("SELECT COUNT(*) FROM users WHERE role='admin' AND active=1").fetchone()[0]<=1:raise Problem('last_admin')
                     if any(old[k]!=b.get('before',{}).get(k) for k in ('role','active','revision')):raise Problem('revision_conflict',409)
-                    if b.get('password'):
-                        if not 12<=len(b['password'])<=512:raise Problem('invalid_user')
+                    if b.get('password') is not None and b.get('password')!='':
+                        if rid==user['id']:raise Problem('use_own_password_form')
+                        validate_password(b['password'])
                         from .store import password_hash
                         db.execute('UPDATE users SET hash=? WHERE id=?',(password_hash(b['password']),rid))
                         db.execute('INSERT INTO account_security(user_id,must_change) VALUES(?,1) ON CONFLICT(user_id) DO UPDATE SET must_change=1,setup_hash=NULL,setup_expires=NULL',(rid,))

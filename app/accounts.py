@@ -1,11 +1,6 @@
 """Password changes and one-use setup links; hashes and tokens never enter audit."""
 import hashlib,hmac,secrets,sqlite3,time
-from .store import Problem,password_hash,verify_password
-
-
-def validate_password(value):
-    if not isinstance(value,str) or not 12<=len(value)<=512 or not value.strip():raise Problem('invalid_user')
-    return value
+from .store import Problem,password_hash,verify_password,validate_password
 
 
 def change_password(store,user,current,new):
@@ -69,13 +64,16 @@ def activate(store,username,token,password):
 
 
 def ensure_role_accounts(store,actor):
-    store.require(actor,True);result=[]
+    store.require(actor,True);result=[];generated=set()
     for name,role in [('farmviewer','viewer'),('farmeditor','staff'),('farmmanager','admin')]:
         db=store.connect()
         try:existing=db.execute('SELECT id,username,role FROM users WHERE username=?',(name,)).fetchone()
         finally:db.close()
         if existing:result.append(dict(existing)|{'created':False});continue
-        try:created=store.create_user(name,secrets.token_urlsafe(32),role,actor['id'],must_change=True)
+        temporary=f'{secrets.randbelow(100_000_000):08d}'
+        while temporary in generated:temporary=f'{secrets.randbelow(100_000_000):08d}'
+        generated.add(temporary)
+        try:created=store.create_user(name,temporary,role,actor['id'],must_change=True)
         except Problem as error:
             if error.code!='username_exists':raise
             result.append({'username':name,'created':False});continue

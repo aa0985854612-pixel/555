@@ -22,7 +22,7 @@ def single_barn_workbook():
 class EntryCorrectionTests(unittest.TestCase):
  def setUp(self):
   self.tmp=tempfile.TemporaryDirectory();self.store=Store(Path(self.tmp.name)/'db')
-  self.admin=self.store.create_user('owner','synthetic-owner-password')
+  self.admin=self.store.create_user('owner','83000011')
   self.payload={'filename':'synthetic.xlsx','base64':base64.b64encode(single_barn_workbook()).decode(),'counts_as_of':'2026-10-12','counts_text':'15/99'}
   self.store.import_workbook(self.admin,self.payload,str(uuid.uuid4()))
  def tearDown(self):self.tmp.cleanup()
@@ -53,7 +53,7 @@ class EntryCorrectionTests(unittest.TestCase):
   self.assertEqual(self.batch()['entry_count'],100)
  def test_server_roles_are_enforced(self):
   for role in ('staff','viewer'):
-   user=self.store.create_user(role,'synthetic-role-password',role)
+   user=self.store.create_user(role,'83000014',role)
    with self.assertRaises(Problem) as e:self.change(120,user=user)
    self.assertEqual(e.exception.status,403)
  def test_retry_is_idempotent_and_stale_revision_conflicts(self):

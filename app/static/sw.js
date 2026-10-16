@@ -1,5 +1,5 @@
-const VERSION='pigledger-1.6.3';
-const FILES=['/','/jiade-cover.webp?v=1.6.3','/app.js?v=1.6.3','/appearance.js?v=1.6.3','/upgrade.js?v=1.6.3','/redesign.js?v=1.6.3','/style.css?v=1.6.3','/jiade-icon-180-v1.6.3.png','/jiade-icon-192-v1.6.3.png','/jiade-icon-512-v1.6.3.png','/jiade-icon-maskable-v1.6.3.png','/manifest.webmanifest?v=1.6.3','/manifest.webmanifest'];
+const VERSION='pigledger-1.6.4';
+const FILES=['/','/jiade-cover.webp?v=1.6.4','/app.js?v=1.6.4','/appearance.js?v=1.6.4','/upgrade.js?v=1.6.4','/redesign.js?v=1.6.4','/style.css?v=1.6.4','/jiade-icon-180-v1.6.3.png','/jiade-icon-192-v1.6.3.png','/jiade-icon-512-v1.6.3.png','/jiade-icon-maskable-v1.6.3.png','/manifest.webmanifest?v=1.6.4','/manifest.webmanifest'];
 self.addEventListener('install',e=>e.waitUntil(caches.open(VERSION).then(c=>c.addAll(FILES))));
 self.addEventListener('message',e=>{if(e.data==='activate')self.skipWaiting()});
 self.addEventListener('activate',e=>e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k.startsWith('pigledger-')&&k!==VERSION).map(k=>caches.delete(k)))).then(()=>self.clients.claim())));

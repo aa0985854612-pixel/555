@@ -12,8 +12,8 @@ from app.store import Store,VERSION
 results=[]
 with tempfile.TemporaryDirectory() as folder:
     folder=Path(folder);local=Store(folder/'local.db')
-    local.create_initial_admin('tester','synthetic-test-password')
-    local.create_user('reader','synthetic-test-password','viewer')
+    local.create_initial_admin('tester','83000016')
+    local.create_user('reader','83000016','viewer')
     fixture=HranaFixture(folder/'remote.db')
     cloud=CloudStore('libsql://test.turso.io','synthetic-token',fixture);migrate(local,cloud)
     os.environ.update({'__VC_HANDLER_ENTRYPOINT':'api/index.py','__VC_HANDLER_ENTRYPOINT_ABS':str(root/'api/index.py'),'__VC_HANDLER_MODULE_NAME':'api.index','__VC_HANDLER_VARIABLE_NAME':'handler','TURSO_DATABASE_URL':'libsql://test.turso.io','TURSO_AUTH_TOKEN':'synthetic-token'})
@@ -25,7 +25,7 @@ with tempfile.TemporaryDirectory() as folder:
         response=invoke('/');assert response['statusCode']==200 and VERSION in response['body'];passed('official runtime discovers handler and renders App')
         response=invoke('/app.js?v='+VERSION);assert response['statusCode']==200 and VERSION in response['body'];passed('original static path and query preserved')
         response=invoke('/api/health');assert response['statusCode']==200 and json.loads(response['body'])['ok'];passed('initialized persistent backend health')
-        response=invoke('/api/login','POST',{'username':'reader','password':'synthetic-test-password'})
+        response=invoke('/api/login','POST',{'username':'reader','password':'83000016'})
         assert response['statusCode']==200;me=json.loads(response['body'])
         headers={k.lower():v for k,v in response['headers'].items()}
         cookie=headers['set-cookie'];cookie=cookie[0] if isinstance(cookie,list) else cookie

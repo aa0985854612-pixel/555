@@ -1,12 +1,14 @@
-# 肉豬紀錄管理 App — PigLedger 1.6.3
+# 肉豬紀錄管理 App — PigLedger 1.6.4
 
 **[開啟正式網站：555-rho-nine.vercel.app](https://555-rho-nine.vercel.app/)**。沿用你目前的帳號、密碼、Vercel專案及Turso資料庫。
 
-- [完整原始碼／Docker／Vercel程式包 v1.6.3](https://github.com/aa0985854612-pixel/555/raw/refs/heads/main/release/pigledger-1.6.3.zip)
+- [完整原始碼／Docker／Vercel程式包 v1.6.4](https://github.com/aa0985854612-pixel/555/raw/refs/heads/main/release/pigledger-1.6.4.zip)
 - [簡短操作說明](docs/USER_GUIDE.md)／[部署說明](docs/VERCEL.md)
-- [1.6.3測試報告與驗收限制](docs/TEST_REPORT_1.6.3.md)
+- [1.6.4測試報告與驗收限制](docs/TEST_REPORT_1.6.4.md)
 
-本版把安裝到手機主畫面的圖示更新為嘉得Q版豬，名稱為「嘉得肉豬紀錄」。Android一般圖示／圓形裁切圖示、iPhone主畫面圖示及瀏覽器圖示均使用同一隻Q版豬，換用版本化檔名避開舊圖示快取，原App識別與網址保持。
+本版將新設／更改／重設密碼統一為4～8位純數字（0–9），保留開頭的0。既有密碼、帳號及登入相容性保留，沒有自動重設任何帳號。到「設定→修改自己的密碼」輸入目前密碼及新的數字密碼；管理員可管理他人帳號。
+
+保留安裝到手機主畫面的圖示更新為嘉得Q版豬，名稱為「嘉得肉豬紀錄」。Android一般圖示／圓形裁切圖示、iPhone主畫面圖示及瀏覽器圖示均使用同一隻Q版豬，換用版本化檔名避開舊圖示快取，原App識別與網址保持。
 
 已安裝的舊圖示由手機系統決定更新時間。若仍顯示舊圖：先完成手上登記及套用網站更新，再移除手機上的舊App／捷徑，從Chrome或Safari重新開正式網址並加入主畫面；不要清除網站資料。正式雲端紀錄保留，重新安裝可能需再次登入。原Q版登入封面保留。
 
@@ -31,7 +33,7 @@
 - [Excel 移入說明](docs/EXCEL_IMPORT.md)
 - [筆電版 v1.2.1 測試結果與限制](docs/TEST_REPORT_1.2.1.md)
 
-首次啟動設定管理員與至少12字元密碼；再次啟動沿用帳號與資料。資料固定存在 %LOCALAPPDATA%\PigLedger\data\pigledger.sqlite3，換版本資料夾不重建。本地舊 schema→4 自動先備份，保留帳號、原始紀錄與歷程。程式包不包含使用者工作簿、農場資料或密碼。
+首次啟動設定管理員與4～8位純數字密碼；再次啟動沿用帳號與資料。資料固定存在 %LOCALAPPDATA%\PigLedger\data\pigledger.sqlite3，換版本資料夾不重建。本地舊 schema→4 自動先備份，保留帳號、原始紀錄與歷程。程式包不包含使用者工作簿、農場資料或密碼。
 
 手机模式取得臨時 HTTPS 網址，Safari／Chrome 可用行動網路登入。啟動器檢查公開健康狀態成功才顯示可用網址。筆電必須開機、連網、不睡眠；Ctrl+C 只停止自己的服務。Cloudflare Quick Tunnel 沒有全天候服務保證，重啟可能換網址。固定正式網址使用[雲端部署](docs/DEPLOY.md)。本雲端網路阻擋 Cloudflare API，Windows雙擊及真正外出手機連線仍待實機驗收。
 

@@ -47,8 +47,8 @@ class CloudDeploymentTests(unittest.TestCase):
     def setUp(self):
         self.temp=tempfile.TemporaryDirectory();self.path=Path(self.temp.name)
         self.local=Store(self.path/'local.db')
-        self.admin=self.local.create_initial_admin('farmadmin','synthetic-test-password')
-        self.viewer=self.local.create_user('reader','synthetic-test-password','viewer')
+        self.admin=self.local.create_initial_admin('farmadmin','83000016')
+        self.viewer=self.local.create_user('reader','83000016','viewer')
         self.fixture=HranaFixture(self.path/'remote.db')
         self.cloud=CloudStore('libsql://test.turso.io','synthetic-token',self.fixture)
         migrate(self.local,self.cloud)
@@ -100,7 +100,7 @@ class CloudDeploymentTests(unittest.TestCase):
         db=restarted.connect()
         try:
             user=db.execute('SELECT * FROM users WHERE id=?',(self.admin['id'],)).fetchone()
-            self.assertTrue(verify_password('synthetic-test-password',user['hash']))
+            self.assertTrue(verify_password('83000016',user['hash']))
             self.assertEqual(user['role'],'admin')
         finally:db.close()
     def test_batch_constraint_failure_never_commits_partial_changes(self):
@@ -200,7 +200,7 @@ class CloudDeploymentTests(unittest.TestCase):
             try:
                 with urllib.request.urlopen(base+'/') as r:self.assertIn(VERSION.encode(),r.read())
                 with urllib.request.urlopen(base+'/api/health') as r:self.assertTrue(json.load(r)['ok'])
-                body=json.dumps({'username':'reader','password':'synthetic-test-password'}).encode()
+                body=json.dumps({'username':'reader','password':'83000016'}).encode()
                 with urllib.request.urlopen(urllib.request.Request(base+'/api/login',data=body,headers={'Content-Type':'application/json'})) as r:
                     me=json.load(r);cookie=r.headers['Set-Cookie']
                     self.assertIn('Secure',cookie);self.assertIn('HttpOnly',cookie)

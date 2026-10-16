@@ -1,5 +1,5 @@
 """Real Chromium manifest and offline asset checks; no physical-phone installation claim."""
-import json,struct,sys,tempfile,threading
+import json,re,struct,sys,tempfile,threading
 from pathlib import Path
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
 from app.store import Store,VERSION
@@ -15,9 +15,9 @@ with tempfile.TemporaryDirectory() as folder:
    manifest_path=page.locator('link[rel=manifest]').get_attribute('href');assert VERSION in manifest_path;response=page.request.get(base+manifest_path);assert response.headers['content-type'].startswith('application/manifest+json');manifest=response.json();assert manifest['id']=='/' and manifest['start_url']=='/';assert manifest['name']==manifest['short_name']=='嘉得肉豬紀錄';passed('versioned manifest keeps app identity and Jia De home-screen name')
    assert {i['purpose'] for i in manifest['icons']}=={'any','maskable'}
    for icon in manifest['icons']:
-    assert VERSION in icon['src'] and 'jiade-icon' in icon['src'];response=page.request.get(base+icon['src']);raw=response.body();assert response.status==200 and response.headers['content-type'].startswith('image/png');assert raw[:8]==b'\x89PNG\r\n\x1a\n';w,h=struct.unpack('>II',raw[16:24]);assert f'{w}x{h}'==icon['sizes']
+    assert re.fullmatch(r'/jiade-icon-(?:192|512|maskable)-v[0-9.]+\.png',icon['src']);response=page.request.get(base+icon['src']);raw=response.body();assert response.status==200 and response.headers['content-type'].startswith('image/png');assert raw[:8]==b'\x89PNG\r\n\x1a\n';w,h=struct.unpack('>II',raw[16:24]);assert f'{w}x{h}'==icon['sizes']
    assert any(i['sizes']=='192x192' and i['purpose']=='any' for i in manifest['icons']);assert any(i['sizes']=='512x512' and i['purpose']=='maskable' for i in manifest['icons']);passed('Android regular and adaptive maskable icons are real PNGs with declared dimensions')
-   apple=page.locator('link[rel=apple-touch-icon]').get_attribute('href');raw=page.request.get(base+apple).body();assert struct.unpack('>II',raw[16:24])==(180,180) and VERSION in apple;assert page.locator('meta[name=apple-mobile-web-app-title]').get_attribute('content')=='嘉得肉豬紀錄';assert page.locator('link[rel=icon]').get_attribute('href')==next(i['src'] for i in manifest['icons'] if i['sizes']=='192x192');passed('iPhone touch icon and browser favicon point to the new pig image')
+   apple=page.locator('link[rel=apple-touch-icon]').get_attribute('href');raw=page.request.get(base+apple).body();assert struct.unpack('>II',raw[16:24])==(180,180) and re.fullmatch(r'/jiade-icon-180-v[0-9.]+\.png',apple);assert page.locator('meta[name=apple-mobile-web-app-title]').get_attribute('content')=='嘉得肉豬紀錄';assert page.locator('link[rel=icon]').get_attribute('href')==next(i['src'] for i in manifest['icons'] if i['sizes']=='192x192');passed('iPhone touch icon and browser favicon point to the new pig image')
    session=ctx.new_cdp_session(page);parsed=session.send('Page.getAppManifest');assert not parsed.get('errors');assert json.loads(parsed['data'])['name']=='嘉得肉豬紀錄';installability=session.send('Page.getInstallabilityErrors');assert not installability['installabilityErrors'],installability;passed('Chromium parses the manifest and reports no installability errors')
    urls=[i['src'] for i in manifest['icons']]+[apple];ctx.set_offline(True);assets=page.evaluate('async(urls)=>await Promise.all(urls.map(async u=>{const r=await fetch(u);return {ok:r.ok,type:r.headers.get("content-type"),bytes:(await r.arrayBuffer()).byteLength}}))',urls);assert all(x['ok'] and x['type'].startswith('image/png') and x['bytes']>0 for x in assets);ctx.set_offline(False);passed('all Android and iPhone icons remain available from the new offline cache')
    for width in (320,390,768,1440):

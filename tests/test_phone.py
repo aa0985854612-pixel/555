@@ -63,7 +63,7 @@ class PhoneLifecycleTests(unittest.TestCase):
     def test_older_desktop_blocks_phone_before_database_migration(self):
         from unittest.mock import patch
         from app.phone import run
-        store=Store(self.folder/'data'/'pigledger.sqlite3');store.create_initial_admin('farmer','phone-test-password')
+        store=Store(self.folder/'data'/'pigledger.sqlite3');store.create_initial_admin('farmer','83000007')
         db=store.connect();db.execute('PRAGMA user_version=2');db.commit();db.close()
         with patch('app.phone.verify_binary',return_value=Path(sys.executable)),patch('app.phone.existing_instance',side_effect=RuntimeError('Close older version')):
             with self.assertRaisesRegex(RuntimeError,'older version'):run(self.folder,Path(sys.executable),True)
@@ -72,7 +72,7 @@ class PhoneLifecycleTests(unittest.TestCase):
         from unittest.mock import patch
         with patch('app.phone.urllib.request.urlopen',side_effect=OSError('offline')):self.assertFalse(remote_health('https://farm-test.trycloudflare.com','profile'))
     def test_real_launcher_duplicate_launch_stop_and_same_database(self):
-        store=Store(self.folder/'data'/'pigledger.sqlite3');admin=store.create_initial_admin('farmer','phone-test-password')
+        store=Store(self.folder/'data'/'pigledger.sqlite3');admin=store.create_initial_admin('farmer','83000007')
         barn=store.mutate(admin,'barns',{'name':'Existing barn','group':''},str(uuid.uuid4()))
         # Only connector provisioning is simulated. The launcher, loopback HTTP,
         # locks, child lifecycle and original SQLite database are real processes.
@@ -130,8 +130,8 @@ class PhoneHttpsTests(unittest.TestCase):
     def tearDownClass(cls):cls.cert_tmp.cleanup()
     def setUp(self):
         self.tmp=tempfile.TemporaryDirectory();self.store=Store(Path(self.tmp.name)/'data'/'pigledger.sqlite3')
-        self.admin=self.store.create_initial_admin('farmer','phone-test-password')
-        self.store.create_user('reader','phone-test-password','viewer')
+        self.admin=self.store.create_initial_admin('farmer','83000007')
+        self.store.create_user('reader','83000007','viewer')
         self.backend=Server(('127.0.0.1',0),self.store,secure=True);self.host='farm-test.trycloudflare.com';self.backend.public_host=self.host
         self.worker=threading.Thread(target=self.backend.serve_forever,daemon=True);self.worker.start()
         port=self.backend.server_port
@@ -167,7 +167,7 @@ class PhoneHttpsTests(unittest.TestCase):
             r=conn.getresponse();status=r.status;rh=dict(r.getheaders());data=json.loads(r.read());return status,data,rh
         finally:conn.close()
     def login(self,username='farmer'):
-        status,me,headers=self.request('POST','/api/login',{'username':username,'password':'phone-test-password'})
+        status,me,headers=self.request('POST','/api/login',{'username':username,'password':'83000007'})
         self.assertEqual(status,200);self.cookie=headers['Set-Cookie'].split(';')[0];self.csrf=me['csrf'];return headers
     def test_verified_tls_login_sets_secure_cookie_and_hsts(self):
         headers=self.login()
@@ -190,8 +190,8 @@ class PhoneHttpsTests(unittest.TestCase):
         self.assertEqual(self.request('GET','/api/snapshot')[0],401)
         self.login('reader');self.assertEqual(self.request('POST','/api/barns',{'name':'not allowed','group':''},{'Idempotency-Key':str(uuid.uuid4())})[0],403)
     def test_wrong_host_origin_http_origin_and_csrf_rejected(self):
-        self.assertEqual(self.request('POST','/api/login',{'username':'farmer','password':'phone-test-password'},{'Host':'evil.test'})[0],403)
-        self.assertEqual(self.request('POST','/api/login',{'username':'farmer','password':'phone-test-password'},{'Origin':'http://'+self.host})[0],403)
+        self.assertEqual(self.request('POST','/api/login',{'username':'farmer','password':'83000007'},{'Host':'evil.test'})[0],403)
+        self.assertEqual(self.request('POST','/api/login',{'username':'farmer','password':'83000007'},{'Origin':'http://'+self.host})[0],403)
         self.login()
         for extra in [{'Host':'evil.test'},{'Origin':'https://evil.test'},{'Origin':'http://'+self.host},{'X-CSRF-Token':'wrong'}]:
             extra['Idempotency-Key']=str(uuid.uuid4())

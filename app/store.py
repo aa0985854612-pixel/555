@@ -1,9 +1,9 @@
-import sqlite3, json, uuid, hashlib, secrets, hmac, os
+import sqlite3, json, uuid, hashlib, secrets, hmac, os, re
 from pathlib import Path
 from datetime import datetime, timezone
 from .domain import Invalid, day, number, herd, consumption, age
 
-VERSION='1.6.3'
+VERSION='1.6.4'
 SCHEMA_VERSION=4
 KINDS=('barns','batches','movements','deliveries','usages','weights','workbooks','source_voids')
 SCHEMA='''
@@ -19,6 +19,13 @@ CREATE TABLE IF NOT EXISTS account_security(user_id TEXT PRIMARY KEY REFERENCES 
 class Problem(Exception):
     def __init__(self, code, status=400, details=None):
         self.code, self.status, self.details = code, status, details
+
+
+def validate_password(value):
+    # Keep strings intact: leading zeroes are part of the password.
+    if not isinstance(value,str) or re.fullmatch(r'[0-9]{4,8}',value) is None:
+        raise Problem('invalid_password_policy')
+    return value
 
 
 def now():
@@ -135,8 +142,9 @@ class Store:
         data['movements']=[m for m in data['movements'] if not m.get('_source_derived')]+derived_movements(data)
 
     def create_user(self, username, password, role='admin', actor='bootstrap', must_change=False):
-        if role not in ('admin','staff','viewer') or not isinstance(username,str) or not 1<=len(username.strip())<=80 or not isinstance(password,str) or not 12<=len(password)<=512:
+        if role not in ('admin','staff','viewer') or not isinstance(username,str) or not 1<=len(username.strip())<=80:
             raise Problem('invalid_user')
+        validate_password(password)
         db=self.connect()
         try:
             db.execute('BEGIN IMMEDIATE')
@@ -152,7 +160,8 @@ class Store:
 
     def create_initial_admin(self, username, password):
         # First-run creation is atomic. Never reset or replace an existing account.
-        if not isinstance(username,str) or not 1<=len(username.strip())<=80 or not isinstance(password,str) or not 12<=len(password)<=512:raise Problem('invalid_user')
+        if not isinstance(username,str) or not 1<=len(username.strip())<=80:raise Problem('invalid_user')
+        validate_password(password)
         db=self.connect()
         try:
             db.execute('BEGIN IMMEDIATE')

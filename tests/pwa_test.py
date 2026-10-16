@@ -8,14 +8,14 @@ from playwright.sync_api import sync_playwright
 root=Path(__file__).resolve().parents[1]
 with tempfile.TemporaryDirectory() as folder:
     folder=Path(folder);static=folder/'static';shutil.copytree(root/'app/static',static)
-    current=(static/'sw.js').read_text();(static/'sw.js').write_text(current.replace('pigledger-1.6.3','pigledger-0.9.0'))
-    server_module.STATIC=static;store=Store(folder/'db.sqlite3');store.create_user('tester','browser-test-password')
+    current=(static/'sw.js').read_text();(static/'sw.js').write_text(current.replace('pigledger-1.6.4','pigledger-0.9.0'))
+    server_module.STATIC=static;store=Store(folder/'db.sqlite3');store.create_user('tester','83000002')
     server=server_module.Server(('127.0.0.1',0),store);threading.Thread(target=server.serve_forever,daemon=True).start()
     with sync_playwright() as p:
         b=p.chromium.launch(executable_path='/usr/bin/chromium',args=['--no-sandbox']);ctx=b.new_context();page=ctx.new_page();page.goto('http://127.0.0.1:'+str(server.server_port))
         page.wait_for_function('()=>navigator.serviceWorker.controller!==null')
         assert 'pigledger-0.9.0' in page.evaluate('()=>caches.keys()')
-        page.locator('#login-form [name=username]').fill('tester');page.locator('#login-form [name=password]').fill('browser-test-password');page.locator('#login-form button').click();page.wait_for_selector('#workspace:not([hidden])')
+        page.locator('#login-form [name=username]').fill('tester');page.locator('#login-form [name=password]').fill('83000002');page.locator('#login-form button').click();page.wait_for_selector('#workspace:not([hidden])')
         page.locator('#movement-form [name=quantity]').fill('7')
         (static/'sw.js').write_text(current);page.evaluate('async()=>{const r=await navigator.serviceWorker.getRegistration();await r.update()}')
         page.wait_for_function('async()=>!!(await navigator.serviceWorker.getRegistration()).waiting')
@@ -25,7 +25,7 @@ with tempfile.TemporaryDirectory() as folder:
         page.evaluate("finishForm(document.querySelector('#movement-form'))")
         with page.expect_navigation(wait_until='networkidle'):
             page.locator('#pwa-update').click()
-        page.wait_for_function("async()=>{const k=await caches.keys();return k.includes('pigledger-1.6.3')&&!k.includes('pigledger-0.9.0')}")
+        page.wait_for_function("async()=>{const k=await caches.keys();return k.includes('pigledger-1.6.4')&&!k.includes('pigledger-0.9.0')}")
         keys=page.evaluate('async()=>{const cs=await caches.keys();const urls=[];for(const c of cs){for(const r of await (await caches.open(c)).keys())urls.push(r.url)}return urls}')
         assert not any('/api/' in u for u in keys)
         manifest=page.request.get('http://127.0.0.1:'+str(server.server_port)+'/manifest.webmanifest').json()

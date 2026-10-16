@@ -8,9 +8,9 @@ from app.server import Server, statistics, filter_rows
 class AppTests(unittest.TestCase):
     def setUp(self):
         self.temp=tempfile.TemporaryDirectory();self.store=Store(Path(self.temp.name)/'data.sqlite3')
-        self.admin=self.store.create_user('admin','secure-test-password')
-        self.staff=self.store.create_user('staff','secure-test-password','staff')
-        self.viewer=self.store.create_user('viewer','secure-test-password','viewer')
+        self.admin=self.store.create_user('admin','83000008')
+        self.staff=self.store.create_user('staff','83000008','staff')
+        self.viewer=self.store.create_user('viewer','83000008','viewer')
         self.barn=self.add('barns',name='9棟',group='A')
         self.batch=self.batch_new('B1',1000)
     def tearDown(self):self.temp.cleanup()
@@ -197,7 +197,7 @@ class HTTPTests(AppTests):
     def tearDown(self):self.server.shutdown();self.server.server_close();super().tearDown()
     def client(self,username):
         op=urllib.request.build_opener(urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()))
-        req=urllib.request.Request(self.base+'/api/login',data=json.dumps({'username':username,'password':'secure-test-password'}).encode(),headers={'Content-Type':'application/json'})
+        req=urllib.request.Request(self.base+'/api/login',data=json.dumps({'username':username,'password':'83000008'}).encode(),headers={'Content-Type':'application/json'})
         with op.open(req) as r:me=json.load(r)
         return op,me
     def test_http_auth_csrf_roles(self):
@@ -233,7 +233,7 @@ class HTTPTests(AppTests):
         with op.open(self.base+'/api/users') as r:users=json.load(r)
         staff=next(u for u in users if u['role']=='staff')
         before={k:staff[k] for k in ('role','active','revision')}
-        body=json.dumps({'role':'viewer','active':True,'before':before,'password':'changed-test-password'}).encode()
+        body=json.dumps({'role':'viewer','active':True,'before':before,'password':'83000003'}).encode()
         headers={'Content-Type':'application/json','X-CSRF-Token':me['csrf']}
         with op.open(urllib.request.Request(self.base+'/api/users/'+staff['id'],data=body,headers=headers,method='PUT')) as r:self.assertEqual(r.status,200)
         with self.assertRaises(urllib.error.HTTPError) as e:op.open(urllib.request.Request(self.base+'/api/users/'+staff['id'],data=body,headers=headers,method='PUT'))

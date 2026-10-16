@@ -10,7 +10,7 @@ from legacy_fixture import workbook_fixture
 class LegacyTests(unittest.TestCase):
     def setUp(self):
         self.temp=tempfile.TemporaryDirectory();self.folder=Path(self.temp.name);self.store=Store(self.folder/'farm.db')
-        self.admin=self.store.create_initial_admin('tester','legacy-test-password');self.staff=self.store.create_user('reader','legacy-test-password','viewer')
+        self.admin=self.store.create_initial_admin('tester','83000006');self.staff=self.store.create_user('reader','83000006','viewer')
         self.raw=workbook_fixture();self.payload={'filename':'test.xlsx','base64':base64.b64encode(self.raw).decode(),'counts_text':'1/50\n2/49','counts_as_of':'2026-10-12','closed_barns':[],'source_url':''}
     def tearDown(self):self.temp.cleanup()
     def apply(self):return self.store.import_workbook(self.admin,self.payload,str(uuid.uuid4()))
@@ -104,10 +104,10 @@ class LegacyTests(unittest.TestCase):
             if csrf:headers['X-CSRF-Token']=csrf
             return op.open(urllib.request.Request(url+path,data=json.dumps(body).encode() if body is not None else None,headers=headers))
         try:
-            with call('/api/login',{'username':'reader','password':'legacy-test-password'}) as r:reader=json.load(r)
+            with call('/api/login',{'username':'reader','password':'83000006'}) as r:reader=json.load(r)
             with self.assertRaises(urllib.error.HTTPError) as e:call('/api/workbook/import',self.payload,reader['csrf'])
             self.assertEqual(e.exception.code,403)
-            with call('/api/login',{'username':'tester','password':'legacy-test-password'}) as r:admin=json.load(r)
+            with call('/api/login',{'username':'tester','password':'83000006'}) as r:admin=json.load(r)
             with call('/api/workbook/import',self.payload,admin['csrf']) as r:self.assertEqual(r.status,201)
             query='from=2026-10-13&to=2026-10-14&type=sale'
             with call('/api/movements?'+query) as r:rows=json.load(r)

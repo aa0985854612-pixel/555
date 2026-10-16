@@ -8,7 +8,7 @@ from playwright.sync_api import sync_playwright
 root=Path(__file__).resolve().parents[1];results=[];measurements={}
 def passed(s):results.append(s);print('PASS',s,flush=True)
 with tempfile.TemporaryDirectory() as folder:
- store=Store(Path(folder)/'db');admin=store.create_user('owner','synthetic-owner-password')
+ store=Store(Path(folder)/'db');admin=store.create_user('owner','83000011')
  def add(kind,**d):return store.mutate(admin,kind,d,str(uuid.uuid4()))
  barn=add('barns',name='19棟',group='A');batch=add('batches',barn_id=barn['id'],name='JD-SAMPLE',entry_date='2026-01-01',entry_count=100,entry_age_days=70,status='active')
  add('movements',date='2026-10-15',batch_id=batch['id'],type='death',quantity=2)
@@ -25,7 +25,7 @@ with tempfile.TemporaryDirectory() as folder:
     page.set_viewport_size({'width':width,'height':900});assert page.evaluate('document.documentElement.scrollWidth<=document.documentElement.clientWidth+2'),width
    page.set_viewport_size({'width':390,'height':844});assert page.locator('#login-form button').bounding_box()['y']+page.locator('#login-form button').bounding_box()['height']<=844;page.screenshot(path=str(root/'artifacts/jiade-login-mobile.png'),full_page=True);page.set_viewport_size({'width':1440,'height':1000});page.screenshot(path=str(root/'artifacts/jiade-login-desktop.png'),full_page=True);page.set_viewport_size({'width':390,'height':844});passed('Jia De title and illustration render; login button visible on mobile; four cover layouts fit')
    assert page.locator('html').get_attribute('data-text-size')=='medium';choose('large');page.reload();assert page.locator('html').get_attribute('data-text-size')=='large';assert page.locator('#login-form input').first.evaluate('(e)=>parseFloat(getComputedStyle(e).fontSize)')==20;passed('size control available before login, persists after reload, and scales inputs')
-   page.locator('#login-form [name=username]').fill('owner');page.locator('#login-form [name=password]').fill('synthetic-owner-password');page.locator('#login-form button').click();page.wait_for_selector('#workspace:not([hidden])');f=page.locator('#movement-form');f.locator('[name=barn_id]').select_option(barn['id']);f.locator('[name=quantity]').fill('7');f.locator('details').evaluate('(e)=>e.open=true');f.locator('[name=note]').fill('尚未儲存的備註');count=len(writes)
+   page.locator('#login-form [name=username]').fill('owner');page.locator('#login-form [name=password]').fill('83000011');page.locator('#login-form button').click();page.wait_for_selector('#workspace:not([hidden])');f=page.locator('#movement-form');f.locator('[name=barn_id]').select_option(barn['id']);f.locator('[name=quantity]').fill('7');f.locator('details').evaluate('(e)=>e.open=true');f.locator('[name=note]').fill('尚未儲存的備註');count=len(writes)
    for size,pixels in [('small',16),('medium',17),('large',20)]:
     choose(size);assert f.locator('[name=quantity]').input_value()=='7';assert f.locator('[name=note]').input_value()=='尚未儲存的備註';assert f.locator('details').evaluate('(e)=>e.open');assert f.locator('[name=batch_id]').input_value()==batch['id'];assert f.locator('[name=quantity]').evaluate('(e)=>parseFloat(getComputedStyle(e).fontSize)')==pixels
    assert len(writes)==count;passed('small/medium/large preserve form values, scope and expanded details without farm writes')

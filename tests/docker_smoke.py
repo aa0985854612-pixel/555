@@ -6,7 +6,7 @@ from pathlib import Path
 os.environ['DOCKER_CONFIG']='/tmp/pigledger-docker'
 os.environ['FARM_DOMAIN']='localhost'
 root=Path(__file__).resolve().parents[1]
-subprocess.run(['docker','exec','-i','pigledger-smoke-app-1','python','-'],input=b"from app.store import Store\ns=Store('/data/pigledger.sqlite3');s.create_user('docker-test','docker-fixture-password')\n",check=True)
+subprocess.run(['docker','exec','-i','pigledger-smoke-app-1','python','-'],input=b"from app.store import Store\ns=Store('/data/pigledger.sqlite3');s.create_user('docker-test','83000005')\n",check=True)
 ctx=ssl.create_default_context(cafile='/tmp/pigledger-smoke-root.crt')
 op=urllib.request.build_opener(urllib.request.ProxyHandler({}),urllib.request.HTTPSHandler(context=ctx),urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar()))
 me={}
@@ -19,7 +19,7 @@ def call(path,body=None):
         assert 'max-age=' in response.headers.get('Strict-Transport-Security','')
         return json.load(response)
 assert call('/api/health')['version']=='1.2.1'
-me=call('/api/login',{'username':'docker-test','password':'docker-fixture-password'})
+me=call('/api/login',{'username':'docker-test','password':'83000005'})
 barn=call('/api/barns',{'name':'Docker fixture','group':''})
 batch=call('/api/batches',{'barn_id':barn['id'],'name':'100-head fixture','entry_date':'2026-01-01','entry_count':100,'entry_age_days':70,'status':'active'})
 for date,mean in [('2026-01-01',50),('2026-01-15',60)]:call('/api/weights',{'date':date,'batch_id':batch['id'],'count':2,'total_kg':2*mean,'representative':True})

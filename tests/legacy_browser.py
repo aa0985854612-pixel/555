@@ -10,12 +10,12 @@ from playwright.sync_api import sync_playwright
 root=Path(__file__).resolve().parents[1];results=[]
 def passed(name):results.append(name);print('PASS',name,flush=True)
 with tempfile.TemporaryDirectory() as tmp:
-    folder=Path(tmp);file=folder/'synthetic-source.xlsx';file.write_bytes(workbook_fixture());store=Store(folder/'farm.sqlite3');store.create_initial_admin('tester','browser-test-password')
+    folder=Path(tmp);file=folder/'synthetic-source.xlsx';file.write_bytes(workbook_fixture());store=Store(folder/'farm.sqlite3');store.create_initial_admin('tester','83000002')
     server=Server(('127.0.0.1',0),store);threading.Thread(target=server.serve_forever,daemon=True).start();url=f'http://127.0.0.1:{server.server_port}'
     try:
         with sync_playwright() as p:
             browser=p.chromium.launch(executable_path='/usr/bin/chromium',headless=True,args=['--no-sandbox']);context=browser.new_context(accept_downloads=True,viewport={'width':1400,'height':1000});page=context.new_page();errors=[];page.on('pageerror',lambda error:errors.append(str(error)))
-            page.goto(url);page.locator('#login-form [name=username]').fill('tester');page.locator('#login-form [name=password]').fill('browser-test-password');page.locator('#login-form button').click();page.wait_for_selector('#workspace:not([hidden])')
+            page.goto(url);page.locator('#login-form [name=username]').fill('tester');page.locator('#login-form [name=password]').fill('83000002');page.locator('#login-form button').click();page.wait_for_selector('#workspace:not([hidden])')
             page.locator('nav [href="#settings"]').click();form=page.locator('#workbook-form');page.locator('#workbook-file').set_input_files(file);form.locator('[name=counts_as_of]').fill('2026-10-12');form.locator('[name=counts_text]').fill('1/50\n2/49');form.locator('[type=submit]').click();page.wait_for_function("()=>!document.querySelector('#apply-workbook').disabled")
             assert not store.snapshot()['workbooks'];assert '90' in page.locator('#workbook-preview').inner_text();passed('preview does not write records; conserved totals shown')
             form.locator('[name=counts_text]').focus();page.select_option('#language','vi');assert form.locator('[name=counts_text]').input_value()=='1/50\n2/49';assert form.locator('[name=counts_as_of]').input_value()=='2026-10-12';assert page.locator('#workbook-file').evaluate('(e)=>e.files[0].name')==file.name;page.select_option('#language','zh');passed('language change keeps chosen file, date and allocation')

@@ -34,9 +34,9 @@ def advanced_workbook(barn=True):
 class UpgradeTests(unittest.TestCase):
     def setUp(self):
         self.temp=tempfile.TemporaryDirectory();self.path=Path(self.temp.name);self.store=Store(self.path/'db.sqlite3')
-        self.admin=self.store.create_user('owner','synthetic-original-password')
-        self.staff=self.store.create_user('writer','synthetic-original-password','staff')
-        self.viewer=self.store.create_user('reader','synthetic-original-password','viewer')
+        self.admin=self.store.create_user('owner','83000010')
+        self.staff=self.store.create_user('writer','83000010','staff')
+        self.viewer=self.store.create_user('reader','83000010','viewer')
         self.barn=self.store.mutate(self.admin,'barns',{'name':'1棟','group':'A'},str(uuid.uuid4()))
         self.batch=self.store.mutate(self.admin,'batches',{'name':'B','barn_id':self.barn['id'],'group':'A','entry_date':'2026-01-01','entry_count':100,'entry_age_days':70,'status':'active','entry_mean_kg':50},str(uuid.uuid4()))
     def tearDown(self):self.temp.cleanup()
@@ -68,25 +68,25 @@ class UpgradeTests(unittest.TestCase):
         with self.assertRaises(Problem):self.store.mutate(self.staff,'movements',other|{'quantity':2},str(uuid.uuid4()),other['id'])
     def test_every_role_can_change_own_password_without_hash_in_audit(self):
         for user in (self.admin,self.staff,self.viewer):
-            change_password(self.store,user,'synthetic-original-password','synthetic-replacement-password')
+            change_password(self.store,user,'83000010','83000013')
         db=self.store.connect()
         try:
-            for user in db.execute('SELECT * FROM users'):self.assertTrue(verify_password('synthetic-replacement-password',user['hash']))
+            for user in db.execute('SELECT * FROM users'):self.assertTrue(verify_password('83000013',user['hash']))
             audit=''.join(str(tuple(r)) for r in db.execute('SELECT before_value,after_value FROM audit'))
-            self.assertNotIn('synthetic-replacement-password',audit);self.assertNotIn('synthetic-original-password',audit)
+            self.assertNotIn('83000013',audit);self.assertNotIn('83000010',audit)
         finally:db.close()
     def test_wrong_current_password_preserves_account(self):
-        with self.assertRaises(Problem) as error:change_password(self.store,self.viewer,'incorrect-value','synthetic-replacement-password')
+        with self.assertRaises(Problem) as error:change_password(self.store,self.viewer,'incorrect-value','83000013')
         self.assertEqual(error.exception.code,'invalid_current_password')
         db=self.store.connect()
-        try:self.assertTrue(verify_password('synthetic-original-password',db.execute('SELECT hash FROM users WHERE id=?',(self.viewer['id'],)).fetchone()[0]))
+        try:self.assertTrue(verify_password('83000010',db.execute('SELECT hash FROM users WHERE id=?',(self.viewer['id'],)).fetchone()[0]))
         finally:db.close()
     def test_setup_link_is_one_use_and_reissue_invalidates_previous(self):
         first=issue_setup(self.store,self.admin,self.viewer['id'],1)
         second=issue_setup(self.store,self.admin,self.viewer['id'],first['revision'])
-        with self.assertRaises(Problem):activate(self.store,'reader',first['token'],'synthetic-replacement-password')
-        activate(self.store,'reader',second['token'],'synthetic-replacement-password')
-        with self.assertRaises(Problem):activate(self.store,'reader',second['token'],'another-synthetic-password')
+        with self.assertRaises(Problem):activate(self.store,'reader',first['token'],'83000013')
+        activate(self.store,'reader',second['token'],'83000013')
+        with self.assertRaises(Problem):activate(self.store,'reader',second['token'],'83000001')
         db=self.store.connect()
         try:
             row=db.execute('SELECT * FROM account_security WHERE user_id=?',(self.viewer['id'],)).fetchone()
@@ -96,11 +96,11 @@ class UpgradeTests(unittest.TestCase):
     def test_setup_expiry_and_nonadmin_denied(self):
         with self.assertRaises(Problem):issue_setup(self.store,self.staff,self.viewer['id'],1)
         link=issue_setup(self.store,self.admin,self.viewer['id'],1);db=self.store.connect();db.execute('UPDATE account_security SET setup_expires=0');db.commit();db.close()
-        with self.assertRaises(Problem):activate(self.store,'reader',link['token'],'synthetic-replacement-password')
+        with self.assertRaises(Problem):activate(self.store,'reader',link['token'],'83000013')
     def test_setup_concurrency_consumes_token_once(self):
         link=issue_setup(self.store,self.admin,self.viewer['id'],1)
         def attempt(_):
-            try:activate(self.store,'reader',link['token'],'synthetic-replacement-password');return True
+            try:activate(self.store,'reader',link['token'],'83000013');return True
             except Problem:return False
         with ThreadPoolExecutor(max_workers=2) as pool:self.assertEqual(sum(pool.map(attempt,range(2))),1)
     def test_role_account_creation_is_repeatable_and_preserves_originals(self):
@@ -140,7 +140,7 @@ class UpgradeTests(unittest.TestCase):
 
 class WorkbookUpdateTests(unittest.TestCase):
     def setUp(self):
-        self.temp=tempfile.TemporaryDirectory();self.store=Store(Path(self.temp.name)/'db.sqlite3');self.admin=self.store.create_user('owner','synthetic-original-password')
+        self.temp=tempfile.TemporaryDirectory();self.store=Store(Path(self.temp.name)/'db.sqlite3');self.admin=self.store.create_user('owner','83000010')
         self.original={'filename':'synthetic.xlsx','base64':base64.b64encode(workbook_fixture()).decode(),'counts_text':'1/49\n2/50','counts_as_of':'2026-10-12','closed_barns':[],'source_url':''}
         self.store.import_workbook(self.admin,self.original,str(uuid.uuid4()))
         self.payload={'filename':'synthetic-update.xlsx','base64':base64.b64encode(advanced_workbook()).decode(),'source_url':''}
