@@ -1,5 +1,5 @@
-const VERSION='pigledger-1.8.0';
-const FILES=['/','/jiade-cover.webp?v=1.8.0','/app.js?v=1.8.0','/appearance.js?v=1.8.0','/upgrade.js?v=1.8.0','/redesign.js?v=1.8.0','/feed.js?v=1.8.0','/compact.js?v=1.8.0','/style.css?v=1.8.0','/jiade-icon-180-v1.6.3.png','/jiade-icon-192-v1.6.3.png','/jiade-icon-512-v1.6.3.png','/jiade-icon-maskable-v1.6.3.png','/manifest.webmanifest?v=1.8.0','/manifest.webmanifest'];
+const VERSION='pigledger-1.8.1';
+const FILES=['/','/jiade-cover.webp?v=1.8.1','/app.js?v=1.8.1','/appearance.js?v=1.8.1','/upgrade.js?v=1.8.1','/redesign.js?v=1.8.1','/weighing-report.js?v=1.8.1','/feed.js?v=1.8.1','/compact.js?v=1.8.1','/style.css?v=1.8.1','/jiade-icon-180-v1.6.3.png','/jiade-icon-192-v1.6.3.png','/jiade-icon-512-v1.6.3.png','/jiade-icon-maskable-v1.6.3.png','/manifest.webmanifest?v=1.8.1','/manifest.webmanifest'];
 self.addEventListener('install',e=>e.waitUntil(caches.open(VERSION).then(c=>c.addAll(FILES))));
 self.addEventListener('message',e=>{if(e.data==='activate')self.skipWaiting()});
 self.addEventListener('activate',e=>e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k.startsWith('pigledger-')&&k!==VERSION).map(k=>caches.delete(k)))).then(()=>self.clients.claim())));

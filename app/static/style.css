@@ -180,6 +180,72 @@ body [hidden] { display: none !important; }
 .weight-chips span { border: 1px solid var(--line); padding: 3px 7px; min-width: 40px; text-align: center; background: #f5f7fa; }
 .weighing-history h3 { font-size: 1.08rem; }
 .paper-table th, .paper-table td { border: 1px solid var(--line); }
+/* Saved weighing reports have their own layout, independent of the input cards. */
+.weighing-saved-export { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 14px; margin: 20px 0; padding: 18px; border: 1px solid #b8c8dd; border-radius: 12px; background: #f0f4fa; }
+.weighing-saved-export > div { display: grid; gap: 6px; min-width: 0; }
+.weighing-saved-export span { color: var(--muted); font-size: .9rem; overflow-wrap: anywhere; }
+#weighing-report-dialog { width: min(1000px, calc(100vw - 24px)); max-width: none; padding: 0; max-height: calc(100dvh - 32px); }
+.report-toolbar { position: sticky; top: 0; z-index: 1; background: #f4f6fa; border-bottom: 1px solid var(--line); padding: 16px 22px; }
+.report-toolbar h2 { margin: 0 0 12px; font-size: 1.15rem; }
+.report-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.report-actions button { min-height: 44px; font-size: .94rem; padding: 10px 14px; }
+.weighing-report { padding: 28px; background: white; color: #162336; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans TC", sans-serif; font-size: 16px; line-height: 1.5; }
+.weighing-report .report-heading { position: static; display: block; padding: 0 0 18px; margin: 0 0 20px; border: 0; border-bottom: 2px solid #192e50; background: white; height: auto; min-height: 0; }
+.report-heading h1 { margin: 0 0 8px; font-size: 26px; line-height: 1.3; color: #192e50; }
+.report-heading p { margin: 0; color: #526177; overflow-wrap: anywhere; }
+.report-basics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px 20px; padding: 0; margin: 0 0 22px; }
+.report-basics > div { display: block; padding: 0; min-width: 0; border: 0; }
+.report-basics dt { font-size: 13px; color: #526177; margin: 0 0 3px; }
+.report-basics dd { font-size: 16px; font-weight: 650; margin: 0; overflow-wrap: anywhere; }
+.report-table-wrap { overflow-x: auto; max-width: 100%; }
+.report-table { width: 100%; min-width: 550px; border-collapse: collapse; table-layout: fixed; margin: 0; }
+.report-col-pen { width: 14%; }.report-col-count { width: 10%; }.report-col-mean { width: 18%; }
+.report-table th, .report-table td { border: 1px solid #aeb8c6; padding: 10px 8px; text-align: center; vertical-align: middle; color: #162336; background: white; font-size: 15px; overflow-wrap: anywhere; }
+.report-table thead th { background: #edf1f6; font-weight: 700; }
+.report-table tbody th > small { display: block; font-size: 12px; font-weight: 400; color: #526177; margin-top: 3px; }
+.report-weights { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 4px; }
+.report-weights > span { display: grid; gap: 3px; padding: 4px 2px; min-width: 0; font-variant-numeric: tabular-nums; }
+.report-weights small { font-size: 10px; color: #637187; }.report-weights b { font-size: 15px; font-weight: 600; }
+.report-table .report-pen-mean { font-size: 17px; font-weight: 700; }.report-quick { font-size: 13px; }
+.report-result { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px 24px; margin-top: 22px; padding: 18px 0; border-block: 2px solid #192e50; }
+.report-result > div { display: grid; gap: 5px; }.report-result > div > span { font-weight: 650; font-size: 16px; }
+.report-result strong { font-size: 32px; line-height: 1.25; font-variant-numeric: tabular-nums; }.report-result strong small { font-size: 14px; font-weight: 500; }
+.report-result p { margin: 0; line-height: 1.8; font-size: 14px; }.report-result p b { font-size: 17px; }
+.weighing-report .report-footnotes { display: block; padding: 14px 0 0; margin: 0; font-size: 12px; color: #526177; }
+.report-footnotes p { margin: 3px 0; }
+#weighing-print-root { display: none; }
+@media (max-width: 600px) {
+  .weighing-report { padding: 18px 14px; }
+  .report-toolbar { padding: 14px; }
+  .report-heading h1 { font-size: 22px; }
+  .report-basics { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 16px; }
+  .report-actions button { flex: 1 1 auto; }
+}
+@media print {
+  @page { size: A4 portrait; margin: 12mm; }
+  html, body { margin: 0 !important; padding: 0 !important; background: white !important; }
+  body > *, body > dialog { display: none !important; }
+  dialog::backdrop { display: none !important; }
+  body > #weighing-print-root { display: block !important; width: 100%; }
+  #weighing-print-root .weighing-report { padding: 0; width: 100%; font-size: 12pt; }
+  #weighing-print-root .report-heading { padding-bottom: 5mm; margin-bottom: 5mm; }
+  #weighing-print-root .report-heading h1 { font-size: 21pt; }
+  #weighing-print-root .report-heading p { font-size: 12pt; }
+  #weighing-print-root .report-basics { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4mm 5mm; margin-bottom: 6mm; }
+  #weighing-print-root .report-basics dt { font-size: 10pt; }
+  #weighing-print-root .report-basics dd { font-size: 12pt; }
+  #weighing-print-root .report-table-wrap { overflow: visible; }
+  #weighing-print-root .report-table { min-width: 0; width: 100%; }
+  #weighing-print-root .report-table th, #weighing-print-root .report-table td { padding: 3mm 2mm; font-size: 11pt; }
+  #weighing-print-root .report-weights b { font-size: 11pt; }
+  #weighing-print-root .report-pen-mean { font-size: 12pt; }
+  #weighing-print-root .report-result { break-inside: avoid; margin-top: 6mm; padding: 5mm 0; }
+  #weighing-print-root .report-result strong { font-size: 25pt; }
+  #weighing-print-root .report-result > div > span { font-size: 12pt; }
+  #weighing-print-root .report-footnotes { font-size: 9pt; }
+  #weighing-print-root thead { display: table-header-group; }
+  #weighing-print-root tr, #weighing-print-root .report-heading, #weighing-print-root .report-basics { break-inside: avoid; }
+}
 #password-card form { max-width: 760px; }
 @media (max-width: 1150px) {
   .content { padding: 24px; }
@@ -247,19 +313,6 @@ body [hidden] { display: none !important; }
 }
 @media (max-width: 359px) { .brand-icon { display: none; } header { padding-inline: 10px; } }
 @media (min-width: 701px) { :root[data-text-size="large"] nav { width: 226px; } }
-@media print {
-  :root { font-size: 12px !important; }
-  body > * { display: none !important; }
-  #workspace, #pages, #page-weights, .content, #weight-results, .print-target { display: block !important; }
-  #workspace nav, .content > *:not(#pages), #pages > *:not(#page-weights), #page-weights > *:not(:last-child), #weight-results > *:not(.print-target), .print-target button { display: none !important; }
-  #page-weights > .card:last-child > h2, #page-weights > .card:last-child > #weight-summary { display: none !important; }
-  .card { border: 0; box-shadow: none; padding: 0; }
-  .content { padding: 0; }
-  .paper-table table { min-width: 0; }
-  body { background: white; }
-  td, th { font-size: 12px; padding: 6px; }
-  .print-target { break-inside: avoid; }
-}
 
 /* Jia De illustrated login cover; the working pages keep their compact layout. */
 .login { max-width: 1080px; display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 48px; align-items: center; margin: 48px auto; padding: 0 28px; }

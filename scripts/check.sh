@@ -8,3 +8,4 @@ node --check app/static/redesign.js
 node --check app/static/appearance.js
 node --check app/static/compact.js
 node --check app/static/feed.js
+node --check app/static/weighing-report.js

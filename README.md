@@ -1,10 +1,12 @@
-# 肉豬紀錄管理 App — PigLedger 1.8.0
+# 肉豬紀錄管理 App — PigLedger 1.8.1
 
 **[開啟正式網站：555-rho-nine.vercel.app](https://555-rho-nine.vercel.app/)**。沿用你目前的帳號、密碼、Vercel專案及Turso資料庫。
 
-- [完整原始碼／Docker／Vercel程式包 v1.8.0](https://github.com/aa0985854612-pixel/555/raw/refs/heads/main/release/pigledger-1.8.0.zip)
+- [完整原始碼／Docker／Vercel程式包 v1.8.1](https://github.com/aa0985854612-pixel/555/raw/refs/heads/main/release/pigledger-1.8.1.zip)
 - [簡短操作說明](docs/USER_GUIDE.md)／[部署說明](docs/VERCEL.md)
-- [1.8.0測試報告與驗收限制](docs/TEST_REPORT_1.8.0.md)
+- [1.8.1測試報告與驗收限制](docs/TEST_REPORT_1.8.1.md)
+
+秤重新增獨立A4報表：上方日期、棟舍、批次、秤重次數、週齡及目前批次進場資料，下方欄號、每隻重量、頭數、各欄均重與本次加權總平均。儲存確認成功後提供「匯出本次秤重表」，歷史作業可再次匯出。提供預覽、列印／另存PDF及Excel可開啟的CSV；同日期多次作業分開，快速輸入不捏造個別重量。完整來源備註仍在原紀錄，不把長篇稽核文字縮印到報表。
 
 本版將飼料改為單一「叫料量」登記：日期、叫料量及公斤／噸；廠商、料別、單棟批次與備註選填。支援查詢、合計、更正、CSV、管理員可追溯作廢與斷線重試。叫料量獨立儲存，不當成到料或實際耗料，也不計入FCR。舊到料／用料若存在則收在可展開的歷史區，保留原值與計算依據。沒有自動叫料、配送或預測。
 
