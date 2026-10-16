@@ -570,28 +570,29 @@ body [hidden] { display: none !important; }
   body:has(#weekly-print-root:not(:empty)) > #weighing-print-root { display: none !important; }
   body > #weekly-print-root:not(:empty) { display: block !important; width: 100%; }
   html:has(#weekly-print-root:not(:empty)) { page: weekly-sheet; }
-  @page weekly-sheet { size: A4 landscape; margin: 10mm; }
-  #weekly-print-root .weekly-sheet { padding: 0; width: 100%; font-size: 11pt; }
-  #weekly-print-root .weekly-heading h1 { font-size: 20pt; }
-  #weekly-print-root .weekly-basics { grid-template-columns: repeat(4,minmax(0,1fr)); }
-  #weekly-print-root .weekly-basics dt { font-size: 9pt; }#weekly-print-root .weekly-basics dd { font-size: 11pt; }
-  #weekly-print-root .weekly-table-wrap { overflow: visible; }#weekly-print-root .weekly-table { min-width: 0; width: 100%; }
-  #weekly-print-root .weekly-table th, #weekly-print-root .weekly-table td { font-size: 10pt; padding: 2.5mm 1mm; }
-  #weekly-print-root .weekly-table th:first-child { width: 32mm; }#weekly-print-root .weekly-note-row td { font-size: 8pt; }
-  #weekly-print-root .weekly-summary { grid-template-columns: repeat(2,minmax(0,1fr)); margin-top: 5mm; padding: 4mm 0; }
-  #weekly-print-root .weekly-summary strong { font-size: 13pt; }#weekly-print-root .weekly-sheet h2 { font-size: 11pt; }
-  #weekly-print-root .weekly-footnotes { font-size: 9pt; }
-  #weekly-print-root .weekly-block, #weekly-print-root .weekly-summary, #weekly-print-root tr, #weekly-print-root .weekly-basics { break-inside: avoid; }
+  @page weekly-sheet { size: A4 portrait; margin: 8mm; }
+  #weekly-print-root .weekly-sheet { padding: 0; width: 100%; font-size: 10pt; line-height: 1.35; }
+  #weekly-print-root .weekly-heading { padding-bottom: 2mm; margin-bottom: 3mm; }
+  #weekly-print-root .weekly-heading h1 { font-size: 17pt; margin-bottom: 1mm; }
+  #weekly-print-root .weekly-heading p { font-size: 10pt; }
+  #weekly-print-root .weekly-basics { grid-template-columns: repeat(4,minmax(0,1fr)); gap: 2mm 3mm; margin-bottom: 3mm; }
+  #weekly-print-root .weekly-basics dt { font-size: 8pt; }
+  #weekly-print-root .weekly-basics dd { font-size: 9.5pt; margin-top: 1mm; }
+  #weekly-print-root .weekly-block { margin-bottom: 3mm; break-inside: avoid; }
+  #weekly-print-root .weekly-table-wrap { overflow: visible; }
+  #weekly-print-root .weekly-table { min-width: 0; width: 100%; }
+  #weekly-print-root .weekly-table th, #weekly-print-root .weekly-table td { font-size: 9pt; padding: 1.5mm .5mm; line-height: 1.2; }
+  #weekly-print-root .weekly-table th:first-child { width: 27mm; }
+  #weekly-print-root .weekly-table .weekly-death td { font-size: 10pt; font-weight: 750; }
+  #weekly-print-root .weekly-summary { grid-template-columns: repeat(2,minmax(0,1fr)); gap: 5mm; margin-top: 3mm; padding: 3mm 0; break-inside: avoid; }
+  #weekly-print-root .weekly-sheet h2 { font-size: 10pt; margin-bottom: 2mm; }
+  #weekly-print-root .weekly-summary p { margin: 1mm 0; font-size: 9pt; }
+  #weekly-print-root .weekly-summary strong { font-size: 12pt; }
+  #weekly-print-root .weekly-summary small { font-size: 8pt; }
+  #weekly-print-root .weekly-compact-pending { font-size: 9pt; margin: 2mm 0; }
+  #weekly-print-root .weekly-footnotes { display: block; padding-top: 2mm; font-size: 8pt; }
+  #weekly-print-root .weekly-footnotes p { margin: 1mm 0; }
+  #weekly-print-root .weekly-print-details { font-weight: 650; }
+  #weekly-print-root tr, #weekly-print-root .weekly-basics { break-inside: avoid; }
   #weekly-print-root thead { display: table-header-group; }
-}
-@media print {
-  #weekly-print-root .weekly-heading { padding-bottom: 3mm; margin-bottom: 3mm; }
-  #weekly-print-root .weekly-heading h1 { font-size: 18pt; }
-  #weekly-print-root .weekly-basics { gap: 2mm 4mm; margin-bottom: 4mm; }
-  #weekly-print-root .weekly-basics dd { font-size: 10.5pt; }
-  #weekly-print-root .weekly-table th, #weekly-print-root .weekly-table td { padding: 1.5mm 1mm; }
-  #weekly-print-root .weekly-block { margin-bottom: 4mm; }
-  #weekly-print-root .weekly-summary { margin-top: 3mm; padding: 3mm 0; }
-  #weekly-print-root .weekly-summary p { margin: 3px 0; font-size: 10pt; }
-  #weekly-print-root .weekly-footnotes { padding-top: 3mm; font-size: 8.5pt; }
 }
