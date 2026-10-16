@@ -10,7 +10,7 @@ from http.server import ThreadingHTTPServer
 from pathlib import Path
 from unittest.mock import patch
 import test_app
-from app.store import Store, Problem, verify_password
+from app.store import Store, Problem, verify_password, VERSION
 from app.cloud_store import CloudStore, Connection, migrate, fingerprint, read_document, endpoint
 from cloud_fixture import HranaFixture
 from api.index import handler
@@ -175,7 +175,7 @@ class CloudDeploymentTests(unittest.TestCase):
             threading.Thread(target=server.serve_forever,daemon=True).start()
             base='http://127.0.0.1:'+str(server.server_port)
             try:
-                with urllib.request.urlopen(base+'/') as r:self.assertIn(b'1.5.0',r.read())
+                with urllib.request.urlopen(base+'/') as r:self.assertIn(VERSION.encode(),r.read())
                 with urllib.request.urlopen(base+'/api/health') as r:self.assertTrue(json.load(r)['ok'])
                 body=json.dumps({'username':'reader','password':'synthetic-test-password'}).encode()
                 with urllib.request.urlopen(urllib.request.Request(base+'/api/login',data=body,headers={'Content-Type':'application/json'})) as r:

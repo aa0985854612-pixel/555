@@ -9,7 +9,9 @@ Object.assign(errorWords,{
 });
 Object.assign(errorWords,{invalid_current_password:['目前密碼不正確，請重新輸入','Mật khẩu hiện tại không đúng'],heads_unknown:['這棟的來源異動尚未分配，請先核對頭數','Biến động nguồn chưa phân chuồng; đối chiếu số con trước']});
 Object.assign(words,{recorded:['使用者登記','Ghi trong App']});
-const base={build,collect,finishForm,edit,selections,renderCurrent,renderSettings,clickAction,rowsHTML,workbookHTML,renderWorkbookSources,filterBox};
+Object.assign(words,{entryCountReason:['入場頭數更正原因／依據','Lý do / căn cứ sửa số nhập'],entryCountOriginal:['原始 Excel 入場頭數','Số nhập trong Excel gốc'],entryCountSaved:['目前已保存','Hiện đã lưu'],entryCountChange:['本次頭數差額','Chênh lệch lần này'],entryCountHint:['管理員可更正入場頭數。差額會同步調整此批存欄及育成率分母，不新增豬隻異動；原始 Excel 與操作前後值保留。數量不確定時請先取消。','Quản trị có thể sửa số nhập. Chênh lệch cập nhật tồn đàn và mẫu số tỷ lệ sống, không tạo biến động; giữ Excel gốc và lịch sử. Chưa chắc số lượng: hủy trước.']});
+Object.assign(errorWords,{entry_count_reason_required:['修改入場頭數時，請填更正原因／依據','Nhập lý do / căn cứ khi sửa số nhập']});
+const base={build,collect,finishForm,edit,selections,renderCurrent,renderSettings,clickAction,rowsHTML,workbookHTML,renderWorkbookSources,filterBox,translate};
 const sourceCache=new Map(), setupLinks=new Map();
 let cohortFingerprint='', activationToken='';
 const fragment=new URLSearchParams(location.hash.slice(1));
@@ -33,6 +35,8 @@ build=()=>{
  base.build();
  const daily=$('#page-daily');daily.prepend($('#movement-form').closest('.split'));
  const batch=$('#batch-form');batch.querySelector('details .grid').insertAdjacentHTML('beforeend',input('entryMean','entry_mean_kg','number','min="0.000001" step="any"')+input('entryMeanDate','entry_mean_date','date')+input('entryMeanSource','entry_mean_source')+input('entryMeanNote','entry_mean_note')+input('entryCountSource','entry_count_source'));
+ batch.querySelector('.grid').insertAdjacentHTML('afterend',`<section id="entry-count-correction" hidden><p class="note" id="entry-count-impact" aria-live="polite"></p><p class="hint">${txt('entryCountHint')}</p>${input('entryCountReason','entry_count_reason','text','maxlength="2000"')}</section>`);
+ batch.elements.entry_count.addEventListener('input',updateEntryCorrection);
  const settings=$('#page-settings');settings.insertAdjacentHTML('afterbegin',`<div class="card" id="password-card"><h2>${txt('passwordChange')}</h2><p id="password-required" class="note" hidden>${txt('passwordRequired')}</p><form id="password-form"><div class="grid">${input('currentPassword','current_password','password','required autocomplete="current-password"')}${input('newPassword','new_password','password','minlength="12" required autocomplete="new-password"')}${input('confirmPassword','confirm_password','password','minlength="12" required autocomplete="new-password"')}</div><p class="form-error" role="status"></p><button class="primary">${txt('saveSettings')}</button></form></div>`);
  $('#password-form').onsubmit=changeOwnPassword;
  const workbook=$('#workbook-form');workbook.elements.counts_text.required=false;workbook.elements.counts_as_of.required=false;
@@ -51,8 +55,15 @@ collect=f=>{
  if(f.id==='batch-form'){d.entry_mean_kg=val(f,'entry_mean_kg')===''?null:Number(val(f,'entry_mean_kg'));d.entry_mean_date=val(f,'entry_mean_date')||null;}
  return d;
 };
-finishForm=f=>{base.finishForm(f);if(f.id==='batch-form')for(const name of ['entry_mean_kg','entry_mean_date','entry_mean_source','entry_mean_note','entry_count_source'])f.elements[name].value='';};
-edit=(kind,id)=>{base.edit(kind,id);if(kind==='batches'){const r=data.batches.find(b=>b.id===id),f=$('#batch-form');if(r.legacy_source&&(r.legacy_group?.expected_members>1||r.entry_count==null)){f.elements.entry_count.readOnly=false;f.elements.entry_count.required=false;}for(const name of ['entry_mean_kg','entry_mean_date','entry_mean_source','entry_mean_note','entry_count_source'])f.elements[name].value=r[name]??'';}};
+function updateEntryCorrection(){
+ const f=$('#batch-form');if(!f)return;const r=data?.batches.find(b=>b.id===f.dataset.editId),single=!!r?.legacy_source&&r.legacy_group?.expected_members===1;
+ $('#entry-count-correction').hidden=!single;const reason=f.elements.entry_count_reason;
+ reason.required=single&&val(f,'entry_count')!==''&&Number(val(f,'entry_count'))!==r.entry_count;
+ if(single){const next=val(f,'entry_count')===''?null:Number(val(f,'entry_count'));$('#entry-count-impact').textContent=`${t('entryCountOriginal')}：${fmt(r.legacy_entry_original??r.entry_count,0)} · ${t('entryCountSaved')}：${fmt(r.entry_count,0)} · ${t('entryCountChange')}：${next==null?'—':fmt(next-r.entry_count,0)}`;}
+}
+translate=()=>{base.translate();updateEntryCorrection();};
+finishForm=f=>{base.finishForm(f);if(f.id==='batch-form'){for(const name of ['entry_mean_kg','entry_mean_date','entry_mean_source','entry_mean_note','entry_count_source','entry_count_reason'])f.elements[name].value='';updateEntryCorrection();}};
+edit=(kind,id)=>{base.edit(kind,id);if(kind==='batches'){const r=data.batches.find(b=>b.id===id),f=$('#batch-form');if(r.legacy_source){f.elements.entry_count.readOnly=false;f.elements.entry_count.required=r.legacy_group?.expected_members===1;}for(const name of ['entry_mean_kg','entry_mean_date','entry_mean_source','entry_mean_note','entry_count_source'])f.elements[name].value=r[name]??'';f.elements.entry_count_reason.value='';updateEntryCorrection();}};
 updateFilterBatch=(f,reset=false)=>{const el=f.elements.batch_id;if(!el||!data)return;replaceOptions(el,option('','all')+data.batches.filter(b=>(!val(f,'barn_id')||b.barn_id===val(f,'barn_id'))&&(!val(f,'cohort')||(b._cohort_key||b.name+'|'+b.entry_date)===val(f,'cohort'))).map(b=>`<option value="${b.id}">${esc(batchName(b.id))}</option>`).join(''));};
 selections=(force=false)=>{
  base.selections(force);const fp=JSON.stringify([data.cohorts,lang]);

@@ -1,12 +1,14 @@
-# 肉豬紀錄管理 App — PigLedger 1.5.0
+# 肉豬紀錄管理 App — PigLedger 1.5.1
 
 **[開啟正式網站：555-rho-nine.vercel.app](https://555-rho-nine.vercel.app/)**。沿用你目前的帳號、密碼、Vercel專案及Turso資料庫。
 
-- [完整原始碼／Docker／Vercel程式包 v1.5.0](https://github.com/aa0985854612-pixel/555/raw/refs/heads/main/release/pigledger-1.5.0.zip)
+- [完整原始碼／Docker／Vercel程式包 v1.5.1](https://github.com/aa0985854612-pixel/555/raw/refs/heads/main/release/pigledger-1.5.1.zip)
 - [簡短操作說明](docs/USER_GUIDE.md)／[部署說明](docs/VERCEL.md)
-- [1.5.0測試報告與驗收限制](docs/TEST_REPORT_1.5.0.md)
+- [1.5.1測試報告與驗收限制](docs/TEST_REPORT_1.5.1.md)
 
-本版改為深藍、米白及灰色，放大字體；首頁每個飼養中批次顯示可靠單棟育成率。週期統計以期間死亡為主，批次名稱連同棟舍顯示，點死亡數字可查明細；零死亡的其他批次可展開查看。
+本版讓管理員更正單棟來源批次（如15棟）的入場頭數：設定→批次→編輯，填新頭數與更正原因，核對差額後儲存。同步重算存欄與育成率，原始Excel及操作前後值保留；不確定數量時先取消。多棟來源分配仍須對上合計，不會因此變成任意改總數。
+
+沿用深藍、米白及灰色，放大字體；首頁每個飼養中批次顯示可靠單棟育成率。週期統計以期間死亡為主，批次名稱連同棟舍顯示，點死亡數字可查明細；零死亡的其他批次可展開查看。
 
 秤重頁採紙本作業方式：日期與棟舍／批次→各欄（頭部／中部／尾部、欄號）→各隻重量或頭數＋總重量。預設6格，可增減，空白不算0，合計按實際樣本加權。多欄整次原子儲存、失敗不留半份；同日多次分開編號，保留單筆快速登記與更正。
 
@@ -42,6 +44,7 @@ python3 tests/legacy_browser.py
 python3 tests/pwa_test.py
 python3 tests/upgrade_browser.py
 python3 tests/redesign_browser.py
+python3 tests/entry_correction_browser.py
 ```
 
 ```sh

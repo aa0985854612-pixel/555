@@ -3,7 +3,7 @@ from pathlib import Path
 from datetime import datetime, timezone
 from .domain import Invalid, day, number, herd, consumption, age
 
-VERSION='1.5.0'
+VERSION='1.5.1'
 SCHEMA_VERSION=4
 KINDS=('barns','batches','movements','deliveries','usages','weights','workbooks','source_voids')
 SCHEMA='''
@@ -111,6 +111,15 @@ class Store:
             b['legacy_heads']={book['report']['as_of']:plan['current'].get(str(b['legacy_barn']),plan['current'].get(b['legacy_barn']))}
             if book['plan']['counts_as_of']!=book['report']['as_of']:
                 b['legacy_heads'][book['plan']['counts_as_of']]=plan['before'].get(str(b['legacy_barn']),plan['before'].get(b['legacy_barn']))
+            # A single-barn entry correction changes the original entry stock,
+            # not an arrival/adjustment event. Rebuild from immutable source on
+            # every read so repeated enrichment/import cannot apply it twice.
+            if len(row['barns'])==1 and b.get('entry_count') is not None:
+                delta=b['entry_count']-row['totals']['entry']
+                b['legacy_entry_original']=row['totals']['entry']
+                for snapshot in b['legacy_group']['snapshots'].values():
+                    snapshot['entry']+=delta;snapshot['remaining']+=delta
+                b['legacy_heads']={on:heads+delta if heads is not None else None for on,heads in b['legacy_heads'].items()}
             b['legacy_values']={}
             for snapshot_date in plan['snapshots']:
                 values={'entry':b['entry_count']}
@@ -185,7 +194,7 @@ class Store:
         d={k:v for k,v in d.items() if k not in ('id','revision','created_at','created_by','updated_at','deleted')}
         allowed={
             'barns':{'name','group'},
-            'batches':{'barn_id','name','group','entry_date','entry_count','entry_age_days','age_date','status','cohort_id','legacy_source','legacy_row','legacy_barn','note','entry_mean_kg','entry_mean_date','entry_mean_source','entry_mean_note','entry_count_source'},
+            'batches':{'barn_id','name','group','entry_date','entry_count','entry_age_days','age_date','status','cohort_id','legacy_source','legacy_row','legacy_barn','note','entry_mean_kg','entry_mean_date','entry_mean_source','entry_mean_note','entry_count_source','entry_count_reason'},
             'movements':{'date','batch_id','type','quantity','note','target_batch_id','total_weight_kg'},
             'deliveries':{'date','kg','display_unit','vendor','item','note','allocations'},
             'usages':{'start','end','batch_id','method','kg','opening','closing','transfer_in','transfer_out','loss','note','active','vendor','item'},
@@ -204,16 +213,16 @@ class Store:
                 book=lookup('workbooks',d['legacy_source'])
                 source=next((r for r in book['report']['rows'] if r['key']==d.get('legacy_row')),None)
                 if not source or d.get('legacy_barn') not in source['barns']:raise Invalid('missing_reference')
-                if d.get('entry_count') is not None:
+                if len(source['barns'])==1 or d.get('entry_count') is not None:
                     qty('entry_count',False,True)
-                    if d['entry_count']<0 or d['entry_count']>source['totals']['entry']:raise Invalid('legacy_entry_unknown')
-                    if len(source['barns'])==1 and d['entry_count']!=source['totals']['entry']:raise Invalid('legacy_entry_unknown')
+                    if d['entry_count']<0 or (len(source['barns'])>1 and d['entry_count']>source['totals']['entry']):raise Invalid('legacy_entry_unknown')
                     if len(source['barns'])>1 and not str(d.get('entry_count_source','')).strip():raise Invalid('entry_source_required')
                 if d['entry_date']!=source['entry_date']:raise Invalid('legacy_source_conflict')
                 text('note')
             else:
                 qty('entry_count',False,True)
                 if d['entry_count']<0: raise Invalid('invalid_number')
+            text('entry_count_reason')
             if d.get('entry_age_days') is not None:
                 qty('entry_age_days')
                 if d['entry_age_days']<0: raise Invalid('invalid_number')
@@ -360,7 +369,12 @@ class Store:
             for row in book['report']['rows']:
                 members=[b for b in data['batches'] if b.get('legacy_source')==book['id'] and b.get('legacy_row')==row['key']]
                 if len(members)!=len(row['barns']) or {b['legacy_barn'] for b in members}!=set(row['barns']):raise Invalid('legacy_source_conflict')
-                if all(b['entry_count'] is not None for b in members) and sum(b['entry_count'] for b in members)!=row['totals']['entry']:raise Invalid('legacy_entry_total_mismatch')
+                if len(members)>1 and all(b['entry_count'] is not None for b in members) and sum(b['entry_count'] for b in members)!=row['totals']['entry']:raise Invalid('legacy_entry_total_mismatch')
+                if len(members)==1:
+                    member=members[0];number(member['entry_count'],False,True)
+                    if member['entry_count']<0:raise Invalid('invalid_number')
+                    if member['entry_count']!=row['totals']['entry'] and not member.get('entry_count_reason','').strip():raise Invalid('entry_count_reason_required')
+                    if any(s['remaining']<0 or s['entry']<s['dead'] for s in member['legacy_group']['snapshots'].values()):raise Invalid('insufficient_heads')
         from .history import source_history
         known={r['id']:r for kind in ('movements','weights') for r in source_history(data,kind,include_voided=True,include_matched=True)}
         for void in data.get('source_voids',[]):
@@ -406,7 +420,13 @@ class Store:
                 tombstone=previous|{'revision':output['revision'],'updated_at':now()}
                 db.execute('UPDATE records SET deleted=1,revision=revision+1,data=? WHERE id=?',(encode(tombstone),rid))
             else:
+                if kind=='batches' and previous and previous.get('legacy_source'):
+                    if any(payload.get(k)!=previous.get(k) for k in ('legacy_source','legacy_row','legacy_barn','barn_id','entry_date')):raise Problem('legacy_source_conflict')
                 cleaned=self.validate(kind,payload,data,user)
+                if kind=='batches' and previous and previous.get('legacy_group',{}).get('expected_members')==1:
+                    if cleaned['entry_count']!=previous['entry_count']:
+                        if not cleaned.get('entry_count_reason'):raise Problem('entry_count_reason_required')
+                    else:cleaned['entry_count_reason']=previous.get('entry_count_reason','')
                 if kind=='weights':
                     for field in ('session_id','session_number','session_fingerprint'):
                         cleaned.pop(field,None)
