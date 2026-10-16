@@ -44,7 +44,7 @@ edit=(kind,id)=>{base.edit(kind,id);if(kind==='weights')$('#quick-weight').open=
 recordActions=(kind,r)=>{
  const source=r.legacy_source||r.source_mean||r._source_derived;
  const edit=!source||kind==='batches'?base.recordActions(kind,r).replace(/<button class="danger"[\s\S]*?<\/button>/g,''):'';
- return edit+(['movements','weights','deliveries','usages'].includes(kind)&&me?.role==='admin'?`<button class="danger" data-delete="${kind}" data-id="${r.id}">${esc(t('voidAction'))}</button>`:'');
+ return edit+(['movements','weights','feed_orders','deliveries','usages'].includes(kind)&&me?.role==='admin'?`<button class="danger" data-delete="${kind}" data-id="${r.id}">${esc(t('voidAction'))}</button>`:'');
 };
 renderHome=async()=>{const summary=await base.renderHome();if(!data)return;$$('#barns .barn-card').forEach((card,i)=>{const barn=data.barns[i];card.querySelectorAll('.batch-line').forEach((line,j)=>{const b=data.batches.filter(b=>b.barn_id===barn.id&&b.status==='active')[j],h=data.dashboard?.batches.find(x=>x.id===b.id)?.herd;if(!h)return;const box=document.createElement('div');box.className='barn-survival';box.innerHTML=`<span>${t('survival')}</span><strong>${h.survival==null?'—':fmt(h.survival)+'%'}</strong>${h.survival==null?`<details><summary>${t('insufficient')}</summary><p>${t('sourceLimit')}</p></details>`:''}`;line.after(box);});});return summary;};
 const deathButton=(text,scope,cls='')=>`<button class="${cls}" data-death-query="${esc(encodeURIComponent(JSON.stringify(scope)))}">${text}</button>`;

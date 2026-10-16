@@ -31,7 +31,7 @@ def filter_rows(kind,data,query):
         if get('cohort') and r.get('cohort') and r['cohort']!=get('cohort'):continue
         if get('vendor') and r.get('vendor')!=get('vendor'):continue
         if get('item') and get('item').lower() not in r.get('item','').lower():continue
-        if kind=='deliveries':
+        if kind in ('deliveries','feed_orders'):
             if scoped and not any(a['batch_id'] in ids for a in r['allocations']):continue
         elif kind=='batches':
             if r['id'] not in ids:continue
@@ -103,6 +103,7 @@ def statistics(data,query):
     scoped=any(get(k) for k in ('batch_id','barn_id','group','cohort'))
     deliveries=[d for d in data['deliveries'] if d['date']<=until and (not start or d['date']>=start)]
     stats['delivery_kg']=sum(sum(a['kg'] for a in d['allocations'] if a['batch_id'] in chosen) if scoped else d['kg'] for d in deliveries)
+    stats['feed_order_kg']=sum(sum(a['kg'] for a in o['allocations'] if a['batch_id'] in chosen) if scoped else o['kg'] for o in data.get('feed_orders',[]) if o['date']<=until and (not start or o['date']>=start))
     stats['unallocated_kg']=sum(d['kg'] for d in deliveries if not d['allocations'])
     uses=[u for u in data['usages'] if u['active'] and u['batch_id'] in chosen and u['end']<=next_day(until) and (not start or u['start']>=start)]
     excluded=[u for u in data['usages'] if u['active'] and u['batch_id'] in chosen and u['start']<=until and u['end']>(start or '0001-01-01') and u not in uses]
@@ -415,16 +416,17 @@ class Handler(BaseHTTPRequestHandler):
                 return self.send(book)
             if path=='/api/export' and method=='GET':
                 kind=query.get('kind',['movements'])[0]
-                if kind not in ('movements','deliveries','usages','weights'):raise Problem('unknown_kind')
+                if kind not in ('movements','feed_orders','deliveries','usages','weights'):raise Problem('unknown_kind')
                 data=store.snapshot(include_source=False);rows=filter_rows(kind,data,query)
                 batches={b['id']:b for b in data['batches']};barns={b['id']:b['name'] for b in data['barns']}
                 out=io.StringIO();writer=csv.writer(out)
                 writer.writerow(['id','revision','date','end_exclusive','barn','batch','type_or_source','quantity','unit','mean_kg','age_days','vendor','item','note','allocations','status','sample_count','individual_weights_kg','pen','selected_allocated_kg','calculation_source','source_cell','section','weighing_session_id','weighing_session_number'])
                 for r in rows:
                     batch=batches.get(r.get('batch_id'),{})
+                    if kind=='feed_orders' and len(r['allocations'])==1:batch=batches.get(r['allocations'][0]['batch_id'],{})
                     q=consumption(r,data['deliveries']) if kind=='usages' else r.get('quantity',r.get('kg',r.get('total_kg','')))
                     mean=(r.get('mean_kg') if r.get('source_mean') else r['total_kg']/r['count']) if kind=='weights' else ''
-                    values=[r['id'],r['revision'],r.get('date',r.get('start','')),r.get('end',''),barns.get(batch.get('barn_id') or r.get('barn_id'),r.get('barn_number') or ''),batch.get('name',r.get('legacy_batch','')),r.get('type',r.get('method','sample' if kind=='weights' else 'delivery')),q,'heads' if kind=='movements' else 'kg',mean,r.get('age_days',''),r.get('vendor',''),r.get('item',''),r.get('note',''),encode(r.get('allocations',[])),('active' if r['active'] else 'excluded') if kind=='usages' else '',r.get('count',''),encode(r.get('individual_kg',[])),r.get('pen',''),sum(a['kg'] for a in r.get('allocations',[]) if a['batch_id'] in set(selected_ids(data,query))) ,'source_mean' if r.get('source_mean') else 'legacy_excel_readonly' if r.get('legacy_source') else r.get('method','recorded'),r.get('source_cell',''),r.get('section',''),r.get('session_id',''),r.get('session_number','')]
+                    values=[r['id'],r['revision'],r.get('date',r.get('start','')),r.get('end',''),barns.get(batch.get('barn_id') or r.get('barn_id'),r.get('barn_number') or ''),batch.get('name',r.get('legacy_batch','')),r.get('type',r.get('method','sample' if kind=='weights' else 'feed_order' if kind=='feed_orders' else 'delivery')),q,'heads' if kind=='movements' else 'kg',mean,r.get('age_days',''),r.get('vendor',''),r.get('item',''),r.get('note',''),encode(r.get('allocations',[])),('active' if r['active'] else 'excluded') if kind=='usages' else '',r.get('count',''),encode(r.get('individual_kg',[])),r.get('pen',''),sum(a['kg'] for a in r.get('allocations',[]) if a['batch_id'] in set(selected_ids(data,query))) ,'source_mean' if r.get('source_mean') else 'legacy_excel_readonly' if r.get('legacy_source') else r.get('method','recorded'),r.get('source_cell',''),r.get('section',''),r.get('session_id',''),r.get('session_number','')]
                     # Spreadsheet formula injection protection; original fields remain intact in backups.
                     writer.writerow(["'"+v if isinstance(v,str) and v.startswith(('=','+','-','@','\t','\r')) else v for v in values])
                 return self.send(('\ufeff'+out.getvalue()).encode(),content_type='text/csv; charset=utf-8',headers={'Content-Disposition':'attachment; filename="'+kind+'-'+VERSION+'.csv"'})

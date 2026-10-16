@@ -3,9 +3,9 @@ from pathlib import Path
 from datetime import datetime, timezone
 from .domain import Invalid, day, number, herd, consumption, age
 
-VERSION='1.7.4'
+VERSION='1.8.0'
 SCHEMA_VERSION=4
-KINDS=('barns','batches','movements','deliveries','usages','weights','workbooks','source_voids')
+KINDS=('barns','batches','movements','feed_orders','deliveries','usages','weights','workbooks','source_voids')
 SCHEMA='''
 CREATE TABLE IF NOT EXISTS records(kind TEXT NOT NULL, id TEXT PRIMARY KEY, revision INTEGER NOT NULL, deleted INTEGER NOT NULL DEFAULT 0, data TEXT NOT NULL);
 CREATE INDEX IF NOT EXISTS records_kind ON records(kind,deleted);
@@ -205,6 +205,7 @@ class Store:
             'barns':{'name','group'},
             'batches':{'barn_id','name','group','entry_date','entry_count','entry_age_days','age_date','status','cohort_id','legacy_source','legacy_row','legacy_barn','note','entry_mean_kg','entry_mean_date','entry_mean_source','entry_mean_note','entry_count_source','entry_count_reason'},
             'movements':{'date','batch_id','type','quantity','note','target_batch_id','total_weight_kg'},
+            'feed_orders':{'date','kg','display_unit','vendor','item','note','allocations'},
             'deliveries':{'date','kg','display_unit','vendor','item','note','allocations'},
             'usages':{'start','end','batch_id','method','kg','opening','closing','transfer_in','transfer_out','loss','note','active','vendor','item'},
             'weights':{'date','batch_id','age_days','pen','count','total_kg','individual_kg','sampling','note','representative','section','session_id','session_number','session_fingerprint'},
@@ -265,17 +266,17 @@ class Store:
                 target=batch('target_batch_id')
                 if b['id']==target['id'] or (b.get('cohort_id') or b['id'])!=(target.get('cohort_id') or target['id']): raise Invalid('transfer_cohort_mismatch')
             else: d.pop('target_batch_id',None)
-        elif kind=='deliveries':
+        elif kind in ('deliveries','feed_orders'):
             day(d.get('date'));qty('kg',True);text('item');text('note')
             if d.get('display_unit') not in ('kg','ton'):raise Invalid('invalid_unit')
             if d.get('vendor') not in ('','養全','新農科'):raise Invalid('invalid_vendor')
             allocations=d.get('allocations',[])
-            if not isinstance(allocations,list) or len(allocations)>500:raise Invalid('invalid_allocations')
+            if not isinstance(allocations,list) or len(allocations)>(1 if kind=='feed_orders' else 500):raise Invalid('invalid_allocations')
             seen=set()
             for a in allocations:
                 if not isinstance(a,dict):raise Invalid('invalid_allocations')
                 b=lookup('batches',a.get('batch_id'))
-                if b['entry_date']>d['date']:raise Invalid('before_entry')
+                if kind=='deliveries' and b['entry_date']>d['date']:raise Invalid('before_entry')
                 if b['status']=='ended' and user['role']!='admin':raise Problem('batch_ended',403)
                 a['kg']=number(a.get('kg'),True)
                 if b['id'] in seen:raise Invalid('duplicate_allocation')
@@ -353,10 +354,11 @@ class Store:
                     if r['date']<bid[r['target_batch_id']]['entry_date']:raise Invalid('before_entry')
                     source,target=bid[r['batch_id']],bid[r['target_batch_id']]
                     if (source.get('cohort_id') or source['id'])!=(target.get('cohort_id') or target['id']):raise Invalid('transfer_cohort_mismatch')
-        for d in data['deliveries']:
-            for a in d['allocations']:
-                if a['batch_id'] not in bid:raise Invalid('referenced_record')
-                if d['date']<bid[a['batch_id']]['entry_date']:raise Invalid('before_entry')
+        for kind in ('deliveries','feed_orders'):
+            for d in data.get(kind,[]):
+                for a in d['allocations']:
+                    if a['batch_id'] not in bid:raise Invalid('referenced_record')
+                    if kind=='deliveries' and d['date']<bid[a['batch_id']]['entry_date']:raise Invalid('before_entry')
         # Daily deltas allow retroactive validation in O(records log records),
         # rather than rescanning the entire farm for each batch and date.
         deltas={b['id']:{(b['legacy_group']['as_of'] if b.get('legacy_group') else b['entry_date']):(b['legacy_heads'][b['legacy_group']['as_of']] if b.get('legacy_group') else b['entry_count'])} for b in data['batches']}

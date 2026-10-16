@@ -78,7 +78,7 @@ syncFilters=source=>{
 query=f=>{const p=new URLSearchParams();for(const key of ['from','to','barn_id','batch_id','cohort','group','type','vendor','item','missing'])if(val(f,key))p.set(key,val(f,key));return p.toString();};
 recordActions=(kind,r)=>{
  if((r.legacy_source&&!['batches','barns'].includes(kind))||r.source_mean||r._source_derived)return esc(t('legacyReadonly'));
- const edit=me.role==='admin'||(me.role==='staff'&&r.created_by===me.id&&['movements','deliveries','usages','weights'].includes(kind));
+ const edit=me.role==='admin'||(me.role==='staff'&&r.created_by===me.id&&['movements','feed_orders','deliveries','usages','weights'].includes(kind));
  return (edit?`<button data-edit="${kind}" data-id="${r.id}">${esc(t('edit'))}</button>`:'')+(me.role==='admin'?`<button class="danger" data-delete="${kind}" data-id="${r.id}">${esc(t('delete'))}</button>`:'');
 };
 rowsHTML=(kind,rows)=>{

@@ -469,3 +469,15 @@ body [hidden] { display: none !important; }
   header { padding-left: calc(20px + var(--safe-left)); padding-right: calc(20px + var(--safe-right)); }
   .grid > .date-field, .filters > .date-field { grid-column: 1 / -1; }
 }
+
+/* Feed has one daily form; historical receipt/usage records remain folded. */
+.feed-order-record { padding: 16px 0; border-bottom: 1px solid var(--line); }
+.feed-order-record:last-child { border-bottom: 0; }
+.feed-order-record .section-row { flex-wrap: wrap; gap: 8px 14px; }
+.feed-order-record .order-quantity { font-size: 1.35rem; color: var(--navy); font-variant-numeric: tabular-nums; }
+.feed-order-record .order-quantity small { font-size: .95rem; }
+.feed-order-record p { margin: 6px 0; color: var(--muted); overflow-wrap: anywhere; }
+.feed-order-record .order-note { color: var(--ink); white-space: pre-wrap; }
+.feed-order-record .actions { margin-top: 8px; }
+#feed-order-total { color: var(--navy); font-weight: 650; font-size: 1.05rem; }
+#legacy-feed > summary { font-size: 1rem; }

@@ -29,7 +29,7 @@ def apply_source_voids(data):
 
 def void_preview(store,user,data,kind,rid):
     store.require(user,True)
-    if kind not in ('movements','deliveries','usages','weights'):raise Problem('void_not_supported')
+    if kind not in ('movements','feed_orders','deliveries','usages','weights'):raise Problem('void_not_supported')
     from .history import source_history
     row=next((r for r in data[kind] if r['id']==rid),None)
     if not row and kind in ('movements','weights'):row=next((r for r in source_history(data,kind) if r['id']==rid),None)
@@ -57,6 +57,7 @@ def void_preview(store,user,data,kind,rid):
         impacts['weighed_before']=combined_weights(data['weights']+[r for r in source_history(data,'weights') if r.get('batch_id')==row.get('batch_id')],row.get('batch_id'))
         impacts['weighed_after']=combined_weights(after['weights']+[r for r in source_history(after,'weights') if r.get('batch_id')==row.get('batch_id')],row.get('batch_id'))
     if kind=='deliveries':impacts['delivery_kg_removed']=row['kg']
+    if kind=='feed_orders':impacts['feed_order_kg_removed']=row['kg']
     if kind=='usages':impacts['usage_kg_removed']=consumption(row,data['deliveries'])
     batch=next((b for b in data['batches'] if b['id']==row.get('batch_id')),None)
     if batch:
