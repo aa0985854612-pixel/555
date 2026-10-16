@@ -1,10 +1,12 @@
-# 肉豬紀錄管理 App — PigLedger 1.8.4
+# 肉豬紀錄管理 App — PigLedger 1.8.5
 
 **[開啟正式網站：555-rho-nine.vercel.app](https://555-rho-nine.vercel.app/)**。沿用你目前的帳號、密碼、Vercel專案及Turso資料庫。
 
-- [完整原始碼／Docker／Vercel程式包 v1.8.4](https://github.com/aa0985854612-pixel/555/raw/refs/heads/main/release/pigledger-1.8.4.zip)
+- [完整原始碼／Docker／Vercel程式包 v1.8.5](https://github.com/aa0985854612-pixel/555/raw/refs/heads/main/release/pigledger-1.8.5.zip)
 - [簡短操作說明](docs/USER_GUIDE.md)／[部署說明](docs/VERCEL.md)
-- [1.8.4測試報告與驗收限制](docs/TEST_REPORT_1.8.4.md)
+- [1.8.5測試報告與驗收限制](docs/TEST_REPORT_1.8.5.md)
+
+設定新增「同批歸組」：不同日期進場的不同棟舍，可由管理員選最早建立的同批資料，保留各棟實際進場日期、頭數、日齡及原ID；設定、總覽、查詢、統計和週表一起分組。沒有指定歸組時，同名但不同日期仍分開。舊Excel批次不改來源歸屬，新一批另建紀錄；不同週齡依各棟顯示，不假設整批同一週齡。原單棟與全場頭數不因歸組改變。
 
 每週A4直式報表的飼料欄改為逐筆「日期＋噸數（棟號）」：例如`10/12+2（13）`。同週多筆分行，同日同棟的不同紀錄保留；有小數噸數照數量呈現，整數不補零。期間叫料合計保留，CSV同時有數字週合計、相同簡寫及完整日期／棟舍／公斤／噸明細。沿用原叫料資料，不轉成實際到料或耗料。
 

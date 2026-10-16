@@ -163,7 +163,7 @@ def statistics(data,query):
         uncertain=[r for r in source_history(data) if r.get('cohort')==key and r.get('type')=='death' and (not r.get('batch_id') or r['batch_id'] in chosen) and (not r.get('date') or ((start or until)<=r['date']<=until and not r.get('batch_id')))]
         unknown_cohort=any(not r.get('date') or not set(r.get('legacy_members',[]))<=chosen for r in uncertain)
         stats['cohorts'].append({'cohort':key,'name':members[0]['name'],'entry_date':members[0]['entry_date'],'herd':herd(data['batches'],data['movements'],until,[b['id'] for b in members]),
-            'age_days':next(iter(ages)) if len(ages)==1 else None,'period_deaths':None if unknown_cohort else sum(r['quantity'] for r in deaths if not r.get('archive')),
+            'age_days':next(iter(ages)) if len(ages)==1 else None,'age_mixed':len(ages)>1 and None not in ages,'period_deaths':None if unknown_cohort else sum(r['quantity'] for r in deaths if not r.get('archive')),
             'known_period_deaths':sum(r['quantity'] for r in deaths if not r.get('archive')),
             'barns':[{'id':b['id'],'barn_id':b['barn_id'],'herd':herd(data['batches'],data['movements'],until,[b['id']]),
                 'age_days':age(b,until),'known_period_deaths':sum(r['quantity'] for r in deaths if r.get('batch_id')==b['id']),
@@ -179,7 +179,7 @@ def statistics(data,query):
     stats['death_summary']={'from':death_start,'to':until,'scope':{k:v[0] for k,v in scope.items()},'known':known,'total':None if incomplete else known,'rows':death_rows}
     # The compact list uses the same scope as history/CSV, including dated
     # archived source events. Archives never become new stock or batch records.
-    stats['death_groups']=[{k:c[k] for k in ('cohort','name','entry_date','age_days','period_deaths','known_period_deaths','barns')} for c in stats['cohorts']]
+    stats['death_groups']=[{k:c[k] for k in ('cohort','name','entry_date','age_days','age_mixed','period_deaths','known_period_deaths','barns')} for c in stats['cohorts']]
     for source in source_rows(data,archives=True):
         if not source['archive']:continue
         row=source['row'];key=cohort_key(row)
@@ -207,7 +207,7 @@ def next_day(s):
 
 def client_snapshot(snapshot,cursor):
     dashboard=statistics(snapshot,{'summary':['1']})
-    cohorts={cohort_key(b):{'key':cohort_key(b),'name':b['name'],'entry_date':b['entry_date'],'archive':False} for b in snapshot['batches']}
+    cohorts={cohort_key(b):{'key':cohort_key(b),'name':b['name'],'entry_date':b['entry_date'],'archive':False} for b in sorted(snapshot['batches'],key=lambda b:b['entry_date'],reverse=True)}
     for source in source_rows(snapshot,archives=True):
         if source['archive']:cohorts.setdefault(cohort_key(source['row']),{'key':cohort_key(source['row']),'name':source['row']['name'],'entry_date':source['row']['entry_date'],'archive':True})
     for key,c in cohorts.items():

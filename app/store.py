@@ -3,7 +3,7 @@ from pathlib import Path
 from datetime import datetime, timezone
 from .domain import Invalid, day, number, herd, consumption, age
 
-VERSION='1.8.4'
+VERSION='1.8.5'
 SCHEMA_VERSION=4
 KINDS=('barns','batches','movements','feed_orders','deliveries','usages','weights','workbooks','source_voids')
 SCHEMA='''
@@ -106,6 +106,8 @@ class Store:
     def enrich_legacy(self,data):
         books={book['id']:book for book in data['workbooks']}
         for b in data['batches']:
+            if not b.get('legacy_source'):b.pop('_cohort_key',None)
+        for b in data['batches']:
             if not b.get('legacy_source'):continue
             book=books.get(b['legacy_source'])
             if not book:continue
@@ -136,6 +138,16 @@ class Store:
                     complete=sum(e['quantity'] for e in all_events)==row['totals'][field] and all(sum(a['quantity'] for a in e['allocations'])==e['quantity'] for e in dated)
                     values[field]=sum(a['quantity'] for e in dated for a in e['allocations'] if a['barn']==b['legacy_barn']) if complete else None
                 b['legacy_values'][snapshot_date]=values
+        # Explicit grouping is separate from physical entry dates and transfers.
+        batches={b['id']:b for b in data['batches']}
+        def resolve(b,seen):
+            if b['id'] in seen:raise Invalid('cohort_link_cycle')
+            target=b.get('same_batch_as')
+            if not target:return b.get('_cohort_key') or b['name']+'|'+b['entry_date']
+            if b.get('legacy_source'):raise Invalid('legacy_source_conflict')
+            if target not in batches:raise Invalid('referenced_record')
+            key=resolve(batches[target],seen|{b['id']});b['_cohort_key']=key;return key
+        for b in data['batches']:resolve(b,set())
         from .operations import apply_source_voids
         apply_source_voids(data)
         from .history import derived_movements
@@ -203,7 +215,7 @@ class Store:
         d={k:v for k,v in d.items() if k not in ('id','revision','created_at','created_by','updated_at','deleted')}
         allowed={
             'barns':{'name','group'},
-            'batches':{'barn_id','name','group','entry_date','entry_count','entry_age_days','age_date','status','cohort_id','legacy_source','legacy_row','legacy_barn','note','entry_mean_kg','entry_mean_date','entry_mean_source','entry_mean_note','entry_count_source','entry_count_reason'},
+            'batches':{'barn_id','name','group','entry_date','entry_count','entry_age_days','age_date','status','cohort_id','same_batch_as','legacy_source','legacy_row','legacy_barn','note','entry_mean_kg','entry_mean_date','entry_mean_source','entry_mean_note','entry_count_source','entry_count_reason'},
             'movements':{'date','batch_id','type','quantity','note','target_batch_id','total_weight_kg'},
             'feed_orders':{'date','kg','display_unit','vendor','item','note','allocations'},
             'deliveries':{'date','kg','display_unit','vendor','item','note','allocations'},
@@ -219,6 +231,12 @@ class Store:
         elif kind=='batches':
             lookup('barns',d.get('barn_id'));text('name',True);text('group')
             day(d.get('entry_date'))
+            d['same_batch_as']=d.get('same_batch_as') or None
+            if d['same_batch_as']:
+                if d.get('legacy_source'):raise Invalid('legacy_source_conflict')
+                target=lookup('batches',d['same_batch_as'])
+                if target['barn_id']==d['barn_id']:raise Invalid('cohort_link_same_barn')
+                if d['entry_date']<target['entry_date']:raise Invalid('cohort_link_earlier_entry')
             if d.get('legacy_source'):
                 book=lookup('workbooks',d['legacy_source'])
                 source=next((r for r in book['report']['rows'] if r['key']==d.get('legacy_row')),None)
@@ -264,7 +282,9 @@ class Store:
             if d.get('total_weight_kg') is not None: qty('total_weight_kg',True)
             if k=='transfer':
                 target=batch('target_batch_id')
-                if b['id']==target['id'] or (b.get('cohort_id') or b['id'])!=(target.get('cohort_id') or target['id']): raise Invalid('transfer_cohort_mismatch')
+                from .history import cohort_key
+                linked=(b.get('same_batch_as') or target.get('same_batch_as')) and cohort_key(b)==cohort_key(target)
+                if b['id']==target['id'] or ((b.get('cohort_id') or b['id'])!=(target.get('cohort_id') or target['id']) and not linked): raise Invalid('transfer_cohort_mismatch')
             else: d.pop('target_batch_id',None)
         elif kind in ('deliveries','feed_orders'):
             day(d.get('date'));qty('kg',True);text('item');text('note')
@@ -353,7 +373,9 @@ class Store:
                     if r['target_batch_id'] not in bid:raise Invalid('referenced_record')
                     if r['date']<bid[r['target_batch_id']]['entry_date']:raise Invalid('before_entry')
                     source,target=bid[r['batch_id']],bid[r['target_batch_id']]
-                    if (source.get('cohort_id') or source['id'])!=(target.get('cohort_id') or target['id']):raise Invalid('transfer_cohort_mismatch')
+                    from .history import cohort_key
+                    linked=(source.get('same_batch_as') or target.get('same_batch_as')) and cohort_key(source)==cohort_key(target)
+                    if (source.get('cohort_id') or source['id'])!=(target.get('cohort_id') or target['id']) and not linked:raise Invalid('transfer_cohort_mismatch')
         for kind in ('deliveries','feed_orders'):
             for d in data.get(kind,[]):
                 for a in d['allocations']:
@@ -431,6 +453,8 @@ class Store:
                 tombstone=previous|{'revision':output['revision'],'updated_at':now()}
                 db.execute('UPDATE records SET deleted=1,revision=revision+1,data=? WHERE id=?',(encode(tombstone),rid))
             else:
+                if kind=='batches' and previous and 'same_batch_as' not in payload:
+                    payload=payload|{'same_batch_as':previous.get('same_batch_as')}
                 if kind=='batches' and previous and previous.get('legacy_source'):
                     if any(payload.get(k)!=previous.get(k) for k in ('legacy_source','legacy_row','legacy_barn','barn_id','entry_date')):raise Problem('legacy_source_conflict')
                 cleaned=self.validate(kind,payload,data,user)
