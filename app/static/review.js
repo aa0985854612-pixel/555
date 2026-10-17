@@ -94,4 +94,3 @@ statHTML=s=>{
  return html.replace('</section>',coverage+'</section>');
 };
 })();
-boot();

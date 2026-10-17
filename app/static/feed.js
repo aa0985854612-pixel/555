@@ -16,7 +16,7 @@ function replaceRecords(id,html){
 function loadOrder(f,r){
  f.elements.date.value=r.date;f.elements.display_unit.value=r.display_unit;f.dataset.unit=r.display_unit;
  f.elements.amount.value=r.display_unit==='ton'?r.kg/1000:r.kg;
- for(const k of ['vendor','item','note'])f.elements[k].value=r[k]||'';
+ for(const k of ['vendor','item','note'])f.elements.namedItem(k).value=r[k]||'';
  f.elements.barn_id.value='';updateScope(f.querySelector('.scope'));f.elements.batch_id.value='';
  const b=data.batches.find(b=>b.id===r.allocations?.[0]?.batch_id);
  if(b){f.elements.barn_id.value=b.barn_id;updateScope(f.querySelector('.scope'));f.elements.batch_id.value=b.id;}
@@ -49,7 +49,7 @@ collect=f=>{
 };
 rowsHTML=(kind,rows)=>{
  if(kind!=='feed_orders')return base.rowsHTML(kind,rows);
- return rows.map(r=>`<article class="feed-order-record"><div class="section-row"><strong>${esc(r.date)}</strong><strong class="order-quantity">${fmt(r.display_unit==='ton'?r.kg/1000:r.kg)} <small>${esc(t(r.display_unit))}</small></strong></div><p>${[r.vendor,r.item,r.allocations.length?r.allocations.map(a=>batchName(a.batch_id)).join('、'):t('allFarm')].filter(Boolean).map(esc).join(' · ')}</p>${r.note?`<p class="order-note">${esc(r.note)}</p>`:''}<div class="actions">${recordActions(kind,r)}</div></article>`).join('')||empty();
+ return rows.map(r=>`<article class="feed-order-record"><div class="section-row"><strong>${esc(r.date)}</strong><strong class="order-quantity">${fmt(r.display_unit==='ton'?r.kg/1000:r.kg)} <small>${esc(t(r.display_unit))}</small></strong></div><p>${[r.vendor,r.item,r.feed_bin_id?r.feed_bin_snapshot.name+' · '+r.feed_bin_snapshot.barn_names.join('、')+(r.target_batch_ids.length?' · '+[...new Set(r.target_batch_ids.map(id=>data.batches.find(b=>b.id===id)?.name||t('unassigned')))].join('、'):' · '+t('feedTargetUnknown')):r.allocations.length?r.allocations.map(a=>batchName(a.batch_id)).join('、'):t('allFarm')].filter(Boolean).map(esc).join(' · ')}</p>${r.scope_attribution?.kg===null?`<p class="feed-shared-note">${t('feedSharedReference')}</p>`:''}${r.note?`<p class="order-note">${esc(r.note)}</p>`:''}<div class="actions">${recordActions(kind,r)}</div></article>`).join('')||empty();
 };
 renderCurrent=async()=>{
  if(current!=='feed')return base.renderCurrent();
@@ -57,7 +57,7 @@ renderCurrent=async()=>{
  try{
   const requests=[api('/api/feed_orders?'+q)];if(archive.open)requests.push(api('/api/deliveries?'+q),api('/api/usages?'+q));
   const [orders,deliveries,usages]=await Promise.all(requests);if(ticket!==renderTicket||current!=='feed')return;
-  replaceRecords('feed-order-results',rowsHTML('feed_orders',orders));$('#feed-order-total').textContent=t('orderTotal')+' '+fmt(orders.reduce((n,r)=>n+r.kg,0))+' kg';
+  replaceRecords('feed-order-results',rowsHTML('feed_orders',orders));const partial=orders.filter(r=>r.scope_attribution?.kg===null),known=orders.reduce((n,r)=>n+(r.scope_attribution?r.scope_attribution.kg||0:r.kg),0);$('#feed-order-total').textContent=(partial.length?t('feedKnownTotal'):t('orderTotal'))+' '+fmt(known)+' kg'+(partial.length?' · '+t('feedReferenceTotal')+' '+fmt(partial.reduce((n,r)=>n+r.kg,0))+' kg':'');
   if(deliveries){replaceRecords('delivery-results',rowsHTML('deliveries',deliveries));replaceRecords('usage-results',rowsHTML('usages',usages.map(u=>({...u,computed_kg:calcConsumption(u)}))));}
  }catch(e){toast(messageError(e));}
 };

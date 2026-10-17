@@ -38,7 +38,10 @@ def weekly_report(data,query,today=None):
     scope={k:v for k,v in query.items() if k in ('cohort','barn_id','batch_id','group')}
     # Shared filtering includes only explicitly allocated orders for this scope.
     orders=filter_rows('feed_orders',data,scope|{'from':[start],'to':[end]})
-    unassigned=[o for o in data.get('feed_orders',[]) if start<=o['date']<=end and not o['allocations']]
+    from .feed import order_scope,order_detail,report_feed_setup
+    unassigned=[o for o in data.get('feed_orders',[]) if start<=o['date']<=end and not o['allocations'] and not o.get('feed_bin_id')]
+    bin_pending=[o for o in orders if o.get('feed_bin_id') and order_scope(o,data,ids)['kg'] is None]
+    pending.extend({'id':o['id'],'type':'feed_orders','date':o['date'],'kg':o['kg'],'bin':o['feed_bin_snapshot']['name'],'reason':'shared_bin_unallocated' if len(o['feed_bin_snapshot']['barn_ids'])>1 else 'bin_batch_unknown'} for o in bin_pending)
     pending.extend({'id':o['id'],'type':'feed_orders','date':o['date'],'kg':o['kg'],'reason':'unassigned_order'} for o in unassigned)
     age_values={age(b,entry) for b in members};entry_age=next(iter(age_values)) if len(age_values)==1 else None
     weeks=[];first=(day(start)-day(entry)).days//7;last=(day(end)-day(entry)).days//7
@@ -48,16 +51,24 @@ def weekly_report(data,query,today=None):
         selected=[r for r in dated if r.get('batch_id') in ids or set(r.get('legacy_members',[]))<=ids]
         values={typ:sum(r['quantity'] for r in selected if r['type']==typ) for typ in FIELDS}
         missing={p['type'] for p in pending if p['type'] in FIELDS and ((p.get('date') and lo.isoformat()<=p['date']<=hi_observed.isoformat()) or (not p.get('date') and lo.isoformat()<=p['until']))}
-        allocated=sum(a['kg'] for o in orders if lo.isoformat()<=o['date']<=hi_observed.isoformat() for a in o['allocations'] if a['batch_id'] in ids)
-        feed_details=[{'id':o['id'],'date':o['date'],'batch_id':a['batch_id'],'barn':barns[batches[a['batch_id']]['barn_id']],'kg':a['kg']} for o in sorted(orders,key=lambda o:o['date']) if lo.isoformat()<=o['date']<=hi_observed.isoformat() for a in o['allocations'] if a['batch_id'] in ids]
-        unknown_orders=any(lo.isoformat()<=o['date']<=hi_observed.isoformat() for o in unassigned)
+        period_orders=[o for o in orders if lo.isoformat()<=o['date']<=hi_observed.isoformat()]
+        allocated=sum((order_scope(o,data,ids)['kg'] or 0) if o.get('feed_bin_id') else sum(a['kg'] for a in o['allocations'] if a['batch_id'] in ids) for o in period_orders)
+        feed_details=[];feed_shared_details=[]
+        for o in sorted(period_orders,key=lambda o:o['date']):
+            if o.get('feed_bin_id'):
+                target=feed_details if order_scope(o,data,ids)['kg'] is not None else feed_shared_details
+                target.append(order_detail(o,data))
+            else:
+                for a in o['allocations']:
+                    if a['batch_id'] in ids:feed_details.append(order_detail(o,data,a['batch_id']))
+        unknown_orders=bool(feed_shared_details) or any(lo.isoformat()<=o['date']<=hi_observed.isoformat() for o in unassigned)
         weeks.append({'index':index+1,'age_week':None if entry_age is None else int(entry_age//7)+index+1,'start':lo.isoformat(),'anchor':anchor.isoformat(),'end':hi.isoformat(),'observed_to':hi_observed.isoformat() if not future else None,'future':future,'partial':lo!=anchor or hi!=anchor+timedelta(days=6) or hi>day(today),
             'values':{typ:None if future or typ in missing else n for typ,n in values.items()}|{'feed_orders':None if future or unknown_orders else allocated},'known':values|{'feed_orders':allocated},
-            'feed_details':feed_details,'events':[{'id':r['id'],'date':r['date'],'type':r['type'],'quantity':r['quantity'],'barn':barns.get(batches.get(r.get('batch_id'),{}).get('barn_id'),''),'note':r.get('note','') if not r.get('legacy_source') else '', 'source_cell':r.get('source_cell','')} for r in selected]})
+            'feed_details':feed_details,'feed_shared_details':feed_shared_details,'events':[{'id':r['id'],'date':r['date'],'type':r['type'],'quantity':r['quantity'],'barn':barns.get(batches.get(r.get('batch_id'),{}).get('barn_id'),''),'note':r.get('note','') if not r.get('legacy_source') else '', 'source_cell':r.get('source_cell','')} for r in selected]})
     totals={typ:None if not any(not w['future'] for w in weeks) or any(w['values'][typ] is None and not w['future'] for w in weeks) else sum(w['known'][typ] for w in weeks if not w['future']) for typ in (*FIELDS,'feed_orders')}
     known={typ:sum(w['known'][typ] for w in weeks if not w['future']) for typ in (*FIELDS,'feed_orders')}
     until=min(end,today);h=herd(data['batches'],data['movements'],until,ids)
     means={b.get('entry_mean_kg') for b in members};mean=next(iter(means)) if len(means)==1 else None
     from .review import check_coverage
     coverage=check_coverage(data,ids,start,end)
-    return {'death_check_coverage':coverage,'cohort':key,'name':members[0]['name'],'entry_date':entry,'entry_age_days':entry_age,'entry_mean_kg':mean,'barns':[barns[b['barn_id']] for b in members],'batch_ids':sorted(ids),'from':start,'to':end,'observed_to':until,'weeks':weeks,'totals':totals,'known_totals':known,'cumulative':h,'pending':pending,'age_mixed':entry_age is None and all(b.get('entry_age_days') is not None for b in members),'barn_ages':[{'barn':barns[b['barn_id']],'age_days':age(b,until),'entry_date':b['entry_date']} for b in members],'week_basis':'entry_date_every_7_days','age_basis':'ordinal_week_entry_age_floor_plus_one','feed_basis':'allocated_manual_orders_kg_not_consumption'}
+    return {'feed_setup':report_feed_setup(data,members,orders),'death_check_coverage':coverage,'cohort':key,'name':members[0]['name'],'entry_date':entry,'entry_age_days':entry_age,'entry_mean_kg':mean,'barns':[barns[b['barn_id']] for b in members],'batch_ids':sorted(ids),'from':start,'to':end,'observed_to':until,'weeks':weeks,'totals':totals,'known_totals':known,'cumulative':h,'pending':pending,'age_mixed':entry_age is None and all(b.get('entry_age_days') is not None for b in members),'barn_ages':[{'barn':barns[b['barn_id']],'age_days':age(b,until),'entry_date':b['entry_date']} for b in members],'week_basis':'entry_date_every_7_days','age_basis':'ordinal_week_entry_age_floor_plus_one','feed_basis':'allocated_manual_orders_kg_not_consumption'}

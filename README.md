@@ -1,10 +1,12 @@
-# 肉豬紀錄管理 App — PigLedger 1.9.1
+# 肉豬紀錄管理 App — PigLedger 2.0.0
 
 **[開啟正式網站：555-rho-nine.vercel.app](https://555-rho-nine.vercel.app/)**。沿用你目前的帳號、密碼、Vercel專案及Turso資料庫。
 
-- [完整原始碼／Docker／Vercel程式包 v1.9.1](https://github.com/aa0985854612-pixel/555/raw/refs/heads/main/release/pigledger-1.9.1.zip)
+- [完整原始碼／Docker／Vercel程式包 v2.0.0](https://github.com/aa0985854612-pixel/555/raw/refs/heads/main/release/pigledger-2.0.0.zip)
 - [簡短操作說明](docs/USER_GUIDE.md)／[部署說明](docs/VERCEL.md)
-- [1.9.1測試報告與驗收限制](docs/TEST_REPORT_1.9.1.md)
+- [2.0.0測試報告與驗收限制](docs/TEST_REPORT_2.0.0.md)
+
+飼料新增「大豬料／仔豬料／哺乳二期料」選單及23個實際料桶。選桶帶入確認的養全／新農科廠商；共用桶登記一筆、雙桶各自保存。完整同批範圍只計一次；單棟或跨批未分攤量另外列示，不平均、不重複入帳。週表上方新增預設廠商、實際料別／廠商，支援料桶查詢與CSV。設定可由管理員維護桶別，原歷史、料名與叫料／耗料區別保留。
 
 每日登記左側只留輸入與當日核對，右側集中全部總覽資訊；無死亡回報改為一個「全部回報無死豬」按鈕。先核對日期、涵蓋棟批及略過原因，再一次保存；有死亡、已確認或歸屬不明的資料不覆蓋。全部保存採單一交易、原有權限與同鍵重試保護，不改頭數。
 

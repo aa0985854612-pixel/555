@@ -3,9 +3,9 @@ from pathlib import Path
 from datetime import datetime, timezone
 from .domain import Invalid, day, number, herd, consumption, age
 
-VERSION='1.9.1'
+VERSION='2.0.0'
 SCHEMA_VERSION=4
-KINDS=('barns','batches','movements','feed_orders','deliveries','usages','weights','workbooks','source_voids','daily_checks')
+KINDS=('barns','batches','movements','feed_orders','deliveries','usages','weights','workbooks','source_voids','daily_checks','feed_bins')
 SCHEMA='''
 CREATE TABLE IF NOT EXISTS records(kind TEXT NOT NULL, id TEXT PRIMARY KEY, revision INTEGER NOT NULL, deleted INTEGER NOT NULL DEFAULT 0, data TEXT NOT NULL);
 CREATE INDEX IF NOT EXISTS records_kind ON records(kind,deleted);
@@ -192,7 +192,7 @@ class Store:
         if not user: raise Problem('login_required',401)
         if user['role']=='viewer' or (admin and user['role']!='admin'): raise Problem('forbidden',403)
 
-    def validate(self, kind, d, data, user):
+    def validate(self, kind, d, data, user, previous=None):
         def text(key, required=False):
             v=d.get(key,'')
             if not isinstance(v,str) or len(v)>2000 or (required and not v.strip()): raise Invalid('invalid_text')
@@ -217,7 +217,8 @@ class Store:
             'barns':{'name','group'},
             'batches':{'barn_id','name','group','entry_date','entry_count','entry_age_days','age_date','status','cohort_id','same_batch_as','legacy_source','legacy_row','legacy_barn','note','entry_mean_kg','entry_mean_date','entry_mean_source','entry_mean_note','entry_count_source','entry_count_reason'},
             'movements':{'date','batch_id','type','quantity','note','target_batch_id','total_weight_kg'},
-            'feed_orders':{'date','kg','display_unit','vendor','item','note','allocations'},
+            'feed_orders':{'date','kg','display_unit','vendor','item','note','allocations','feed_bin_id','feed_bin_snapshot','target_batch_ids'},
+            'feed_bins':{'name','barn_ids','vendor','active','note'},
             'deliveries':{'date','kg','display_unit','vendor','item','note','allocations'},
             'usages':{'start','end','batch_id','method','kg','opening','closing','transfer_in','transfer_out','loss','note','active','vendor','item'},
             'weights':{'date','batch_id','age_days','pen','count','total_kg','individual_kg','sampling','note','representative','section','session_id','session_number','session_fingerprint'},
@@ -229,6 +230,15 @@ class Store:
         if kind=='barns':
             text('name',True); text('group')
             if any(x['name']==d['name'] for x in data['barns']): raise Invalid('duplicate_barn')
+        elif kind=='feed_bins':
+            text('name',True);text('note')
+            if d.get('vendor') not in ('養全','新農科'):raise Invalid('invalid_vendor')
+            ids=d.get('barn_ids')
+            if not isinstance(ids,list) or not ids or len(ids)>100 or any(not isinstance(x,str) for x in ids) or len(ids)!=len(set(ids)):raise Invalid('invalid_feed_bin')
+            for rid in ids:lookup('barns',rid)
+            if not isinstance(d.get('active',True),bool):raise Invalid('invalid_status')
+            d['active']=d.get('active',True)
+            if any(b['name']==d['name'] for b in data.get('feed_bins',[])):raise Invalid('duplicate_feed_bin')
         elif kind=='batches':
             lookup('barns',d.get('barn_id'));text('name',True);text('group')
             day(d.get('entry_date'))
@@ -301,6 +311,30 @@ class Store:
         elif kind in ('deliveries','feed_orders'):
             day(d.get('date'));qty('kg',True);text('item');text('note')
             if d.get('display_unit') not in ('kg','ton'):raise Invalid('invalid_unit')
+            if kind=='feed_orders' and d.get('feed_bin_id'):
+                from .feed import FEED_TYPES
+                bin=lookup('feed_bins',d['feed_bin_id'])
+                if not bin['active'] and not (previous and previous.get('feed_bin_id')==bin['id']):raise Invalid('feed_bin_inactive')
+                if d['item'] not in FEED_TYPES:raise Invalid('invalid_feed_type')
+                d['vendor']=d.get('vendor') or bin['vendor']
+                if d.get('allocations'):raise Invalid('bin_allocation_conflict')
+                if previous and previous.get('feed_bin_id')==bin['id']:
+                    d['feed_bin_snapshot']=previous['feed_bin_snapshot']
+                else:
+                    d['feed_bin_snapshot']={'id':bin['id'],'name':bin['name'],'barn_ids':list(bin['barn_ids']),'barn_names':[lookup('barns',rid)['name'] for rid in bin['barn_ids']]}
+                snap=d['feed_bin_snapshot']
+                if not isinstance(snap,dict) or set(snap)!={'id','name','barn_ids','barn_names'} or snap['id']!=bin['id'] or snap['barn_ids']!=bin['barn_ids'] or not isinstance(snap['name'],str) or not snap['name'].strip() or len(snap['name'])>2000 or not isinstance(snap['barn_names'],list) or len(snap['barn_names'])!=len(bin['barn_ids']) or any(not isinstance(x,str) or len(x)>2000 for x in snap['barn_names']):raise Invalid('invalid_feed_bin')
+                targets=d.get('target_batch_ids',[])
+                if not isinstance(targets,list) or any(not isinstance(x,str) for x in targets) or len(targets)!=len(set(targets)):raise Invalid('invalid_allocations')
+                seen_barns=set()
+                for rid in targets:
+                    b=lookup('batches',rid)
+                    if b['barn_id'] not in d['feed_bin_snapshot']['barn_ids'] or b['barn_id'] in seen_barns:raise Invalid('invalid_allocations')
+                    if b['status']=='ended' and user['role']!='admin':raise Problem('batch_ended',403)
+                    seen_barns.add(b['barn_id'])
+                d['target_batch_ids']=targets
+            elif kind=='feed_orders':
+                for key in ('feed_bin_id','feed_bin_snapshot','target_batch_ids'):d.pop(key,None)
             if d.get('vendor') not in ('','養全','新農科'):raise Invalid('invalid_vendor')
             allocations=d.get('allocations',[])
             if not isinstance(allocations,list) or len(allocations)>(1 if kind=='feed_orders' else 500):raise Invalid('invalid_allocations')
@@ -400,6 +434,17 @@ class Store:
                 for a in d['allocations']:
                     if a['batch_id'] not in bid:raise Invalid('referenced_record')
                     if kind=='deliveries' and d['date']<bid[a['batch_id']]['entry_date']:raise Invalid('before_entry')
+        bins={b['id']:b for b in data.get('feed_bins',[])}
+        for bin in bins.values():
+            if not set(bin['barn_ids'])<=barns:raise Invalid('referenced_record')
+        for o in data.get('feed_orders',[]):
+            if not o.get('feed_bin_id'):continue
+            bin=bins.get(o['feed_bin_id'])
+            if not bin:raise Invalid('referenced_record')
+            snap=o['feed_bin_snapshot']
+            if bin['barn_ids']!=snap['barn_ids']:raise Invalid('feed_bin_members_locked')
+            if not set(o.get('target_batch_ids',[]))<=bid.keys():raise Invalid('referenced_record')
+            if any(bid[x]['barn_id'] not in snap['barn_ids'] for x in o.get('target_batch_ids',[])):raise Invalid('referenced_record')
         # Daily deltas allow retroactive validation in O(records log records),
         # rather than rescanning the entire farm for each batch and date.
         deltas={b['id']:{(b['legacy_group']['as_of'] if b.get('legacy_group') else b['entry_date']):(b['legacy_heads'][b['legacy_group']['as_of']] if b.get('legacy_group') else b['entry_count'])} for b in data['batches']}
@@ -445,7 +490,7 @@ class Store:
             if any(a['end']>b['start'] for a,b in zip(rows,rows[1:])):raise Invalid('overlapping_usage')
 
     def mutate(self, user, kind, payload, request_key, rid=None, delete=False, return_snapshot=False):
-        self.require(user,admin=kind in ('barns','batches','workbooks') or delete)
+        self.require(user,admin=kind in ('barns','batches','workbooks','feed_bins') or delete)
         if kind not in KINDS:raise Problem('unknown_kind',404)
         if kind in ('workbooks','source_voids'):raise Problem('legacy_source_readonly',403)
         if not isinstance(payload,dict) or not isinstance(request_key,str) or not 16<=len(request_key)<=128:raise Problem('idempotency_required')
@@ -478,7 +523,9 @@ class Store:
                     payload=payload|{'same_batch_as':previous.get('same_batch_as')}
                 if kind=='batches' and previous and previous.get('legacy_source'):
                     if any(payload.get(k)!=previous.get(k) for k in ('legacy_source','legacy_row','legacy_barn','barn_id','entry_date')):raise Problem('legacy_source_conflict')
-                cleaned=self.validate(kind,payload,data,user)
+                if kind=='feed_orders' and previous and 'feed_bin_id' not in payload:
+                    payload={k:previous[k] for k in ('feed_bin_id','target_batch_ids') if k in previous}|payload
+                cleaned=self.validate(kind,payload,data,user,previous)
                 if kind=='batches' and previous and previous.get('legacy_group',{}).get('expected_members')==1:
                     if cleaned['entry_count']!=previous['entry_count']:
                         if not cleaned.get('entry_count_reason'):raise Problem('entry_count_reason_required')
@@ -618,7 +665,7 @@ class Store:
                         if not subset(r['report'],checked):raise Problem('invalid_backup')
                         continue
                     others={k:[x for x in rows if not (k==kind and x['id']==r['id'])] for k,rows in data.items()}
-                    cleaned=self.validate(kind,r,others,user)
+                    cleaned=self.validate(kind,r,others,user,r if kind=='feed_orders' else None)
                     if any((r.get(k, '') if k in ('vendor','item','entry_mean_source','entry_mean_note','entry_count_source','section') else r.get(k))!=v for k,v in cleaned.items()):raise Problem('invalid_backup')
             self.validate_global(data)
             for u in document.get('users',[]):
