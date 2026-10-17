@@ -449,7 +449,7 @@ class Handler(BaseHTTPRequestHandler):
                 data=store.snapshot(include_source=False);rows=filter_rows(kind,data,query)
                 batches={b['id']:b for b in data['batches']};barns={b['id']:b['name'] for b in data['barns']}
                 out=io.StringIO();writer=csv.writer(out)
-                writer.writerow(['id','revision','date','end_exclusive','barn','batch','type_or_source','quantity','unit','mean_kg','age_days','vendor','item','note','allocations','status','sample_count','individual_weights_kg','pen','selected_allocated_kg','calculation_source','source_cell','section','weighing_session_id','weighing_session_number','feed_bin','feed_bin_barns','feed_target_batches','feed_scope_state'])
+                writer.writerow(['id','revision','date','end_exclusive','barn','batch','type_or_source','quantity','unit','mean_kg','age_days','vendor','item','note','allocations','status','sample_count','individual_weights_kg','pen','selected_allocated_kg','calculation_source','source_cell','section','weighing_session_id','weighing_session_number','feed_bin','feed_bin_barns','feed_target_batches','feed_scope_state','outgoing_destination'])
                 for r in rows:
                     batch=batches.get(r.get('batch_id'),{})
                     if kind=='feed_orders' and len(r['allocations'])==1:batch=batches.get(r['allocations'][0]['batch_id'],{})
@@ -463,6 +463,7 @@ class Handler(BaseHTTPRequestHandler):
                         values[4]='、'.join(r['feed_bin_snapshot']['barn_names']);values[5]='、'.join(batches[x]['name'] for x in r['target_batch_ids']);values[19]=attribution['kg']
                         values.extend([r['feed_bin_snapshot']['name'],'、'.join(r['feed_bin_snapshot']['barn_names']),encode(r['target_batch_ids']),attribution['state']])
                     else:values.extend(['','','',''])
+                    values.append(r.get('outgoing_destination',''))
                     # Spreadsheet formula injection protection; original fields remain intact in backups.
                     writer.writerow(["'"+v if isinstance(v,str) and v.startswith(('=','+','-','@','\t','\r')) else v for v in values])
                 return self.send(('\ufeff'+out.getvalue()).encode(),content_type='text/csv; charset=utf-8',headers={'Content-Disposition':'attachment; filename="'+kind+'-'+VERSION+'.csv"'})

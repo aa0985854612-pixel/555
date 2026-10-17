@@ -66,7 +66,7 @@ build=()=>{
 };
 function recordLine(r){
  const batch=data.batches.find(b=>b.id===r.batch_id),barn=r.barn_number?String(r.barn_number)+t('barn'):data.barns.find(b=>b.id===batch?.barn_id)?.name||t('unassigned');
- return `<article class="review-event"><div><strong>${esc(barn)}</strong><span>${esc(batch?.name||r.legacy_batch||t('unassigned'))}</span>${r.note?`<small>${esc(r.note)}</small>`:''}</div><strong class="${r.type==='death'?'warning-text':''}">${esc(t(r.type))} ${fmt(r.quantity,0)}</strong><div class="review-actions">${recordActions('movements',r)}</div></article>`;
+ return `<article class="review-event"><div><strong>${esc(barn)}</strong><span>${esc(batch?.name||r.legacy_batch||t('unassigned'))}</span>${movementNote(r)?`<small>${esc(movementNote(r))}</small>`:''}</div><strong class="${r.type==='death'?'warning-text':''}">${esc(t(r.type))} ${fmt(r.quantity,0)}</strong><div class="review-actions">${recordActions('movements',r)}</div></article>`;
 }
 async function renderDaily(){
  const on=$('#review-date')?.value||today(),ticket=++requestNo;if(!data)return;

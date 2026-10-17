@@ -3,7 +3,7 @@ from pathlib import Path
 from datetime import datetime, timezone
 from .domain import Invalid, day, number, herd, consumption, age
 
-VERSION='2.0.6'
+VERSION='2.0.7'
 SCHEMA_VERSION=4
 KINDS=('barns','batches','movements','feed_orders','deliveries','usages','weights','workbooks','source_voids','daily_checks','feed_bins')
 SCHEMA='''
@@ -221,7 +221,7 @@ class Store:
         allowed={
             'barns':{'name','group','feed_vendor'},
             'batches':{'barn_id','name','group','entry_date','entry_count','entry_age_days','age_date','status','cohort_id','same_batch_as','legacy_source','legacy_row','legacy_barn','note','entry_mean_kg','entry_mean_date','entry_mean_source','entry_mean_note','entry_count_source','entry_count_reason','source_assignments','stock_basis','quality_review'},
-            'movements':{'date','batch_id','type','quantity','note','target_batch_id','total_weight_kg'},
+            'movements':{'date','batch_id','type','quantity','note','target_batch_id','total_weight_kg','outgoing_destination'},
             'feed_orders':{'date','kg','display_unit','vendor','item','note','allocations','feed_bin_id','feed_bin_snapshot','target_batch_ids'},
             'feed_bins':{'name','barn_ids','vendor','active','note'},
             'deliveries':{'date','kg','display_unit','vendor','item','note','allocations'},
@@ -313,6 +313,11 @@ class Store:
             day(d.get('date'));b=batch();text('note')
             k=d.get('type')
             if k not in ('sale','death','cull','arrival','transfer','adjustment'): raise Invalid('invalid_type')
+            if 'outgoing_destination' in d:
+                destination=d['outgoing_destination']
+                if not isinstance(destination,str) or destination not in ('','新北','南投','嘉義'):raise Invalid('invalid_outgoing_destination')
+                if destination and k not in ('sale','cull'):raise Invalid('outgoing_destination_type')
+                if k not in ('sale','cull'):d.pop('outgoing_destination')
             qty('quantity',k!='adjustment',True)
             if not d['quantity']: raise Invalid('invalid_number')
             if k=='adjustment': self.require(user,True)
@@ -538,6 +543,8 @@ class Store:
                     payload=payload|{'feed_vendor':previous['feed_vendor']}
                 if kind=='batches' and previous:
                     payload={k:previous[k] for k in ('source_assignments','stock_basis','quality_review') if k not in payload and k in previous}|payload
+                if kind=='movements' and previous and 'outgoing_destination' not in payload and payload.get('type') in ('sale','cull') and 'outgoing_destination' in previous:
+                    payload=payload|{'outgoing_destination':previous['outgoing_destination']}
                 if kind=='batches' and previous and 'same_batch_as' not in payload:
                     payload=payload|{'same_batch_as':previous.get('same_batch_as')}
                 if kind=='batches' and previous and previous.get('legacy_source'):

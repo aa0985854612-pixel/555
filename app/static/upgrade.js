@@ -83,7 +83,7 @@ recordActions=(kind,r)=>{
 };
 rowsHTML=(kind,rows)=>{
  if(!rows.length)return empty();
- if(kind==='movements')return table(['date','barn','batch','type','quantity','note','sourceCell','edit'],rows.map(r=>`<tr><td>${esc(r.date||t('dateUnknown'))}</td><td>${esc(rowBarn(r))}</td><td>${esc(r.legacy_batch||data.batches.find(b=>b.id===r.batch_id)?.name||t('unassigned'))}${r.archive?'<br>'+esc(t('archive')):''}</td><td>${esc(t(r.type))}</td><td>${fmt(r.quantity,0)}</td><td>${esc(r.note)}</td><td>${esc(r.source_cell||t('recorded'))}</td><td>${recordActions(kind,r)}</td></tr>`));
+ if(kind==='movements')return table(['date','barn','batch','type','quantity','note','sourceCell','edit'],rows.map(r=>`<tr><td>${esc(r.date||t('dateUnknown'))}</td><td>${esc(rowBarn(r))}</td><td>${esc(r.legacy_batch||data.batches.find(b=>b.id===r.batch_id)?.name||t('unassigned'))}${r.archive?'<br>'+esc(t('archive')):''}</td><td>${esc(t(r.type))}</td><td>${fmt(r.quantity,0)}</td><td>${esc(movementNote(r))}</td><td>${esc(r.source_cell||t('recorded'))}</td><td>${recordActions(kind,r)}</td></tr>`));
  if(kind==='weights')return table(['date','barn','batch','weightCount','totalWeight','mean','sourceCell','edit'],rows.map(r=>`<tr><td>${esc(r.date||t('dateUnknown'))}${r.age_weeks_hint?'<br>'+esc(r.age_weeks_hint):''}</td><td>${esc(rowBarn(r))}</td><td>${esc(r.legacy_batch||data.batches.find(b=>b.id===r.batch_id)?.name||'')}<br><small>${esc(r.pen||'')}</small></td><td>${fmt(r.count,0)}</td><td>${fmt(r.total_kg)}</td><td>${fmt(meanOf(r))}<br><small>${esc(t(r.source_mean?'sourceMean':'sample'))}</small></td><td>${esc(r.source_cell||'')}<br><small>${esc(r.note||'')}</small></td><td>${recordActions(kind,r)}</td></tr>`));
  return base.rowsHTML(kind,rows);
 };
