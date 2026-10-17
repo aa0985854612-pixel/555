@@ -48,6 +48,37 @@ recordActions=(kind,r)=>{
 };
 renderHome=async()=>{const summary=await base.renderHome();if(!data)return;$$('#barns .barn-card').forEach((card,i)=>{const barn=data.barns[i];card.querySelectorAll('.batch-line').forEach((line,j)=>{const b=data.batches.filter(b=>b.barn_id===barn.id&&b.status==='active')[j],h=data.dashboard?.batches.find(x=>x.id===b.id)?.herd;if(!h)return;const box=document.createElement('div');box.className='barn-survival';box.innerHTML=`<span>${t('survival')}</span><strong>${h.survival==null?'—':fmt(h.survival)+'%'}</strong>${h.survival==null?`<details><summary>${t('insufficient')}</summary><p>${t('sourceLimit')}</p></details>`:''}`;line.after(box);});});return summary;};
 const deathButton=(text,scope,cls='')=>`<button class="${cls}" data-death-query="${esc(encodeURIComponent(JSON.stringify(scope)))}">${text}</button>`;
+Object.assign(words,{
+ fcrVisibleTitle:['換肉率／料肉比（FCR）','Hệ số chuyển đổi thức ăn (FCR)'],
+ fcrNeeds:['尚未計算的原因','Lý do chưa tính được'],
+ fcrFeedBasis:['使用同期間的實際耗料計算；叫料量不直接當成吃料量。','Tính bằng thức ăn thực tế tiêu thụ cùng kỳ; không dùng trực tiếp lượng đặt.'],
+ fcrActualPeriod:['實際比較日期','Ngày so sánh thực tế'],
+ fcrMethodTitle:['計算方式','Cách tính'],
+ fcrNoBatches:['查詢範圍沒有可計算的批次。','Không có lứa có thể tính trong phạm vi lọc.'],
+ fcrFallback:['計算資料尚未完整，請查看各批次明細。','Dữ liệu tính chưa đủ; xem chi tiết từng lứa.'],
+ fcrNeedWeights:['缺少兩個不同日期的有效重量。','Thiếu cân nặng hợp lệ ở hai ngày khác nhau.'],
+ fcrNeedRepresentative:['秤重尚未確認能代表整批豬隻。','Chưa xác nhận mẫu cân đại diện cho cả lứa.'],
+ fcrNeedFeed:['缺少與兩次秤重期間一致的完整實際耗料。','Thiếu tiêu thụ thực tế đầy đủ, đúng kỳ giữa hai lần cân.'],
+ fcrNeedMovement:['出豬、死亡或其他異動缺少活體總重量。','Thiếu tổng khối lượng sống của heo xuất, chết hoặc biến động khác.'],
+ fcrNeedSequence:['秤重日也有豬隻異動，需確認先後順序。','Ngày cân có biến động đàn; cần xác nhận thứ tự.'],
+ fcrNeedStock:['比較日期的存欄資料不完整。','Thiếu dữ liệu tồn đàn ở ngày so sánh.'],
+ fcrNeedHerd:['比較日期的頭數不適合計算，需核對。','Số heo ở ngày so sánh chưa phù hợp để tính; cần đối chiếu.'],
+ fcrNeedWeightCheck:['後次均重較低，需核對兩次秤重。','Cân nặng trung bình lần sau thấp hơn; cần đối chiếu.'],
+ fcrNeedFeedCheck:['實際耗料為負，需核對庫存與到料。','Tiêu thụ thực tế âm; cần đối chiếu tồn kho và nhập cám.'],
+ fcrNeedGain:['校正後增重不大於0，需核對。','Tăng trọng sau hiệu chỉnh không lớn hơn 0; cần đối chiếu.'],
+ fcrNeedSamePeriod:['各批次比較日期不同，不能合併FCR；可選單一批次查看。','Các lứa có kỳ so sánh khác nhau nên không gộp FCR; hãy chọn từng lứa.']
+});
+function fcrOverviewHTML(s,name){
+ const valid=Number.isFinite(s.aggregate_fcr)&&s.aggregate_fcr>=0;
+ const batches=(s.batches||[]).filter(b=>!b.performance.reasons.includes('empty_fcr_period'));
+ const keys={two_weights_required:'fcrNeedWeights',representative_required:'fcrNeedRepresentative',feed_period_mismatch:'fcrNeedFeed',movement_weight_required:'fcrNeedMovement',endpoint_movement_order_unknown:'fcrNeedSequence',legacy_history_unknown:'fcrNeedStock',invalid_herd:'fcrNeedHerd',weight_decreased:'fcrNeedWeightCheck',negative_feed:'fcrNeedFeedCheck',nonpositive_gain:'fcrNeedGain'};
+ const reasons=[...new Set(batches.filter(b=>b.performance.fcr==null).flatMap(b=>b.performance.reasons.map(r=>keys[r]||'fcrFallback')))];
+ if(!valid&&batches.length&&!s.usage_count&&!reasons.includes('fcrNeedFeed'))reasons.push('fcrNeedFeed');
+ if(!valid&&s.fcr_period_mismatch)reasons.push('fcrNeedSamePeriod');
+ if(!valid&&!reasons.length)reasons.push(batches.length?'fcrFallback':'fcrNoBatches');
+ const period=s.fcr_period;
+ return `<section class="card fcr-overview" aria-labelledby="fcr-title"><div class="fcr-heading"><h2 id="fcr-title">${t('fcrVisibleTitle')}</h2><span class="fcr-status">${valid?t('sample'):t('insufficient')}</span></div><p class="fcr-scope">${esc(name)}</p><div class="fcr-value"><strong>${valid?fmt(s.aggregate_fcr):'—'}</strong>${valid?`<span>${t('feedKg')} / ${lang==='zh'?'增重1公斤':'1 kg tăng trọng'}</span>`:''}</div>${valid?`<p class="fcr-description">${t('fcrSentence')} <strong>${fmt(s.aggregate_fcr)}</strong> ${t('feedKg')}。</p>`:`<div class="fcr-missing"><h3>${t('fcrNeeds')}</h3><ul>${reasons.map(r=>`<li>${esc(t(r))}</li>`).join('')}</ul></div>`}${period?`<p class="fcr-period">${t('fcrActualPeriod')}：${esc(period[0])} → ${esc(period[1])}</p>`:''}<p class="hint">${t('fcrFeedBasis')}</p><details data-key="fcr-method"><summary>${t('fcrMethodTitle')}</summary><p>${t('fcrMethod')}</p><p>${t('aggregateHint')}</p></details></section>`;
+}
 statHTML=s=>{
  const d=s.death_summary,form=$('#stats-filter'),scope={...(d.scope||Object.fromEntries(['cohort','group','barn_id','batch_id'].map(k=>[k,val(form,k)]))),from:d.from,to:d.to};
  const c=data.cohorts.find(c=>c.key===scope.cohort),name=c?cohortLabel(c):scope.batch_id?batchName(scope.batch_id):scope.barn_id?data.barns.find(b=>b.id===scope.barn_id)?.name:scope.group||t('allFarm');
@@ -61,7 +92,7 @@ statHTML=s=>{
   const age=c.age_days==null?t(c.age_mixed?'mixedAges':'ageUnknown'):Math.floor(c.age_days/7)+'W',rowScope={...scope,cohort:c.cohort};
   return `<article class="period-item" data-period-cohort="${esc(c.cohort)}">${deathButton(`<span class="period-row-title"><strong>${esc(barns)}</strong><span class="period-age" title="${esc(displayAge(c.age_days))}" aria-label="${esc(displayAge(c.age_days))}">${esc(age)}</span></span><strong class="period-count${c.period_deaths===0?' is-zero':''}">${count(c.period_deaths)}</strong><span class="period-batch">${esc(c.name)} · ${esc(c.entry_date||'—')}${c.archive?' · '+t('archive'):''}</span>`,rowScope,'period-row')}<div class="period-barns">${members.filter(b=>b.period_deaths!==0).map(b=>{const label=`${esc(barnName(b))}：<strong>${b.period_deaths==null?'—':fmt(b.period_deaths,0)}</strong>`;return b.barn_id?deathButton(label,{...rowScope,barn_id:b.barn_id,...(b.id?{batch_id:b.id}:{})}):`<span>${label}</span>`;}).join('')}</div>${c.period_deaths==null||members.some(b=>b.period_deaths==null)?`<p class="period-unknown">${t('insufficient')}${c.period_deaths==null?' · '+t('knownDeaths')+' '+fmt(c.known_period_deaths,0):''}</p>`:''}</article>`;
  }).join('');
- return `<section class="card period-deaths">${main}<div class="period-list">${rows||`<p class="empty period-empty">${d.total===0?t('noPeriodDeaths'):t('insufficient')}</p>`}</div></section>`+`<details class="card" data-key="other-statistics"><summary>${t('asOf')} ${s.as_of} · ${t('survival')} ${s.cumulative.survival==null?'—':fmt(s.cumulative.survival)+'%'} · ${t('remaining')} ${fmt(s.cumulative.remaining,0)}</summary>${base.statHTML(s)}</details>`;
+ return `<section class="card period-deaths">${main}</section>`+fcrOverviewHTML(s,name)+`<section class="card period-breakdown"><div class="period-list">${rows||`<p class="empty period-empty">${d.total===0?t('noPeriodDeaths'):t('insufficient')}</p>`}</div></section>`+`<details class="card" data-key="other-statistics"><summary>${t('asOf')} ${s.as_of} · ${t('survival')} ${s.cumulative.survival==null?'—':fmt(s.cumulative.survival)+'%'} · ${t('remaining')} ${fmt(s.cumulative.remaining,0)}</summary>${base.statHTML(s)}</details>`;
 };
 rowsHTML=(kind,rows)=>{
  if(kind!=='weights'||current!=='weights')return base.rowsHTML(kind,rows);

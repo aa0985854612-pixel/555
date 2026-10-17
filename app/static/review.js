@@ -92,6 +92,7 @@ renderSettings=()=>{base.renderSettings();renderQuality();};
 statHTML=s=>{
  const html=base.statHTML(s),c=s.death_check_coverage;if(!c)return html;
  const coverage=`<div class="coverage-card"><h3>${t('coverageTitle')}</h3><p><strong>${t('noDeathsChecked')} ${c.confirmed_zero_batch_days}</strong> · ${t('deathRecorded')} ${c.death_recorded_batch_days} · ${t('notReported')} ${c.awaiting_batch_days} ${t('batchDays')}</p><details data-key="coverage-basis"><summary>${t('qualityReason')}</summary><p>${t('coverageHint')}</p></details><p class="hint">${t('coverageDisclaimer')}</p></div>`;
- return html.replace('</section>',coverage+'</section>');
+ const anchor='<details class="card" data-key="other-statistics">';
+ return html.replace(anchor,`<div class="card">${coverage}</div>`+anchor);
 };
 })();
