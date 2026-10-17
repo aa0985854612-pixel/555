@@ -1,5 +1,5 @@
-const VERSION='pigledger-2.0.12';
-const FILES=['/','/jiade-cover.webp?v=2.0.12','/app.js?v=2.0.12','/appearance.js?v=2.0.12','/upgrade.js?v=2.0.12','/redesign.js?v=2.0.12','/weighing-report.js?v=2.0.12','/weekly-pdf.js?v=2.0.12','/weekly-report.js?v=2.0.12','/feed.js?v=2.0.12','/cohort-link.js?v=2.0.12','/compact.js?v=2.0.12','/review.js?v=2.0.12','/feed-setup.js?v=2.0.12','/style.css?v=2.0.12','/jiade-icon-180-v1.6.3.png','/jiade-icon-192-v1.6.3.png','/jiade-icon-512-v1.6.3.png','/jiade-icon-maskable-v1.6.3.png','/manifest.webmanifest?v=2.0.12','/manifest.webmanifest'];
+const VERSION='pigledger-2.0.13';
+const FILES=['/','/jiade-cover.webp?v=2.0.13','/app.js?v=2.0.13','/appearance.js?v=2.0.13','/upgrade.js?v=2.0.13','/redesign.js?v=2.0.13','/weighing-report.js?v=2.0.13','/weekly-pdf.js?v=2.0.13','/weekly-report.js?v=2.0.13','/feed.js?v=2.0.13','/cohort-link.js?v=2.0.13','/compact.js?v=2.0.13','/review.js?v=2.0.13','/feed-setup.js?v=2.0.13','/style.css?v=2.0.13','/jiade-icon-180-v1.6.3.png','/jiade-icon-192-v1.6.3.png','/jiade-icon-512-v1.6.3.png','/jiade-icon-maskable-v1.6.3.png','/manifest.webmanifest?v=2.0.13','/manifest.webmanifest'];
 self.addEventListener('install',e=>e.waitUntil(caches.open(VERSION).then(c=>c.addAll(FILES))));
 self.addEventListener('message',e=>{if(e.data==='activate')self.skipWaiting()});
 self.addEventListener('activate',e=>e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k.startsWith('pigledger-')&&k!==VERSION).map(k=>caches.delete(k)))).then(()=>self.clients.claim())));

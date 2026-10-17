@@ -677,19 +677,22 @@ body [hidden] { display: none !important; }
  #weekly-print-root .weekly-sheet{width:196mm!important;max-width:none!important;box-sizing:border-box}
 }
 
-/* Balanced week panels, then one separate field for shipment notes. */
+/* Death allocation and shipment notes stay in separate equal columns. */
 .weekly-feed-entry{white-space:nowrap;overflow-wrap:normal;line-height:1.5}
-.weekly-shipping-notes{display:grid;grid-template-columns:115px minmax(0,1fr);border:1px solid #555;margin:12px 0;min-height:70px;break-inside:avoid}
-.weekly-shipping-notes h2{margin:0;padding:12px 8px;font-size:16px;background:#f0f0f0;border-right:1px solid #555}
-.weekly-shipping-notes>div{padding:10px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px 12px;align-content:start;min-width:0}
-.weekly-shipping-notes p{margin:0;font-size:14px;line-height:1.5;overflow-wrap:anywhere}
-.weekly-shipping-notes .weekly-outgoing-more{grid-column:1/-1}
-@media(max-width:700px){.weekly-shipping-notes{grid-template-columns:86px minmax(0,1fr)}.weekly-shipping-notes h2{font-size:15px}.weekly-shipping-notes>div{grid-template-columns:minmax(0,1fr)}}
+.weekly-notes-pair{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));border:1px solid #555;margin:12px 0;break-inside:avoid}
+.weekly-death-notes,.weekly-shipping-notes{min-width:0;min-height:70px}
+.weekly-death-notes{border-right:1px solid #555}
+.weekly-notes-pair h2{margin:0;padding:8px;font-size:16px;background:#f0f0f0;border-bottom:1px solid #555}
+.weekly-notes-pair section>div{padding:10px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px 12px;align-content:start;min-width:0}
+.weekly-notes-pair p{margin:0;font-size:14px;line-height:1.5;overflow-wrap:anywhere}
+.weekly-outgoing-more,.weekly-death-more{grid-column:1/-1;color:var(--muted)}
+@media(max-width:700px){.weekly-notes-pair h2{font-size:15px}.weekly-notes-pair section>div{grid-template-columns:minmax(0,1fr);padding:8px}.weekly-notes-pair p{font-size:13px}}
 @media print{
  #weekly-print-root .weekly-table th:first-child{width:20mm}
  #weekly-print-root .weekly-feed-entry{white-space:nowrap;line-height:1.3}
- #weekly-print-root .weekly-shipping-notes{grid-template-columns:20mm minmax(0,1fr);min-height:12mm;margin:2mm 0}
- #weekly-print-root .weekly-shipping-notes h2{font-size:9pt;padding:2mm 1mm;margin:0}
- #weekly-print-root .weekly-shipping-notes>div{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));padding:2mm;gap:1mm 3mm}
- #weekly-print-root .weekly-shipping-notes p{font-size:8pt;line-height:1.3}
+ #weekly-print-root .weekly-notes-pair{margin:2mm 0}
+ #weekly-print-root .weekly-death-notes,#weekly-print-root .weekly-shipping-notes{min-height:12mm}
+ #weekly-print-root .weekly-notes-pair h2{font-size:9pt;padding:1mm 2mm;margin:0}
+ #weekly-print-root .weekly-notes-pair section>div{grid-template-columns:repeat(2,minmax(0,1fr));padding:1.5mm;gap:1mm 2mm}
+ #weekly-print-root .weekly-notes-pair p{font-size:7.5pt;line-height:1.2}
 }
