@@ -613,3 +613,8 @@ body [hidden] { display: none !important; }
 /* Keep the barn-first feed destination readable on narrow screens. */
 #feed-order-form > .grid > .scope { padding: 0; }
 #feed-order-form > .grid > .scope:has(> label[hidden]) { grid-template-columns: minmax(0, 1fr); }
+
+#barn-settings .table-wrap table { min-width: 0; }
+#barn-settings td, #barn-settings th { padding: 10px 6px; overflow-wrap: anywhere; }
+#barn-settings td small { display: block; color: var(--muted); margin-top: 4px; }
+#barn-settings td:last-child .actions { flex-wrap: wrap; gap: 6px; }
