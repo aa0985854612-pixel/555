@@ -624,3 +624,32 @@ body [hidden] { display: none !important; }
 
 .weekly-outgoing-entry,.weekly-outgoing-more{display:block;overflow-wrap:anywhere;line-height:1.5}.weekly-outgoing-row td{text-align:left;vertical-align:top}.weekly-outgoing-entry{font-size:12px}.weekly-outgoing-more{font-size:10px;color:var(--muted)}
 @media print{#weekly-print-root .weekly-outgoing-entry{font-size:7.5pt;line-height:1.2}#weekly-print-root .weekly-outgoing-more{font-size:6.5pt;line-height:1.2}}
+
+/* Paper record: essential facts first; provenance remains available in App/CSV. */
+.weekly-sheet .weekly-heading{padding-bottom:10px;margin-bottom:12px;text-align:center}
+.weekly-heading h1{margin:0;font-size:26px;letter-spacing:.04em}
+.weekly-basics{grid-template-columns:repeat(3,minmax(0,1fr));gap:0;margin-bottom:12px;border:1px solid #aeb8c6}
+.weekly-basics>div{padding:8px 10px;border:1px solid #d4dbe4}
+.weekly-basics dt{font-size:14px}.weekly-basics dd{font-size:16px}
+.weekly-entry-facts{width:100%;table-layout:fixed;border-collapse:collapse;margin:0 0 10px}
+.weekly-entry-facts th,.weekly-entry-facts td{white-space:normal;padding:8px 5px;border:1px solid #aeb8c6;text-align:center;font-size:15px;overflow-wrap:anywhere}
+.weekly-entry-facts thead{background:#edf1f6}.weekly-entry-facts small{display:block;font-size:12px}
+.weekly-period-line{font-size:14px;line-height:1.5;margin:10px 0}
+.weekly-totals{border:1px solid #aeb8c6;break-inside:avoid}.weekly-totals h2{padding:8px 10px;margin:0;background:#edf1f6}
+.weekly-totals-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr))}.weekly-totals-grid>div{padding:10px;border:1px solid #d4dbe4;display:flex;flex-direction:column;gap:4px;min-width:0;overflow-wrap:anywhere}.weekly-totals-grid span{font-size:14px}.weekly-totals-grid strong{font-size:23px}.weekly-totals-grid small{font-size:13px}
+.weekly-cumulative{display:flex;gap:8px 20px;flex-wrap:wrap;font-size:15px;border-bottom:1px solid #aeb8c6;padding-bottom:12px}.weekly-cumulative>span:first-child{flex-basis:100%;color:#526177}.weekly-cumulative strong{font-size:19px}
+.weekly-details,.weekly-pending{margin-top:12px;padding:0}.weekly-details summary,.weekly-pending summary{cursor:pointer;font-size:16px;padding:10px 0}.weekly-details ul{font-size:14px;padding-left:20px;overflow-wrap:anywhere}
+@media(max-width:700px){.weekly-basics{grid-template-columns:repeat(2,minmax(0,1fr))}.weekly-totals-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.weekly-entry-facts th,.weekly-entry-facts td{font-size:14px;padding:7px 3px}.weekly-entry-facts th:first-child{width:12%}.weekly-entry-facts th:nth-child(2){width:24%}}
+@media print{
+ #weekly-print-root .weekly-heading{text-align:center;padding-bottom:2mm;margin-bottom:2mm}
+ #weekly-print-root .weekly-heading h1{font-size:18pt;margin:0}
+ #weekly-print-root .weekly-basics{grid-template-columns:repeat(3,minmax(0,1fr));gap:0;margin-bottom:2mm}
+ #weekly-print-root .weekly-basics>div{padding:1mm 2mm}#weekly-print-root .weekly-basics dt{font-size:8pt}#weekly-print-root .weekly-basics dd{font-size:10pt;margin-top:.5mm}
+ #weekly-print-root .weekly-entry-facts{margin-bottom:2mm;break-inside:avoid}
+ #weekly-print-root .weekly-entry-facts th,#weekly-print-root .weekly-entry-facts td{font-size:9pt;padding:1.2mm 1mm}#weekly-print-root .weekly-entry-facts small{font-size:8pt}
+ #weekly-print-root .weekly-period-line{font-size:8pt;line-height:1.3;margin:2mm 0}
+ #weekly-print-root .weekly-totals h2{font-size:10pt;padding:1mm 2mm;margin:0}
+ #weekly-print-root .weekly-totals-grid{grid-template-columns:repeat(4,minmax(0,1fr))}#weekly-print-root .weekly-totals-grid>div{padding:1mm 2mm;gap:.5mm}#weekly-print-root .weekly-totals-grid span,#weekly-print-root .weekly-totals-grid small{font-size:8pt}#weekly-print-root .weekly-totals-grid strong{font-size:12pt}
+ #weekly-print-root .weekly-cumulative{gap:1mm 4mm;font-size:9pt;padding-bottom:2mm;margin:2mm 0;break-inside:avoid}#weekly-print-root .weekly-cumulative strong{font-size:11pt}#weekly-print-root .weekly-cumulative>span:first-child{flex-basis:auto}
+}
+@media print{#weekly-print-root .weekly-block{margin-bottom:2mm}#weekly-print-root .weekly-heading h1{font-size:17pt}#weekly-print-root .weekly-footnotes{padding-top:1mm;line-height:1.2}#weekly-print-root .weekly-footnotes p{margin:.5mm 0}}

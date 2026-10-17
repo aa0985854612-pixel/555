@@ -52,3 +52,14 @@ class WeeklyReportTests(unittest.TestCase):
   r=self.report();self.assertEqual([e['kg'] for e in r['weeks'][0]['feed_details']],[2000,500]);self.assertEqual([sum(e['kg'] for e in w['feed_details']) for w in r['weeks']],[2500,2500]);self.assertEqual({e['id'] for w in r['weeks'] for e in w['feed_details']},{o['id'] for o in records});self.assertEqual(r['weeks'][1]['feed_details'][0]['barn'],'2棟');self.assertEqual(len(self.report(barn_id=self.barns[0]['id'])['weeks'][0]['feed_details']),2)
  def test_unassigned_and_voided_orders_never_become_fake_feed_entries(self):
   order=self.add('feed_orders',date='2026-10-10',kg=2000,display_unit='ton',vendor='',allocations=[{'batch_id':self.batches[0]['id'],'kg':2000}]);self.store.mutate(self.admin,'feed_orders',{'revision':order['revision']},str(uuid.uuid4()),order['id'],delete=True);self.add('feed_orders',date='2026-10-10',kg=3000,display_unit='ton',vendor='',allocations=[]);r=self.report();self.assertEqual(r['weeks'][0]['feed_details'],[]);self.assertIsNone(r['weeks'][0]['values']['feed_orders'])
+
+ def test_linked_barns_preserve_separate_entry_dates_counts_and_means(self):
+  d=self.store.snapshot();a,b=d['batches'];b.update(_cohort_key='SYNTHETIC|2026-10-09',entry_date='2026-10-16',entry_count=318,entry_mean_kg=21.58,entry_mean_date='2026-10-17',cohort_id=a['id']);a.update(entry_count=1052,entry_mean_kg=21.36,entry_mean_date='2026-10-09',cohort_id=a['id'])
+  from app.history import cohort_key
+  r=weekly_report(d,{'cohort':[cohort_key(a)],'to':['2026-10-22']},today='2026-10-22')
+  self.assertEqual(r['cumulative']['entry'],1370);self.assertEqual([(x['date'],x['count'],x['mean_kg']) for x in r['entry_details']],[('2026-10-09',1052,21.36),('2026-10-16',318,21.58)]);self.assertEqual(r['entry_details'][1]['mean_date'],'2026-10-17');self.assertIsNone(r['entry_mean_kg'])
+ def test_combined_legacy_entry_never_becomes_invented_barn_entry(self):
+  d=self.legacy();r=weekly_report(d,{'cohort':['JD-TEST|2026-09-09'],'to':['2026-10-15']},today='2026-10-15')
+  for item in r['entry_details']:
+   self.assertEqual(item['count'],herd(d['batches'],d['movements'],'2026-10-15',[item['batch_id']])['entry'])
+  self.assertTrue(any(x['count'] is None for x in r['entry_details']))
