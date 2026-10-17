@@ -33,7 +33,7 @@ with tempfile.TemporaryDirectory() as tmp:
    assert tables.nth(0).locator('thead th').count()==tables.nth(1).locator('thead th').count()==14
    assert tables.nth(0).locator('thead th').all_text_contents()[1:]==['第'+str(i)+'週' for i in range(11,24)]
    assert tables.nth(1).locator('thead th').all_text_contents()[1:6]==['第'+str(i)+'週' for i in range(24,29)]
-   assert tables.nth(1).locator('thead th').all_text_contents()[6:]==['']*8
+   assert tables.nth(1).locator('thead th').all_text_contents()[6:9]==['第29週','第30週','第31週'];assert tables.nth(1).locator('thead th').all_text_contents()[9:]==['']*5
    assert set(sheet.locator('.weekly-feed-entry').all_text_contents())=={'10/13+4（24）','10/13+2（12）','10/15+2（24）'}
    assert all(v not in ('0','0.000','—') for v in sheet.locator('.weekly-table td').all_text_contents())
    assert sheet.locator('.weekly-death td').all_text_contents()[0]=='' and sheet.locator('.weekly-death td').all_text_contents()[1]=='3'
@@ -42,14 +42,14 @@ with tempfile.TemporaryDirectory() as tmp:
    with page.expect_download() as dl:page.locator('#weekly-print').click()
    output=root/'artifacts/weekly-two-bands-a4.pdf';dl.value.save_as(output);pdf_info(output);model=page.evaluate('lastPdfModel')
    assert all(pair[0] in ('批次','棟舍','進場頭數','棟舍預設廠商','本期間登記料別','出豬備註') for pair in model['basics']);assert len(model['pages'])==1 and len(model['pages'][0])==2
-   assert all(len(b['headers'])==13 for b in model['pages'][0])
+   assert all(len(b['headers'])==13 for b in model['pages'][0]);assert model['pages'][0][1]['headers'][5:8]==['29週','30週','31週'];assert model['pages'][0][1]['rows'][0]['cells'][5:8]==['10/23','10/30','11/6'];assert all(all(cell=='' for cell in row['cells'][5:8]) for row in model['pages'][0][1]['rows'][1:]);assert '週期預排至31週' in model['legend']
    assert dict(model['totals'])=={'淘汰數（隻）':'5','死亡數（隻）':'16','叫料登記量（噸）':'8','正常出豬（隻）':'83'}
    assert model['pages'][0][1]['rows'][3]['cells'][3]=='10/13+4（24）\n10/13+2（12）\n10/15+2（24）'
    assert all(x not in ('0','0.000','—') for b in model['pages'][0] for row in b['rows'] for x in row['cells'])
    passed('actual downloaded PDF is exactly one portrait A4, with totals 5/16/8/83 and full three-line feed cell')
    with page.expect_download() as dl:page.locator('#weekly-csv').click()
-   csvrows=list(csv.reader(io.StringIO(Path(dl.value.path()).read_text(encoding='utf-8-sig'))));deaths=next(r for r in csvrows if r and r[0]=='死亡數（隻）' and len(r)>2);assert deaths[1]=='' and deaths[2]=='3';assert ['叫料登記量（噸）','8'] in csvrows
-   passed('CSV weekly cells also leave absent values blank while preserving numeric totals and detail records')
+   csvrows=list(csv.reader(io.StringIO(Path(dl.value.path()).read_text(encoding='utf-8-sig'))));deaths=next(r for r in csvrows if r and r[0]=='死亡數（隻）' and len(r)>2);assert deaths[1]=='' and deaths[2]=='3';assert ['叫料登記量（噸）','8'] in csvrows;cycle=next(r for r in csvrows if r and r[0]=='週期');assert cycle[-1]=='第31週';assert len(deaths)==22 and deaths[-3:]==['','','']
+   passed('preview/PDF/CSV extend reliable week labels and dates to 31; planned quantities blank and original period totals unchanged')
    for width in (320,390,768,1366):
     page.set_viewport_size({'width':width,'height':900})
     for language in ('zh','vi'):
