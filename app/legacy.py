@@ -138,6 +138,25 @@ def review(raw):
     return {'format':'alice-workbook-review-1','source_sha256':hashlib.sha256(raw).hexdigest(),'as_of':as_of,'sheet':current['name'],'sheets':[s['name'] for s in sheets],'totals':totals,'rows':rows,'archive_rows':archive_review(sheets,epoch),'issues':issues,'historical_sheet_preserved':True}
 
 
+def archive_movement_cell(ref):
+    """Alice's archived sheet uses W:AU for 10W:34W; AV is APP+PR."""
+    m=re.fullmatch(r'([A-Z]+)\d+',str(ref));column=0
+    if not m:return False
+    for ch in m[1]:column=column*26+ord(ch)-64
+    return 23<=column<=47
+
+
+def archive_history_row(row):
+    """Read old cached reports safely; retain the immutable report and workbook."""
+    return row|{key:[item for item in row.get(key,[]) if archive_movement_cell(item.get('cell'))]
+        for key in ('events','unresolved_cells')}
+
+
+def history_report(report):
+    """Normalize only historical event columns when checking older backups."""
+    return report|({'archive_rows':[archive_history_row(row) for row in report['archive_rows']]} if 'archive_rows' in report else {})
+
+
 def archive_review(sheets,epoch):
     """Old sheets are source history only; weekly weights have no invented date."""
     rows=[]
@@ -162,10 +181,8 @@ def archive_review(sheets,epoch):
                 for ref,cell in cells.items():
                     match=re.fullmatch(r'([A-Z]+)(\d+)',ref)
                     if not match or int(match[2])!=rr:continue
-                    column=0
-                    for ch in match[1]:column=column*26+ord(ch)-64
                     q=cell.get('value')
-                    if column<23 or not isinstance(q,(int,float)) or q<=0 or int(q)!=q:continue
+                    if not archive_movement_cell(ref) or not isinstance(q,(int,float)) or q<=0 or int(q)!=q:continue
                     parsed=[]
                     for line in cell.get('comment','').splitlines():
                         dm=re.match(r'\s*(\d{1,2})/(\d{1,2})\s*(.*)',line)

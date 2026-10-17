@@ -35,7 +35,9 @@ def source_rows(data,archives=False):
             yield {'base':base,'base_row':row,'book':current_book,'row':current_row,'matched':matched,'archive':False}
         if archives:
             latest=next((b for b in reversed([base,*versions]) if b['report'].get('archive_rows')),base)
-            for row in latest['report'].get('archive_rows',[]):
+            from .legacy import archive_history_row
+            for original in latest['report'].get('archive_rows',[]):
+                row=archive_history_row(original)
                 yield {'base':base,'base_row':row,'book':latest,'row':row,'matched':{},'archive':True}
 
 

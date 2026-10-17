@@ -86,7 +86,9 @@ def data_quality(data, on, dashboard=None):
         for r in source_history(data,kind):
             fields=[]
             if not r.get('date'):fields.append('missing_date')
-            if not r.get('batch_id'):fields.append('missing_barn_allocation')
+            # Archived cohorts have no active batch ID. An explicit original
+            # barn is sufficient; never create a new batch just to clear a flag.
+            if not r.get('batch_id') and not (r.get('archive') and r.get('barn_id')):fields.append('missing_barn_allocation')
             if kind=='weights' and r.get('count') is None:fields.append('source_mean_only')
             if fields:issues.append({'id':'source:'+r['id'],'kind':kind,'record_id':r['id'],'fields':fields,'date':r.get('date'),'name':r.get('legacy_batch',''),'source_cell':r.get('source_cell',''),'note':r.get('note',''),'archive':r.get('archive',False)})
     for book in data.get('workbooks',[]):

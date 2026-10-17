@@ -3,7 +3,7 @@ from pathlib import Path
 from datetime import datetime, timezone
 from .domain import Invalid, day, number, herd, consumption, age
 
-VERSION='2.0.2'
+VERSION='2.0.3'
 SCHEMA_VERSION=4
 KINDS=('barns','batches','movements','feed_orders','deliveries','usages','weights','workbooks','source_voids','daily_checks','feed_bins')
 SCHEMA='''
@@ -658,14 +658,14 @@ class Store:
             for kind in KINDS:
                 for r in data[kind]:
                     if kind=='workbooks':
-                        from .legacy import unpack,review
+                        from .legacy import unpack,review,history_report
                         checked=review(unpack(r.get('base64')))
                         if checked['source_sha256']!=r.get('sha256'):raise Problem('invalid_backup')
                         def subset(old,new):
                             if isinstance(old,dict):return isinstance(new,dict) and all(k in new and subset(v,new[k]) for k,v in old.items())
                             if isinstance(old,list):return isinstance(new,list) and len(old)==len(new) and all(subset(a,b) for a,b in zip(old,new))
                             return old==new
-                        if not subset(r['report'],checked):raise Problem('invalid_backup')
+                        if not subset(history_report(r['report']),history_report(checked)):raise Problem('invalid_backup')
                         continue
                     others={k:[x for x in rows if not (k==kind and x['id']==r['id'])] for k,rows in data.items()}
                     cleaned=self.validate(kind,r,others,user,r if kind=='feed_orders' else None)
