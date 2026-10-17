@@ -4,20 +4,33 @@ from pathlib import Path
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
 from app.store import Store,VERSION
 from app.server import Server
-from app.feed import initial_bins
+from app.feed import initial_bins,YANG_QUAN_BARNS
 from playwright.sync_api import sync_playwright
 root=Path(__file__).resolve().parents[1];checks=[]
 def passed(s):checks.append(s);print('PASS',s,flush=True)
 with tempfile.TemporaryDirectory() as tmp:
  store=Store(Path(tmp)/'db');owner=store.create_user('owner','83000011');store.create_user('worker','83000012','staff');store.create_user('reader','83000013','viewer')
  def add(kind,**d):return store.mutate(owner,kind,d,str(uuid.uuid4()))
- barns=[add('barns',name=f'{n}棟') for n in range(1,25)];batches=[add('batches',barn_id=b['id'],name='PAIR' if i<2 else f'B{i+1}',entry_date='2026-10-01',entry_count=100,entry_age_days=70,status='active') for i,b in enumerate(barns)];bins=[add('feed_bins',**b) for b in initial_bins(barns)];by_name={b['name']:b for b in bins}
+ barns=[add('barns',name=f'{n}棟',feed_vendor='養全' if n in YANG_QUAN_BARNS else '新農科') for n in range(1,25)];batches=[add('batches',barn_id=b['id'],name='PAIR' if i<2 else f'B{i+1}',entry_date='2026-10-01',entry_count=100,entry_age_days=70,status='active') for i,b in enumerate(barns)];bins=[add('feed_bins',**b) for b in initial_bins(barns)];by_name={b['name']:b for b in bins}
  original=store.export_backup()['users'];server=Server(('127.0.0.1',0),store);threading.Thread(target=server.serve_forever,daemon=True).start();url=f'http://127.0.0.1:{server.server_port}'
  try:
   with sync_playwright() as p:
    browser=p.chromium.launch(executable_path='/usr/bin/chromium',args=['--no-sandbox']);page=browser.new_page(viewport={'width':390,'height':844},timezone_id='Asia/Taipei');errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
    def login(name,password):page.locator('#login-form [name=username]').fill(name);page.locator('#login-form [name=password]').fill(password);page.locator('#login-form button').click();page.wait_for_selector('#workspace:not([hidden])');page.wait_for_function('()=>data?.feed_bins?.length===23')
    page.goto(url);login('owner','83000011');page.locator('nav [href="#feed"]').click();f=page.locator('#feed-order-form');assert f.locator('[name=item]').evaluate('(e)=>e.tagName')=='SELECT';assert f.locator('[name=item] option').all_text_contents()==['請選擇','大豬料','仔豬料','哺乳二期料'];assert f.locator('[name=feed_bin_id] option').count()==24
+   page.locator('nav [href="#settings"]').click();page.locator('#barn-form').evaluate('(e)=>e.closest("details").open=true');page.locator(f'[data-edit=barns][data-id="{barns[0]["id"]}"]').click();bf=page.locator('#barn-form');assert bf.locator('[name=feed_vendor]').input_value()=='養全';bf.locator('[name=feed_vendor]').select_option('新農科')
+   with page.expect_response(lambda r:'/api/barns/' in r.url and r.request.method=='PUT') as saved:bf.locator('button.primary').click()
+   assert saved.value.status==200;page.wait_for_function('()=>pending===null&&data.barns.find(b=>b.name==="1棟").feed_vendor==="新農科"')
+   page.locator('nav [href="#feed"]').click();f.locator('[name=barn_id]').select_option(barns[0]['id']);assert f.locator('[name=vendor]').input_value()=='新農科';assert f.locator('[name=feed_bin_id]').input_value()==by_name['1、2']['id'];assert page.locator('#feed-vendor-warning').is_visible();assert not f.locator('[name=batch_id]').is_visible()
+   f.locator('[name=barn_id]').select_option(barns[10]['id']);assert f.locator('[name=vendor]').input_value()=='新農科';assert f.locator('[name=feed_bin_id]').input_value()=='';assert f.locator('[name=feed_bin_id] option').count()==3;assert f.locator('[name=feed_bin_id]').evaluate('(e)=>e.required');f.locator('[name=feed_bin_id]').select_option(by_name['11-2']['id']);assert f.locator('[name=vendor]').input_value()=='新農科'
+   f.locator('[name=barn_id]').select_option(barns[13]['id']);assert f.locator('[name=vendor]').input_value()=='養全';assert f.locator('[name=feed_bin_id]').input_value()=='';assert f.locator('[name=feed_bin_id] option').count()==3
+   f.locator('[name=barn_id]').select_option(barns[2]['id']);assert f.locator('[name=vendor]').input_value()=='養全';assert f.locator('[name=feed_bin_id]').input_value()==by_name['3、4']['id'];f.locator('[name=amount]').fill('1.5')
+   for repeat in range(3):
+    page.select_option('#language','vi');page.select_option('#language','zh');page.evaluate('async()=>await refresh()');assert f.locator('[name=barn_id]').input_value()==barns[2]['id'];assert f.locator('[name=vendor]').input_value()=='養全';assert f.locator('[name=amount]').input_value()=='1.5'
+   page.locator('nav [href="#settings"]').click();page.locator('#barn-form').evaluate('(e)=>e.closest("details").open=true');page.locator(f'[data-edit=barns][data-id="{barns[0]["id"]}"]').click();bf.locator('[name=feed_vendor]').select_option('養全')
+   with page.expect_response(lambda r:'/api/barns/' in r.url and r.request.method=='PUT') as saved:bf.locator('button.primary').click()
+   assert saved.value.status==200;page.wait_for_function('()=>pending===null&&data.barns.find(b=>b.name==="1棟").feed_vendor==="養全"');page.locator('nav [href="#feed"]').click();f.locator('[name=barn_id]').select_option('');assert not f.locator('[name=feed_bin_id]').evaluate('(e)=>e.required')
+   passed('barn setting saves supplier; barn-first input auto-fills vendor and single/shared bin, dual bins require choice; three sync/language rounds retain draft')
    f.locator('[name=feed_bin_id]').select_option(by_name['1、2']['id']);assert f.locator('[name=vendor]').input_value()=='養全';assert page.locator('[data-feed-barn]').count()==2;f.locator('[name=item]').select_option('大豬料');f.locator('[name=display_unit]').select_option('ton');f.locator('[name=amount]').fill('2');f.locator('[name=date]').fill('2026-10-12')
    for i in range(3):
     page.select_option('#language','vi');page.select_option('#language','zh');page.evaluate('async()=>await refresh()');assert f.locator('[name=amount]').input_value()=='2';assert f.locator('[name=item]').input_value()=='大豬料';assert f.locator('[name=vendor]').input_value()=='養全';assert f.locator('[name=feed_bin_id]').input_value()==by_name['1、2']['id']

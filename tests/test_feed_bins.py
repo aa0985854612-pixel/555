@@ -69,6 +69,28 @@ class FeedBinTests(unittest.TestCase):
   d=self.store.snapshot();before=herd(d['batches'],d['movements'],'2026-10-15');self.order();d=self.store.snapshot();self.assertEqual(herd(d['batches'],d['movements'],'2026-10-15'),before);self.assertEqual(d['deliveries'],[]);self.assertEqual(d['usages'],[])
  def test_report_header_has_configured_supplier_and_actual_recorded_types(self):
   self.order(item='哺乳二期料');setup=self.report()['feed_setup'];self.assertEqual(setup['configured_vendors'],['養全']);self.assertEqual(setup['recorded_types'],['哺乳二期料']);self.assertEqual(setup['recorded_vendors'],['養全'])
+ def test_barn_vendor_setting_and_old_clients_preserve_default(self):
+  b=self.barns[0];updated=self.store.mutate(self.admin,'barns',b|{'feed_vendor':'新農科'},str(uuid.uuid4()),b['id'])
+  oldclient=self.store.mutate(self.admin,'barns',{'name':b['name'],'group':'test','revision':updated['revision']},str(uuid.uuid4()),b['id'])
+  self.assertEqual(oldclient['feed_vendor'],'新農科')
+  with self.assertRaises(Problem) as conflict:self.store.mutate(self.admin,'barns',updated|{'feed_vendor':'養全'},str(uuid.uuid4()),b['id'])
+  self.assertEqual(conflict.exception.status,409)
+ def test_barn_supplier_is_validated_and_admin_only(self):
+  b=self.barns[0]
+  for invalid in ('other',None,[],1):
+   with self.assertRaises(Problem):self.store.mutate(self.admin,'barns',b|{'feed_vendor':invalid},str(uuid.uuid4()),b['id'])
+  for user in (self.staff,self.viewer):
+   with self.assertRaises(Problem) as denied:self.store.mutate(user,'barns',b|{'feed_vendor':'養全'},str(uuid.uuid4()),b['id'])
+   self.assertEqual(denied.exception.status,403)
+ def test_changing_barn_supplier_preserves_order_and_other_barn(self):
+  old=self.order();b=self.barns[0];self.store.mutate(self.admin,'barns',b|{'feed_vendor':'新農科'},str(uuid.uuid4()),b['id'])
+  data=self.store.snapshot();self.assertEqual(data['feed_orders'][0],old);self.assertEqual(data['barns'][1],self.barns[1]);self.assertEqual(data['feed_bins'][0],self.bin)
+  self.assertEqual(self.report()['feed_setup']['recorded_vendors'],['養全'])
+  self.assertEqual(self.report(barn_id=b['id'])['feed_setup']['configured_vendors'],['新農科'])
+ def test_backup_with_and_without_barn_supplier_is_roundtrippable(self):
+  b=self.barns[0];self.store.mutate(self.admin,'barns',b|{'feed_vendor':'養全'},str(uuid.uuid4()),b['id'])
+  doc=self.store.export_backup();clone=Store(Path(self.tmp.name)/'barn-restore');clone.import_backup(self.admin,doc)
+  self.assertEqual({b['id']:b.get('feed_vendor') for b in clone.snapshot()['barns']},{b['id']:b.get('feed_vendor') for b in self.store.snapshot()['barns']})
  def test_legacy_orders_without_bins_keep_original_free_text_and_scope(self):
   old=self.add('feed_orders',date='2026-10-12',kg=500,display_unit='kg',vendor='新農科',item='舊來源料名',allocations=[{'batch_id':self.batches[0]['id'],'kg':500}]);self.order();self.assertEqual(self.store.snapshot()['feed_orders'][0]['item'],'舊來源料名');self.assertEqual(self.report()['totals']['feed_orders'],2500)
 

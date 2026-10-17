@@ -87,7 +87,7 @@ function attachEditor(){
 renderSettings=()=>{
  if(!data)return;
  renderWorkbookSources();
- preserveBox('barn-settings',table(['barn','group','edit'],data.barns.map(r=>`<tr><td>${esc(r.name)}</td><td>${esc(r.group)}</td><td>${recordActions('barns',r)}</td></tr>`)));
+ preserveBox('barn-settings',table(['barn','feedVendor','group','edit'],data.barns.map(r=>`<tr><td>${esc(r.name)}</td><td>${esc(r.feed_vendor||'—')}</td><td>${esc(r.group)}</td><td>${recordActions('barns',r)}</td></tr>`)));
  // Do not detach/rebuild the active editor: IME, keyboard focus and unsaved values stay intact.
  const editor=$('#batch-editor'),editing=editor.contains(document.activeElement);
  if(!editing){

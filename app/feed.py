@@ -52,7 +52,12 @@ def order_detail(order, data, batch_id=None):
 def report_feed_setup(data, members, orders):
     ids={b['barn_id'] for b in members}
     bins=[b for b in data.get('feed_bins',[]) if b['active'] and set(b['barn_ids'])&ids]
-    suppliers=sorted({b['vendor'] for b in bins})
+    suppliers=set()
+    for barn in data['barns']:
+        if barn['id'] not in ids:continue
+        if barn.get('feed_vendor'):suppliers.add(barn['feed_vendor'])
+        else:suppliers.update(b['vendor'] for b in bins if barn['id'] in b['barn_ids'])
+    suppliers=sorted(suppliers)
     return {'configured_vendors':suppliers,'recorded_vendors':sorted({o['vendor'] for o in orders if o.get('vendor')}),
         'recorded_types':sorted({o['item'] for o in orders if o.get('item')}),
         'bins':[{'name':b['name'],'vendor':b['vendor'],'barns':[x['name'] for x in data['barns'] if x['id'] in b['barn_ids']]} for b in bins]}

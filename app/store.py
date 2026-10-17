@@ -3,7 +3,7 @@ from pathlib import Path
 from datetime import datetime, timezone
 from .domain import Invalid, day, number, herd, consumption, age
 
-VERSION='2.0.0'
+VERSION='2.0.1'
 SCHEMA_VERSION=4
 KINDS=('barns','batches','movements','feed_orders','deliveries','usages','weights','workbooks','source_voids','daily_checks','feed_bins')
 SCHEMA='''
@@ -214,7 +214,7 @@ class Store:
             return b
         d={k:v for k,v in d.items() if k not in ('id','revision','created_at','created_by','updated_at','deleted')}
         allowed={
-            'barns':{'name','group'},
+            'barns':{'name','group','feed_vendor'},
             'batches':{'barn_id','name','group','entry_date','entry_count','entry_age_days','age_date','status','cohort_id','same_batch_as','legacy_source','legacy_row','legacy_barn','note','entry_mean_kg','entry_mean_date','entry_mean_source','entry_mean_note','entry_count_source','entry_count_reason'},
             'movements':{'date','batch_id','type','quantity','note','target_batch_id','total_weight_kg'},
             'feed_orders':{'date','kg','display_unit','vendor','item','note','allocations','feed_bin_id','feed_bin_snapshot','target_batch_ids'},
@@ -229,6 +229,7 @@ class Store:
         d={k:v for k,v in d.items() if k in allowed}
         if kind=='barns':
             text('name',True); text('group')
+            if 'feed_vendor' in d and d['feed_vendor'] not in ('','養全','新農科'):raise Invalid('invalid_vendor')
             if any(x['name']==d['name'] for x in data['barns']): raise Invalid('duplicate_barn')
         elif kind=='feed_bins':
             text('name',True);text('note')
@@ -519,6 +520,8 @@ class Store:
                 tombstone=previous|{'revision':output['revision'],'updated_at':now()}
                 db.execute('UPDATE records SET deleted=1,revision=revision+1,data=? WHERE id=?',(encode(tombstone),rid))
             else:
+                if kind=='barns' and previous and 'feed_vendor' not in payload and 'feed_vendor' in previous:
+                    payload=payload|{'feed_vendor':previous['feed_vendor']}
                 if kind=='batches' and previous and 'same_batch_as' not in payload:
                     payload=payload|{'same_batch_as':previous.get('same_batch_as')}
                 if kind=='batches' and previous and previous.get('legacy_source'):
