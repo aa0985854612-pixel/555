@@ -75,6 +75,7 @@ def data_quality(data, on, dashboard=None):
         if b['status']!='active' or b['entry_date']>on:continue
         h=metrics.get(b['id']) or herd(data['batches'],data['movements'],on,[b['id']])
         fields=[]
+        if b.get('legacy_stock_pending'):fields.append('stock_basis_pending')
         if b.get('entry_count') is None:fields.append('missing_entry_count')
         if b.get('entry_mean_kg') is None:fields.append('missing_entry_mean')
         if age(b,on) is None:fields.append('missing_age')

@@ -126,7 +126,7 @@ def source_history(data,kind='movements',include_voided=False,include_matched=Fa
                         'date':event.get('date'),'type':event['type'],'quantity':allocation['quantity'],
                         'batch_id':batch['id'] if batch else None,'barn_id':barn['id'] if barn else None,'barn_number':allocation['barn'],
                         'source_cell':row.get('sheet',source['book']['report']['sheet'])+'!'+event['cell'],
-                        'note':event['text'],'event_key':eid,'source_anchor':hashlib.sha256((anchor+str(allocation['barn'])).encode()).hexdigest(),'matched_manual':source['matched'].get(eid,[]),'source_mean':False})
+                        'note':event['text'],'event_key':eid,'source_anchor':hashlib.sha256((anchor+str(allocation['barn'])).encode()).hexdigest(),'source_event_anchor':hashlib.sha256((anchor+'None').encode()).hexdigest(),'matched_manual':source['matched'].get(eid,[]),'source_mean':False})
             for cell in row.get('unresolved_cells',[]):
                 if cell.get('unresolved_quantity',cell['quantity'])<=0:continue
                 output.append(common|{'id':str(uuid.uuid5(uuid.NAMESPACE_URL,source['base']['id']+row.get('sheet','')+cell['cell']+':undated')),
@@ -144,9 +144,12 @@ def source_history(data,kind='movements',include_voided=False,include_matched=Fa
                     'pen':'','sampling':'source_mean','representative':False,'age_days':None,
                     'age_weeks_hint':weight.get('age_weeks_hint'),'source_cell':row.get('sheet',source['book']['report']['sheet'])+'!'+weight['cell'],
                     'note':weight.get('formula') or '', 'entry_measurement':weight.get('entry_measurement',False)})
+    if kind=='movements':
+        from .source_assignment import apply_assignment
+        output=[apply_assignment(row,data) for row in output]
     voided={v['source_row_id'] for v in data.get('source_voids',[]) if v['target_kind']==kind}
     anchors={v['source_record'].get('source_anchor') for v in data.get('source_voids',[]) if v['target_kind']==kind};anchors.discard(None)
-    return output if include_voided else [r for r in output if r['id'] not in voided and r.get('source_anchor') not in anchors]
+    return output if include_voided else [r for r in output if r['id'] not in voided and r.get('source_anchor') not in anchors and r.get('source_event_anchor') not in anchors]
 
 
 def derived_movements(data):

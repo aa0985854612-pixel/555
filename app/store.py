@@ -3,7 +3,7 @@ from pathlib import Path
 from datetime import datetime, timezone
 from .domain import Invalid, day, number, herd, consumption, age
 
-VERSION='2.0.3'
+VERSION='2.0.4'
 SCHEMA_VERSION=4
 KINDS=('barns','batches','movements','feed_orders','deliveries','usages','weights','workbooks','source_voids','daily_checks','feed_bins')
 SCHEMA='''
@@ -130,10 +130,12 @@ class Store:
                     snapshot['entry']+=delta;snapshot['remaining']+=delta
                 b['legacy_heads']={on:heads+delta if heads is not None else None for on,heads in b['legacy_heads'].items()}
             b['legacy_values']={}
+            from .source_assignment import reviewed_events
+            value_events=reviewed_events(book,row,data) if any(x.get('source_assignments') for x in data['batches']) else row['events']
             for snapshot_date in plan['snapshots']:
                 values={'entry':b['entry_count']}
                 for field,typ in [('sold','sale'),('culled','cull'),('dead','death')]:
-                    all_events=[e for e in row['events'] if e['type']==typ]
+                    all_events=[e for e in value_events if e['type']==typ]
                     dated=[e for e in all_events if e['date']<=snapshot_date]
                     complete=sum(e['quantity'] for e in all_events)==row['totals'][field] and all(sum(a['quantity'] for a in e['allocations'])==e['quantity'] for e in dated)
                     values[field]=sum(a['quantity'] for e in dated for a in e['allocations'] if a['barn']==b['legacy_barn']) if complete else None
@@ -148,6 +150,8 @@ class Store:
             if target not in batches:raise Invalid('referenced_record')
             key=resolve(batches[target],seen|{b['id']});b['_cohort_key']=key;return key
         for b in data['batches']:resolve(b,set())
+        from .source_assignment import rebuild_confirmed_stock
+        rebuild_confirmed_stock(data)
         from .operations import apply_source_voids
         apply_source_voids(data)
         from .history import derived_movements
@@ -212,10 +216,11 @@ class Store:
             if b['status']=='ended' and user['role']!='admin': raise Problem('batch_ended',403)
             if kind=='movements' and d.get('type') in ('sale','death','cull','transfer') and herd(data['batches'],data['movements'],d[datekey],[b['id']])['remaining'] is None:raise Invalid('heads_unknown')
             return b
+        original_id=d.get('id')
         d={k:v for k,v in d.items() if k not in ('id','revision','created_at','created_by','updated_at','deleted')}
         allowed={
             'barns':{'name','group','feed_vendor'},
-            'batches':{'barn_id','name','group','entry_date','entry_count','entry_age_days','age_date','status','cohort_id','same_batch_as','legacy_source','legacy_row','legacy_barn','note','entry_mean_kg','entry_mean_date','entry_mean_source','entry_mean_note','entry_count_source','entry_count_reason'},
+            'batches':{'barn_id','name','group','entry_date','entry_count','entry_age_days','age_date','status','cohort_id','same_batch_as','legacy_source','legacy_row','legacy_barn','note','entry_mean_kg','entry_mean_date','entry_mean_source','entry_mean_note','entry_count_source','entry_count_reason','source_assignments','stock_basis'},
             'movements':{'date','batch_id','type','quantity','note','target_batch_id','total_weight_kg'},
             'feed_orders':{'date','kg','display_unit','vendor','item','note','allocations','feed_bin_id','feed_bin_snapshot','target_batch_ids'},
             'feed_bins':{'name','barn_ids','vendor','active','note'},
@@ -262,6 +267,12 @@ class Store:
             else:
                 qty('entry_count',False,True)
                 if d['entry_count']<0: raise Invalid('invalid_number')
+            if 'stock_basis' in d:
+                basis=d['stock_basis']
+                if not d.get('legacy_source') or not isinstance(basis,dict) or set(basis)!={'mode','reason'} or basis.get('mode')!='entry_minus_source_outflows' or not isinstance(basis.get('reason'),str) or not 1<=len(basis['reason'].strip())<=500:raise Invalid('invalid_stock_basis')
+            if 'source_assignments' in d:
+                from .source_assignment import validate_assignments
+                validate_assignments(d['source_assignments'],d|{'id':previous['id'] if previous else original_id},data|{'batches':data['batches']+([previous] if previous else [])})
             text('entry_count_reason')
             if d.get('entry_age_days') is not None:
                 qty('entry_age_days')
@@ -522,6 +533,8 @@ class Store:
             else:
                 if kind=='barns' and previous and 'feed_vendor' not in payload and 'feed_vendor' in previous:
                     payload=payload|{'feed_vendor':previous['feed_vendor']}
+                if kind=='batches' and previous:
+                    payload={k:previous[k] for k in ('source_assignments','stock_basis') if k not in payload and k in previous}|payload
                 if kind=='batches' and previous and 'same_batch_as' not in payload:
                     payload=payload|{'same_batch_as':previous.get('same_batch_as')}
                 if kind=='batches' and previous and previous.get('legacy_source'):
