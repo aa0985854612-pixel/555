@@ -84,7 +84,7 @@ recordActions=(kind,r)=>{
 rowsHTML=(kind,rows)=>{
  if(!rows.length)return empty();
  if(kind==='movements')return table(['date','barn','batch','type','quantity','note','sourceCell','edit'],rows.map(r=>`<tr><td>${esc(r.date||t('dateUnknown'))}</td><td>${esc(rowBarn(r))}</td><td>${esc(r.legacy_batch||data.batches.find(b=>b.id===r.batch_id)?.name||t('unassigned'))}${r.archive?'<br>'+esc(t('archive')):''}</td><td>${esc(t(r.type))}</td><td>${fmt(r.quantity,0)}</td><td>${esc(movementNote(r))}</td><td>${esc(r.source_cell||t('recorded'))}</td><td>${recordActions(kind,r)}</td></tr>`));
- if(kind==='weights')return table(['date','barn','batch','weightCount','totalWeight','mean','sourceCell','edit'],rows.map(r=>`<tr><td>${esc(r.date||t('dateUnknown'))}${r.age_weeks_hint?'<br>'+esc(r.age_weeks_hint):''}</td><td>${esc(rowBarn(r))}</td><td>${esc(r.legacy_batch||data.batches.find(b=>b.id===r.batch_id)?.name||'')}<br><small>${esc(r.pen||'')}</small></td><td>${fmt(r.count,0)}</td><td>${fmt(r.total_kg)}</td><td>${fmt(meanOf(r))}<br><small>${esc(t(r.source_mean?'sourceMean':'sample'))}</small></td><td>${esc(r.source_cell||'')}<br><small>${esc(r.note||'')}</small></td><td>${recordActions(kind,r)}</td></tr>`));
+ if(kind==='weights')return table(['date','barn','batch','weightCount','totalWeight','mean','sourceCell','edit'],rows.map(r=>`<tr><td>${esc(r.date||t('dateUnknown'))}${r.age_weeks_hint?'<br>'+esc(r.age_weeks_hint):''}</td><td>${esc(rowBarn(r))}</td><td>${esc(r.legacy_batch||data.batches.find(b=>b.id===r.batch_id)?.name||'')}<br><small>${esc(r.pen||'')}</small></td><td>${fmtWeight(r.count,0)}</td><td>${fmtWeight(r.total_kg)}</td><td>${fmtWeight(meanOf(r))}<br><small>${esc(t(r.source_mean?'sourceMean':'sample'))}</small></td><td>${esc(r.source_cell||'')}<br><small>${esc(r.note||'')}</small></td><td>${recordActions(kind,r)}</td></tr>`));
  return base.rowsHTML(kind,rows);
 };
 renderCurrent=async()=>{
@@ -96,7 +96,7 @@ renderCurrent=async()=>{
   $('#weight-results').innerHTML=rowsHTML('weights',rows);
   const valid=rows.filter(r=>r.count>0&&r.total_kg>0),grouped={};
   valid.forEach(r=>{const key=r.batch_id+'|'+r.date,g=grouped[key]||={date:r.date,batch_id:r.batch_id,count:0,total:0};g.count+=r.count;g.total+=r.total_kg;});
-  const html=Object.values(grouped).length?table(['date','batch','weightCount','mean'],Object.values(grouped).map(g=>`<tr><td>${g.date}</td><td>${esc(batchName(g.batch_id))}</td><td>${fmt(g.count,0)}</td><td>${fmt(g.total/g.count)}</td></tr>`)):'';
+  const html=Object.values(grouped).length?table(['date','batch','weightCount','mean'],Object.values(grouped).map(g=>`<tr><td>${g.date}</td><td>${esc(batchName(g.batch_id))}</td><td>${fmtWeight(g.count,0)}</td><td>${fmtWeight(g.total/g.count)}</td></tr>`)):'';
   preserveBox('weight-summary',html+sampleSummary(valid)+`<p class="hint">${esc(t('sourceMeanHint'))}</p>`);
  }catch(e){toast(messageError(e));}
 };
