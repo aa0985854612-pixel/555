@@ -13,3 +13,5 @@ node --check app/static/weekly-report.js
 node --check app/static/cohort-link.js
 node --check app/static/review.js
 node --check app/static/feed-setup.js
+
+node --check app/static/weekly-pdf.js

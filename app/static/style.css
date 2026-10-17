@@ -653,3 +653,26 @@ body [hidden] { display: none !important; }
  #weekly-print-root .weekly-cumulative{gap:1mm 4mm;font-size:9pt;padding-bottom:2mm;margin:2mm 0;break-inside:avoid}#weekly-print-root .weekly-cumulative strong{font-size:11pt}#weekly-print-root .weekly-cumulative>span:first-child{flex-basis:auto}
 }
 @media print{#weekly-print-root .weekly-block{margin-bottom:2mm}#weekly-print-root .weekly-heading h1{font-size:17pt}#weekly-print-root .weekly-footnotes{padding-top:1mm;line-height:1.2}#weekly-print-root .weekly-footnotes p{margin:.5mm 0}}
+
+/* Two equal paper bands; unused cells stay empty instead of stretching a tail. */
+.weekly-export-hint{margin:12px 20px;font-size:16px;line-height:1.5}
+.weekly-sheet{color:#161616}.weekly-heading h1{letter-spacing:.08em}.weekly-sheet .weekly-heading{border-color:#333}
+.weekly-basics,.weekly-basics>div,.weekly-entry-facts th,.weekly-entry-facts td,.weekly-table th,.weekly-table td,.weekly-totals,.weekly-totals-grid>div{border-color:#555}
+.weekly-table thead th,.weekly-table tbody th,.weekly-entry-facts thead,.weekly-totals h2{background:#f0f0f0;color:#161616}
+.weekly-table .weekly-feed_orders td{min-height:70px}.weekly-table .weekly-starts td{white-space:nowrap}.weekly-block{margin-bottom:14px}.weekly-table .weekly-sale td,.weekly-table .weekly-cull td{font-size:16px}
+@media print{
+ @page weekly-sheet{size:A4 portrait;margin:7mm}
+ #weekly-print-root .weekly-sheet{font-size:9pt}
+ #weekly-print-root .weekly-table th:first-child{width:24mm}
+ #weekly-print-root .weekly-table th,#weekly-print-root .weekly-table td{font-size:8pt;line-height:1.15;padding:1.1mm .4mm}
+ #weekly-print-root .weekly-table .weekly-starts td{font-size:7.5pt;white-space:nowrap}
+ #weekly-print-root .weekly-table .weekly-death td{font-size:10pt}
+ #weekly-print-root .weekly-table .weekly-sale td,#weekly-print-root .weekly-table .weekly-cull td{font-size:9pt}
+ #weekly-print-root .weekly-feed-entry{font-size:7.5pt;line-height:1.2}
+ #weekly-print-root .weekly-basics>div{padding:.8mm 1.5mm}
+ #weekly-print-root .weekly-footnotes{font-size:7.5pt;line-height:1.2}
+}
+@media print{
+ body>#weekly-print-root:not(:empty){width:196mm!important;max-width:none!important}
+ #weekly-print-root .weekly-sheet{width:196mm!important;max-width:none!important;box-sizing:border-box}
+}
