@@ -3,7 +3,7 @@ from pathlib import Path
 from datetime import datetime, timezone
 from .domain import Invalid, day, number, herd, consumption, age
 
-VERSION='2.0.4'
+VERSION='2.0.5'
 SCHEMA_VERSION=4
 KINDS=('barns','batches','movements','feed_orders','deliveries','usages','weights','workbooks','source_voids','daily_checks','feed_bins')
 SCHEMA='''
@@ -220,7 +220,7 @@ class Store:
         d={k:v for k,v in d.items() if k not in ('id','revision','created_at','created_by','updated_at','deleted')}
         allowed={
             'barns':{'name','group','feed_vendor'},
-            'batches':{'barn_id','name','group','entry_date','entry_count','entry_age_days','age_date','status','cohort_id','same_batch_as','legacy_source','legacy_row','legacy_barn','note','entry_mean_kg','entry_mean_date','entry_mean_source','entry_mean_note','entry_count_source','entry_count_reason','source_assignments','stock_basis'},
+            'batches':{'barn_id','name','group','entry_date','entry_count','entry_age_days','age_date','status','cohort_id','same_batch_as','legacy_source','legacy_row','legacy_barn','note','entry_mean_kg','entry_mean_date','entry_mean_source','entry_mean_note','entry_count_source','entry_count_reason','source_assignments','stock_basis','quality_review'},
             'movements':{'date','batch_id','type','quantity','note','target_batch_id','total_weight_kg'},
             'feed_orders':{'date','kg','display_unit','vendor','item','note','allocations','feed_bin_id','feed_bin_snapshot','target_batch_ids'},
             'feed_bins':{'name','barn_ids','vendor','active','note'},
@@ -295,6 +295,9 @@ class Store:
                 if d['entry_age_days'] is None:
                     d.update(entry_age_days=source['entry_age_days'],age_date=source['age_date'])
             elif not d.get('legacy_source'): d['cohort_id']=None
+            if 'quality_review' in d:
+                from .review import validate_quality_review
+                validate_quality_review(d['quality_review'],d,data,previous)
         elif kind=='daily_checks':
             from .review import farm_today, death_state
             day(d.get('date'));b=batch();text('note')
@@ -534,7 +537,7 @@ class Store:
                 if kind=='barns' and previous and 'feed_vendor' not in payload and 'feed_vendor' in previous:
                     payload=payload|{'feed_vendor':previous['feed_vendor']}
                 if kind=='batches' and previous:
-                    payload={k:previous[k] for k in ('source_assignments','stock_basis') if k not in payload and k in previous}|payload
+                    payload={k:previous[k] for k in ('source_assignments','stock_basis','quality_review') if k not in payload and k in previous}|payload
                 if kind=='batches' and previous and 'same_batch_as' not in payload:
                     payload=payload|{'same_batch_as':previous.get('same_batch_as')}
                 if kind=='batches' and previous and previous.get('legacy_source'):
@@ -681,7 +684,7 @@ class Store:
                         if not subset(history_report(r['report']),history_report(checked)):raise Problem('invalid_backup')
                         continue
                     others={k:[x for x in rows if not (k==kind and x['id']==r['id'])] for k,rows in data.items()}
-                    cleaned=self.validate(kind,r,others,user,r if kind=='feed_orders' else None)
+                    cleaned=self.validate(kind,r,others,user,r if kind in ('feed_orders','batches') else None)
                     if any((r.get(k, '') if k in ('vendor','item','entry_mean_source','entry_mean_note','entry_count_source','section') else r.get(k))!=v for k,v in cleaned.items()):raise Problem('invalid_backup')
             self.validate_global(data)
             for u in document.get('users',[]):

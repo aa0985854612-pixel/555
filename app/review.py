@@ -66,7 +66,7 @@ def check_coverage(data, ids, start, end):
         'awaiting_batch_days':expected-confirmed-death_days,'basis':'current_active_batches_after_source_baseline','zero_is_explicit_only':True}
 
 
-def data_quality(data, on, dashboard=None):
+def data_quality(data, on, dashboard=None, apply_completions=True):
     """Present source gaps without deriving false entry counts or rewriting data."""
     barns={b['id']:b['name'] for b in data['barns']}
     metrics={r['id']:r['herd'] for r in (dashboard or {}).get('batches',[])}
@@ -98,7 +98,47 @@ def data_quality(data, on, dashboard=None):
             issues.append({'id':'conflict:'+book['id']+':'+c['cohort'],'kind':'workbooks','fields':['source_conflict'],'name':c.get('cohort',''),'source_cell':book['filename']})
     for o in data.get('feed_orders',[]):
         if not o['allocations'] and (not o.get('feed_bin_id') or len(o.get('target_batch_ids',[]))!=len(o['feed_bin_snapshot']['barn_ids'])):issues.append({'id':'order:'+o['id'],'kind':'feed_orders','fields':['unassigned_feed'],'date':o['date'],'name':o.get('note',''),'record_id':o['id']})
-    return {'as_of':on,'items':issues,'count':len(issues),'active_batches_with_gaps':sum(i['kind']=='batches' for i in issues)}
+    completed=0
+    if apply_completions:
+        accepted={(item['id'],tuple(sorted(item['fields'])))
+            for batch in data['batches']
+            if (batch.get('quality_review') or {}).get('status')=='completed_skipped'
+            for item in (batch.get('quality_review') or {}).get('items',[])}
+        pending=[]
+        for issue in issues:
+            if (issue['id'],tuple(sorted(issue['fields']))) in accepted:completed+=1
+            else:pending.append(issue)
+        issues=pending
+    return {'as_of':on,'items':issues,'count':len(issues),'active_batches_with_gaps':sum(i['kind']=='batches' for i in issues),'completed_skipped_count':completed}
+
+
+def validate_quality_review(review, batch, data, previous):
+    """Accept specific existing gaps, without changing their underlying evidence."""
+    if review is None:return
+    if not previous or not isinstance(review,dict) or set(review)!={'status','reason','items'} or review.get('status')!='completed_skipped':raise Invalid('invalid_quality_review')
+    if not isinstance(review['reason'],str) or not 1<=len(review['reason'].strip())<=500:raise Invalid('invalid_quality_review')
+    items=review['items']
+    if not isinstance(items,list) or not 1<=len(items)<=1000:raise Invalid('invalid_quality_review')
+    import copy
+    from .store import Store
+    current=copy.deepcopy(data|{'batches':[b for b in data['batches'] if b['id']!=previous['id']]+[batch|{'id':previous['id']}]})
+    Store.enrich_legacy(None,current)
+    eligible={'batch:'+previous['id']}
+    for kind in ('movements','weights'):
+        for row in source_history(current,kind,include_voided=True,include_matched=True):
+            if not row.get('archive') and (row.get('batch_id')==previous['id'] or previous['id'] in row.get('legacy_members',[])):eligible.add('source:'+row['id'])
+    existing={i['id']:i['fields'] for i in data_quality(current,farm_today(),apply_completions=False)['items'] if i['id'] in eligible}
+    preserved={i['id']:i['fields'] for i in (previous.get('quality_review') or {}).get('items',[])}
+    seen=set()
+    for item in items:
+        if not isinstance(item,dict) or set(item)!={'id','fields'} or not isinstance(item.get('id'),str):raise Invalid('invalid_quality_review')
+        fields=item['fields']
+        if not isinstance(fields,list) or not fields or any(not isinstance(f,str) for f in fields) or len(fields)!=len(set(fields)):raise Invalid('invalid_quality_review')
+        if item['id'] in seen:raise Invalid('invalid_quality_review')
+        seen.add(item['id'])
+        if item['id'] not in eligible:raise Invalid('quality_review_scope_conflict')
+        if item['id'] in preserved and fields==preserved[item['id']]:continue
+        if item['id'] not in existing or sorted(fields)!=sorted(existing[item['id']]):raise Invalid('quality_review_scope_conflict')
 
 
 def bulk_check_preview(data, user, on):

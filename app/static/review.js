@@ -83,7 +83,8 @@ function renderQuality(){
  if(!data?.data_quality)return;const q=data.data_quality;$('#quality-count').textContent=q.count;
  const group=(items,key)=>`<details data-key="quality-${key}" ${key==='active'?'open':''}><summary>${t(key==='active'?'qualityActive':'qualitySources')} · ${items.length}</summary>${items.map(i=>`<article class="quality-item"><div><strong>${esc(i.barn||i.source_cell||i.date||t('unassigned'))}</strong><span>${esc(i.name||'')}${i.entry_date?' · '+esc(i.entry_date):''}</span></div><p>${i.fields.map(k=>esc(t(k))).join('；')}</p>${i.fields.includes('stock_exceeds_entry')?`<p>${t('remaining')} ${fmt(i.remaining,0)} · ${t('denominator')} ${fmt(i.denominator,0)}</p>`:''}${i.note?`<details data-key="quality-note-${esc(i.id)}"><summary>${t('note')}</summary><p>${esc(i.note)}</p></details>`:''}${i.kind==='batches'?(me?.role==='admin'?`<button type="button" data-quality-edit="${i.batch_id}">${t('qualityGoEdit')}</button>`:''):`<button type="button" data-quality-source="${i.kind}">${t('qualityGoHistory')}</button>`}</article>`).join('')}</details>`;
  const first=!$('#quality-body').hasChildNodes();
- preserveBox('quality-body',q.count?group(q.items.filter(i=>i.kind==='batches'),'active')+group(q.items.filter(i=>i.kind!=='batches'),'source'):`<p>${t('qualityNoGaps')}</p>`);
+ const active=q.items.filter(i=>i.kind==='batches'),sources=q.items.filter(i=>i.kind!=='batches');
+ preserveBox('quality-body',q.count?(active.length?group(active,'active'):'')+(sources.length?group(sources,'source'):''):`<p>${t('qualityNoGaps')}</p>`);
  if(first&&$('#quality-body [data-key=quality-active]'))$('#quality-body [data-key=quality-active]').open=true;
 }
 renderHome=async()=>{const result=await base.renderHome();await renderDaily();return result;};
