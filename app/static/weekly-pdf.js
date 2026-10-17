@@ -31,16 +31,23 @@ window.weeklyPdf = async function(model) {
    for(const row of rows){cell(row.label,M,y,labelW,row.height,{size:8.5,bold:true,shade:row.shade});for(let j=0;j<n;j++)cell(row.cells[j]||'',M+labelW+j*cw,y,cw,row.height,{size:row.bold?size+.5:size,bold:row.bold,shade:row.shade,align:row.left?'left':'center',singleLine:row.singleLine});y+=row.height;}
    y+=8;
   }
-  // Keep death allocation on the left and shipments on the right.
-  // Each side has its own continuation notice; never mix event types.
-  const columns=[{title:model.death_title,notes:model.death_notes||[],more:model.death_more},{title:model.shipping_title,notes:model.shipping_notes||[],more:model.shipping_more}];
-  const half=W/2,noteH=Math.max(44,...columns.map(col=>18+Math.ceil(Math.min(col.notes.length,12)/2)*12+8+(col.notes.length>12?13:0)));
-  columns.forEach((col,index)=>{
-   const x=M+index*half,shown=col.notes.slice(0,12),cw=half/2;
-   cell(col.title||'',x,y,half,18,{size:9,bold:true,shade:true});cell('',x,y+18,half,noteH-18);
-   shown.forEach((note,i)=>text(note,x+4+(i%2)*cw,y+23+Math.floor(i/2)*12,cw-8,8.5,false,'left',12,true));
-   if(col.notes.length>shown.length)text(col.more.replace('{n}',col.notes.length-shown.length),x+4,y+noteH-13,half-8,8,false,'left',12,true);
+  // One death column per barn; each date stays under its own barn heading.
+  const groups=model.death_groups||[],shownGroups=groups.slice(0,3),shipping=model.shipping_notes||[],shownShipping=shipping.slice(0,12),half=W/2;
+  const extraGroups=groups.length-shownGroups.length,available=PH-M-y-128;
+  const cap=Math.max(1,Math.min(6,Math.floor((available-52-(extraGroups?12:0))/10)));
+  const deathRows=Math.max(0,...shownGroups.map(g=>Math.min(cap,g.notes.length))),deathMore=shownGroups.some(g=>g.notes.length>cap);
+  const noteH=Math.max(44,18+16+deathRows*10+6+(deathMore?12:0)+(extraGroups?12:0),18+Math.ceil(shownShipping.length/2)*12+8+(shipping.length>12?13:0));
+  cell(model.death_title||'',M,y,half,18,{size:9,bold:true,shade:true});cell('',M,y+18,half,noteH-18);
+  shownGroups.forEach((g,index)=>{
+   const cw=half/shownGroups.length,x=M+index*cw,shown=g.notes.slice(0,cap);
+   cell(g.title,x,y+18,cw,16,{size:8.5,bold:true,shade:true});cell('',x,y+34,cw,noteH-34);
+   shown.forEach((note,i)=>text(note,x+4,y+38+i*10,cw-8,8,false,'left',11,true));
+   if(g.notes.length>shown.length)text(model.death_more.replace('{n}',g.notes.length-shown.length),x+4,y+noteH-12-(extraGroups?12:0),cw-8,7.5,false,'left',11,true);
   });
+  if(extraGroups)text(model.death_groups_more.replace('{n}',extraGroups),M+4,y+noteH-12,half-8,8,false,'left',11,true);
+  const sx=M+half;cell(model.shipping_title||'',sx,y,half,18,{size:9,bold:true,shade:true});cell('',sx,y+18,half,noteH-18);
+  shownShipping.forEach((note,i)=>text(note,sx+4+(i%2)*half/2,y+23+Math.floor(i/2)*12,half/2-8,8.5,false,'left',12,true));
+  if(shipping.length>shownShipping.length)text(model.shipping_more.replace('{n}',shipping.length-shownShipping.length),sx+4,y+noteH-13,half-8,8,false,'left',12,true);
   y+=noteH+8;
   // Footer stays within the fixed page; long individual cells explicitly point
   // to the full CSV instead of creating an unplanned second page.

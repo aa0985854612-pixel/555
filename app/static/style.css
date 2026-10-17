@@ -696,3 +696,22 @@ body [hidden] { display: none !important; }
  #weekly-print-root .weekly-notes-pair section>div{grid-template-columns:repeat(2,minmax(0,1fr));padding:1.5mm;gap:1mm 2mm}
  #weekly-print-root .weekly-notes-pair p{font-size:7.5pt;line-height:1.2}
 }
+
+/* Stable barn headings with their own vertical date lists. */
+.weekly-death-groups{--barn-cols:1}
+.weekly-death-groups[data-barn-columns="2"]{--barn-cols:2}
+.weekly-death-groups[data-barn-columns="3"]{--barn-cols:3}
+.weekly-death-notes .weekly-death-groups{grid-template-columns:repeat(var(--barn-cols),minmax(0,1fr));padding:0;gap:0}
+.weekly-death-barn{min-width:0;border-right:1px solid #ccc}
+.weekly-death-barn:last-child{border-right:0}
+.weekly-death-barn h3{margin:0;padding:6px 3px;text-align:center;font-size:14px;background:#fafafa;border-bottom:1px solid #ccc}
+.weekly-death-barn>div{padding:6px}
+.weekly-death-barn .weekly-death-entry{margin-bottom:3px}
+.weekly-death-groups>.weekly-death-more{padding:6px}
+@media(max-width:700px){.weekly-death-barn h3{font-size:13px}.weekly-death-barn>div{padding:4px}.weekly-death-barn p{font-size:12px}}
+@media print{
+ #weekly-print-root .weekly-death-groups{grid-template-columns:repeat(var(--barn-cols),minmax(0,1fr));padding:0;gap:0}
+ #weekly-print-root .weekly-death-barn h3{font-size:8pt;padding:1mm}
+ #weekly-print-root .weekly-death-barn>div{padding:1mm}
+ #weekly-print-root .weekly-death-barn .weekly-death-entry{margin-bottom:.5mm}
+}
