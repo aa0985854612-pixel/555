@@ -20,7 +20,7 @@ with tempfile.TemporaryDirectory() as tmp:
  def add(kind,**d):return store.mutate(owner,kind,d,str(uuid.uuid4()))
  barns=[add('barns',name=f'{n}棟',feed_vendor='養全') for n in (12,24)]
  batches=[add('batches',name='SYNTHETIC-18-WEEKS',barn_id=b['id'],entry_date='2026-06-19',entry_age_days=70,entry_count=n,entry_mean_kg=21.9,status='active') for b,n in zip(barns,(500,206))]
- for on,typ,n,b in [('2026-06-26','death',3,0),('2026-07-17','death',3,0),('2026-07-24','death',2,0),('2026-07-31','death',1,1),('2026-08-07','death',2,1),('2026-08-14','death',1,0),('2026-09-25','death',1,1),('2026-10-09','death',3,1),('2026-08-07','cull',3,0),('2026-08-21','cull',2,1),('2026-10-13','sale',3,1),('2026-10-16','sale',80,0)]:add('movements',date=on,type=typ,quantity=n,batch_id=batches[b]['id'])
+ for on,typ,n,b in [('2026-06-26','death',3,0),('2026-07-17','death',3,0),('2026-07-24','death',2,0),('2026-07-31','death',1,1),('2026-08-07','death',2,1),('2026-08-14','death',1,0),('2026-09-25','death',1,1),('2026-10-09','death',3,1),('2026-08-07','cull',3,0),('2026-08-21','cull',2,1),('2026-10-13','sale',3,1),('2026-10-16','sale',80,0)]:add('movements',date=on,type=typ,quantity=n,batch_id=batches[b]['id'],**({'outgoing_destination':'嘉義'} if typ=='sale' and n==80 else {}))
  for on,kg,b in [('2026-10-13',4000,1),('2026-10-13',2000,0),('2026-10-15',2000,1)]:add('feed_orders',date=on,kg=kg,display_unit='ton',vendor='養全',item='大豬料',allocations=[{'batch_id':batches[b]['id'],'kg':kg}])
  before=store.snapshot();server=Server(('127.0.0.1',0),store);threading.Thread(target=server.serve_forever,daemon=True).start();url=f'http://127.0.0.1:{server.server_port}'
  try:
@@ -30,33 +30,35 @@ with tempfile.TemporaryDirectory() as tmp:
    def generate():page.locator('#weekly-generate').click();page.wait_for_selector('#weekly-export-actions:not([hidden])')
    login('owner','83000011');page.locator('#movement-form details').evaluate('(e)=>e.open=true');page.locator('#movement-form [name=note]').fill('unsaved next entry')
    page.locator('#open-daily-weekly-report').click();page.locator('#weekly-cohort').select_option('SYNTHETIC-18-WEEKS|2026-06-19');page.locator('#weekly-to').fill('2026-10-17');generate();sheet=page.locator('#weekly-sheet-body');tables=sheet.locator('.weekly-table');assert tables.count()==2
-   assert tables.nth(0).locator('thead th').count()==tables.nth(1).locator('thead th').count()==14
-   assert tables.nth(0).locator('thead th').all_text_contents()[1:]==['第'+str(i)+'週' for i in range(11,24)]
-   assert tables.nth(1).locator('thead th').all_text_contents()[1:6]==['第'+str(i)+'週' for i in range(24,29)]
-   assert tables.nth(1).locator('thead th').all_text_contents()[6:9]==['第29週','第30週','第31週'];assert tables.nth(1).locator('thead th').all_text_contents()[9:]==['']*5
+   assert tables.nth(0).locator('thead th').count()==tables.nth(1).locator('thead th').count()==13
+   assert tables.nth(0).locator('thead th').all_text_contents()[1:]==['第'+str(i)+'週' for i in range(11,23)]
+   assert tables.nth(1).locator('thead th').all_text_contents()[1:7]==['第'+str(i)+'週' for i in range(23,29)]
+   assert tables.nth(1).locator('thead th').all_text_contents()[7:11]==['第29週','第30週','第31週','第32週'];assert tables.nth(1).locator('thead th').all_text_contents()[11:]==['']*2
    assert set(sheet.locator('.weekly-feed-entry').all_text_contents())=={'10/13+4（24）','10/13+2（12）','10/15+2（24）'}
-   assert all(v not in ('0','0.000','—') for v in sheet.locator('.weekly-table td').all_text_contents())
+   assert sheet.locator('.weekly-feed-entry').evaluate_all('(xs)=>xs.every(e=>e.scrollWidth<=e.clientWidth+1&&getComputedStyle(e).whiteSpace==="nowrap")');assert all(v not in ('0','0.000','—') for v in sheet.locator('.weekly-table td').all_text_contents())
    assert sheet.locator('.weekly-death td').all_text_contents()[0]=='' and sheet.locator('.weekly-death td').all_text_contents()[1]=='3'
-   passed('18-week report has two fixed 13-column bands; unentered cells blank and all three feed notes retained')
+   passed('18-week report has two balanced 12-column bands ending at week 32 and two blanks; unentered cells blank and all three feed notes retained')
    page.evaluate('()=>{window.realWeeklyPdf=window.weeklyPdf;window.weeklyPdf=(model)=>{window.lastPdfModel=model;return window.realWeeklyPdf(model)}}')
+   page.evaluate("()=>{window.feedDrawCalls=[];window.pdfAllTextCalls=[];const original=CanvasRenderingContext2D.prototype.fillText;CanvasRenderingContext2D.prototype.fillText=function(...args){pdfAllTextCalls.push(args[0]);if(String(args[0]).includes('+'))feedDrawCalls.push(args);return original.apply(this,args)}}")
    with page.expect_download() as dl:page.locator('#weekly-print').click()
    output=root/'artifacts/weekly-two-bands-a4.pdf';dl.value.save_as(output);pdf_info(output);model=page.evaluate('lastPdfModel')
-   assert all(pair[0] in ('批次','棟舍','進場頭數','棟舍預設廠商','本期間登記料別','出豬備註') for pair in model['basics']);assert len(model['pages'])==1 and len(model['pages'][0])==2
-   assert all(len(b['headers'])==13 for b in model['pages'][0]);assert model['pages'][0][1]['headers'][5:8]==['29週','30週','31週'];assert model['pages'][0][1]['rows'][0]['cells'][5:8]==['10/23','10/30','11/6'];assert all(all(cell=='' for cell in row['cells'][5:8]) for row in model['pages'][0][1]['rows'][1:]);assert '週期預排至31週' in model['legend']
+   assert all(pair[0] in ('批次','棟舍','進場頭數','棟舍預設廠商','本期間登記料別','週期') for pair in model['basics']);assert len(model['pages'])==1 and len(model['pages'][0])==2
+   assert all(len(b['headers'])==12 for b in model['pages'][0]);assert model['pages'][0][1]['headers'][6:10]==['29週','30週','31週','32週'];assert model['pages'][0][1]['rows'][0]['cells'][6:10]==['10/23','10/30','11/6','11/13'];assert all(all(cell=='' for cell in row['cells'][6:10]) for row in model['pages'][0][1]['rows'][1:]);assert '週期預排至32週' in model['legend']
+   assert '… CSV' not in page.evaluate('pdfAllTextCalls');calls=page.evaluate('feedDrawCalls');assert {c[0] for c in calls}=={'10/13+4（24）','10/13+2（12）','10/15+2（24）'};assert len(calls)==3 and all(len(c)==4 and c[3]>0 for c in calls);assert model['shipping_notes']==['10/16 嘉義 80（12）'];assert sheet.locator('.weekly-outgoing-row').count()==0;assert '10/16 嘉義 80（12）' in sheet.locator('.weekly-shipping-notes').inner_text();assert all(r['singleLine'] for p in model['pages'] for b in p for r in b['rows'] if r.get('left'))
    assert dict(model['totals'])=={'淘汰數（隻）':'5','死亡數（隻）':'16','叫料登記量（噸）':'8','正常出豬（隻）':'83'}
-   assert model['pages'][0][1]['rows'][3]['cells'][3]=='10/13+4（24）\n10/13+2（12）\n10/15+2（24）'
+   assert model['pages'][0][1]['rows'][3]['cells'][4]=='10/13+4（24）\n10/13+2（12）\n10/15+2（24）'
    assert all(x not in ('0','0.000','—') for b in model['pages'][0] for row in b['rows'] for x in row['cells'])
-   passed('actual downloaded PDF is exactly one portrait A4, with totals 5/16/8/83 and full three-line feed cell')
+   passed('single A4: three complete feed entries each drawn once on one line, separate shipment field and original totals')
    with page.expect_download() as dl:page.locator('#weekly-csv').click()
-   csvrows=list(csv.reader(io.StringIO(Path(dl.value.path()).read_text(encoding='utf-8-sig'))));deaths=next(r for r in csvrows if r and r[0]=='死亡數（隻）' and len(r)>2);assert deaths[1]=='' and deaths[2]=='3';assert ['叫料登記量（噸）','8'] in csvrows;cycle=next(r for r in csvrows if r and r[0]=='週期');assert cycle[-1]=='第31週';assert len(deaths)==22 and deaths[-3:]==['','','']
-   passed('preview/PDF/CSV extend reliable week labels and dates to 31; planned quantities blank and original period totals unchanged')
+   csvrows=list(csv.reader(io.StringIO(Path(dl.value.path()).read_text(encoding='utf-8-sig'))));deaths=next(r for r in csvrows if r and r[0]=='死亡數（隻）' and len(r)>2);assert deaths[1]=='' and deaths[2]=='3';assert ['叫料登記量（噸）','8'] in csvrows;cycle=next(r for r in csvrows if r and r[0]=='週期');assert cycle[-1]=='第32週';assert len(deaths)==23 and deaths[-4:]==['','','','']
+   passed('preview/PDF/CSV extend reliable week labels and dates to 32; planned quantities blank and original period totals unchanged')
    for width in (320,390,768,1366):
     page.set_viewport_size({'width':width,'height':900})
     for language in ('zh','vi'):
      page.evaluate('(v)=>{lang=v;translate()}',language);assert page.evaluate('document.documentElement.scrollWidth<=innerWidth+2');assert page.locator('#weekly-report-dialog').evaluate('(e)=>e.scrollWidth<=e.clientWidth+1')
    page.evaluate('lang="vi";translate()')
    with page.expect_download() as dl:page.locator('#weekly-print').click()
-   vi=root/'artifacts/weekly-two-bands-vi-a4.pdf';dl.value.save_as(vi);pdf_info(vi);passed('Vietnamese PDF is one A4; both languages fit four screen widths')
+   vi=root/'artifacts/weekly-two-bands-vi-a4.pdf';dl.value.save_as(vi);pdf_info(vi);assert '… CSV' not in page.evaluate('pdfAllTextCalls');passed('Vietnamese PDF is one A4; both languages fit four screen widths')
    page.evaluate('lang="zh";translate()');page.locator('#weekly-close').click();assert page.locator('#movement-form [name=note]').input_value()=='unsaved next entry';assert store.snapshot()==before
    passed('PDF and CSV generation preserve draft and all farm/account data')
    page.locator('#logout').click();login('reader','83000012');page.locator('nav [href="#stats"]').click();page.locator('#open-weekly-report').click();page.locator('#weekly-cohort').select_option('SYNTHETIC-18-WEEKS|2026-06-19');page.locator('#weekly-to').fill('2026-10-17');generate()
