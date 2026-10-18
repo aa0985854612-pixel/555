@@ -42,31 +42,71 @@ window.weeklyPdf = async function(model) {
    for(const originalRow of rows){const row=originalRow.left?{...originalRow,height:Math.max(30,originalRow.height-shrink)}:originalRow;cell(row.label,M,y,labelW,row.height,{size:8.5,bold:true,shade:row.shade});for(let j=0;j<n;j++)cell(row.cells[j]||'',M+labelW+j*cw,y,cw,row.height,{size:row.bold?size+.5:size,bold:row.bold,shade:row.shade,align:row.left?'left':'center',singleLine:row.singleLine});y+=row.height;}
    y+=8;
   }
-  // One death column per barn; each date stays under its own barn heading.
-  const groups=model.death_groups||[],shownGroups=groups.slice(0,3),shipping=model.shipping_notes||[],shownShipping=shipping.slice(0,12),half=W/2;
-  const extraGroups=groups.length-shownGroups.length,available=PH-M-y-128;
-  const cap=Math.max(1,Math.min(6,Math.floor((available-52-(extraGroups?12:0))/10)));
-  const deathRows=Math.max(0,...shownGroups.map(g=>Math.min(cap,g.notes.length))),deathMore=shownGroups.some(g=>g.notes.length>cap);
-  const noteH=Math.max(44,18+16+deathRows*10+6+(deathMore?12:0)+(extraGroups?12:0),18+Math.ceil(shownShipping.length/2)*12+8+(shipping.length>12?13:0));
+  // Measure complete notes against the space left by the actual tables and footer.
+  // Normal reports keep every entry; only a physically full page uses a CSV count.
+  const groups=model.death_groups||[],shipping=model.shipping_notes||[],half=W/2;
+  const cumulativeH=lines(model.cumulative,W,9,true).length*9*1.25,legendH=lines(model.legend,W,7.5).length*7.5*1.25;
+  const footerH=15+39+cumulativeH+6+legendH,available=PH-M-y-8-footerH;
+  function notePlan(size,compact=false){
+   const lh=size*1.25,gap=1,entryHeight=parts=>parts.length*lh+gap;
+   const cols=Math.max(1,Math.min(3,groups.length)),cw=half/cols;
+   let visible=groups,extra=0;
+   if(compact){const maxRows=Math.max(1,Math.floor((available-18-12+4)/(28+lh+2)));visible=groups.slice(0,maxRows*cols);extra=groups.length-visible.length;}
+   const tiles=[];
+   for(let i=0;i<visible.length;i+=cols){
+    const members=visible.slice(i,i+cols).map(g=>({...g,entries:g.notes.map(note=>lines(note,cw-8,size)),more:0}));
+    tiles.push({members,full:Math.max(0,...members.map(g=>g.entries.reduce((n,parts)=>n+entryHeight(parts),0)))});
+   }
+   const overhead=18+tiles.length*24+Math.max(0,tiles.length-1)*4+(extra?lh+2:0),need=tiles.reduce((n,r)=>n+r.full,0);
+   const content=Math.max(0,available-overhead),base=tiles.map(r=>Math.min(r.full,lh+2));
+   const spare=Math.max(0,content-base.reduce((n,h)=>n+h,0)),remaining=need-base.reduce((n,h)=>n+h,0);
+   tiles.forEach((r,i)=>r.budget=Math.min(r.full,base[i]+(remaining?spare*(r.full-base[i])/remaining:0)));
+   for(const tile of tiles){
+    if(compact)for(const g of tile.members){
+     const budget=tile.budget,total=g.entries.reduce((n,parts)=>n+entryHeight(parts),0);
+     if(total>budget){let used=0,count=0;while(count<g.entries.length&&used+entryHeight(g.entries[count])+lh+2<=budget){used+=entryHeight(g.entries[count++]);}g.more=g.entries.length-count;g.entries=g.entries.slice(0,count);}
+    }
+    tile.height=24+Math.max(0,...tile.members.map(g=>g.entries.reduce((n,parts)=>n+entryHeight(parts),0)+(g.more?lh+2:0)));
+   }
+   function shippingPlan(columns){
+    const width=half/columns,rows=[];
+    for(let i=0;i<shipping.length;i+=columns){const entries=shipping.slice(i,i+columns).map(note=>lines(note,width-8,size));rows.push({entries,height:Math.max(...entries.map(entryHeight))});}
+    return {columns,width,rows,height:26+rows.reduce((n,r)=>n+r.height,0),more:0};
+   }
+   const candidates=[shippingPlan(2),shippingPlan(1)],out=candidates.sort((a,b)=>a.height-b.height)[0];
+   if(compact&&out.height>available){let used=26,count=0;while(count<out.rows.length&&used+out.rows[count].height+lh+2<=available){used+=out.rows[count++].height;}out.more=out.rows.slice(count).reduce((n,r)=>n+r.entries.length,0);out.rows=out.rows.slice(0,count);out.height=used+(out.more?lh+2:0);}
+   return {size,lh,gap,cols,cw,tiles,extra,shipping:out,height:Math.max(44,18+tiles.reduce((n,r)=>n+r.height,0)+Math.max(0,tiles.length-1)*4+(extra?lh+2:0),out.height)};
+  }
+  let plan;
+  for(const size of [8.5,8,7.5,7]){plan=notePlan(size);if(plan.height<=available)break;}
+  if(plan.height>available)plan=notePlan(7,true);
+  const noteH=plan.height;
+  function noteLines(parts,x,on,width){for(let i=0;i<parts.length;i++)text(parts[i],x,on+i*plan.lh,width,plan.size,false,'left',plan.lh+.1,true);}
   cell(model.death_title||'',M,y,half,18,{size:9,bold:true,shade:true});cell('',M,y+18,half,noteH-18);
-  shownGroups.forEach((g,index)=>{
-   const cw=half/shownGroups.length,x=M+index*cw,shown=g.notes.slice(0,cap);
-   cell(g.title,x,y+18,cw,16,{size:8.5,bold:true,shade:true});cell('',x,y+34,cw,noteH-34);
-   shown.forEach((note,i)=>text(note,x+4,y+38+i*10,cw-8,8,false,'left',11,true));
-   if(g.notes.length>shown.length)text(model.death_more.replace('{n}',g.notes.length-shown.length),x+4,y+noteH-12-(extraGroups?12:0),cw-8,7.5,false,'left',11,true);
-  });
-  if(extraGroups)text(model.death_groups_more.replace('{n}',extraGroups),M+4,y+noteH-12,half-8,8,false,'left',11,true);
+  let tileY=y+18;
+  for(const tile of plan.tiles){
+   tile.members.forEach((g,index)=>{
+    const x=M+index*plan.cw;
+    cell(g.title,x,tileY,plan.cw,16,{size:8.5,bold:true,shade:true});cell('',x,tileY+16,plan.cw,tile.height-16);
+    let on=tileY+20;
+    for(const parts of g.entries){noteLines(parts,x+4,on,plan.cw-8);on+=parts.length*plan.lh+plan.gap;}
+    if(g.more)text(model.death_more.replace('{n}',g.more),x+4,on,plan.cw-8,plan.size,false,'left',plan.lh+.1,true);
+   });
+   tileY+=tile.height+4;
+  }
+  if(plan.extra)text(model.death_groups_more.replace('{n}',plan.extra),M+4,y+noteH-plan.lh-2,half-8,plan.size,false,'left',plan.lh+.1,true);
   const sx=M+half;cell(model.shipping_title||'',sx,y,half,18,{size:9,bold:true,shade:true});cell('',sx,y+18,half,noteH-18);
-  shownShipping.forEach((note,i)=>text(note,sx+4+(i%2)*half/2,y+23+Math.floor(i/2)*12,half/2-8,8.5,false,'left',12,true));
-  if(shipping.length>shownShipping.length)text(model.shipping_more.replace('{n}',shipping.length-shownShipping.length),sx+4,y+noteH-13,half-8,8,false,'left',12,true);
+  let shippingY=y+22;
+  for(const row of plan.shipping.rows){row.entries.forEach((parts,i)=>noteLines(parts,sx+4+i*plan.shipping.width,shippingY,plan.shipping.width-8));shippingY+=row.height;}
+  if(plan.shipping.more)text(model.shipping_more.replace('{n}',plan.shipping.more),sx+4,shippingY,half-8,plan.size,false,'left',plan.lh+.1,true);
   y+=noteH+8;
   // Footer stays within the fixed page; long individual cells explicitly point
   // to the full CSV instead of creating an unplanned second page.
-  if(y+120>PH-M)throw new Error('weekly_pdf_layout_overflow');
+  if(y+footerH>PH-M+.1)throw new Error('weekly_pdf_layout_overflow');
   text(model.totalLabel,M,y,W,9,true,'left',14);y+=15;
   for(let i=0;i<model.totals.length;i++){const x=M+i*W/4,pair=model.totals[i];cell('',x,y,W/4,32);text(pair[0],x+4,y+3,W/4-8,8,false,'left',10);text(pair[1],x+4,y+15,W/4-8,11,true,'left',14);}y+=39;
-  text(model.cumulative,M,y,W,9,true,'left',24);y+=27;
-  text(model.legend,M,y,W,7.5,false,'left',35);
+  text(model.cumulative,M,y,W,9,true,'left',cumulativeH+.1);y+=cumulativeH+6;
+  text(model.legend,M,y,W,7.5,false,'left',legendH+.1);
   const blob=await new Promise((resolve,reject)=>canvas.toBlob(b=>b?resolve(b):reject(new Error('weekly_pdf_image_failed')),'image/jpeg',.96));
   images.push({bytes:new Uint8Array(await blob.arrayBuffer()),width:canvas.width,height:canvas.height});canvas.width=canvas.height=1;
  }
