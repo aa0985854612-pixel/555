@@ -27,6 +27,17 @@ class FeedBinTests(unittest.TestCase):
   for item in ('大豬料','仔豬料','哺乳二期料'):
    r=self.order(item=item);self.assertEqual(r['vendor'],'養全');self.assertEqual(r['item'],item);self.assertEqual(r['feed_bin_snapshot']['barn_names'],['1棟','2棟'])
   with self.assertRaises(Problem):self.order(item='虛構料別')
+ def test_blank_type_and_supplier_can_be_saved_without_guessing(self):
+  r=self.order(item='',vendor='');self.assertEqual((r['item'],r['vendor']),('',''))
+  edited=self.store.mutate(self.staff,'feed_orders',self.body(item='',vendor='',revision=r['revision'],kg=3000),str(uuid.uuid4()),r['id'])
+  self.assertEqual((edited['item'],edited['vendor']),('',''));self.assertEqual(self.report()['totals']['feed_orders'],3000)
+  self.assertEqual(self.report()['feed_setup']['recorded_types'],[]);self.assertEqual(self.report()['feed_setup']['recorded_vendors'],[])
+ def test_omitted_type_is_blank_and_omitted_supplier_still_uses_default(self):
+  body=self.body();body.pop('item');r=self.store.mutate(self.staff,'feed_orders',body,str(uuid.uuid4()))
+  self.assertEqual(r['item'],'');self.assertEqual(r['vendor'],'養全')
+ def test_editing_quantity_preserves_explicit_existing_type_and_supplier(self):
+  r=self.order(item='仔豬料',vendor='新農科');edited=self.store.mutate(self.staff,'feed_orders',r|{'kg':3000},str(uuid.uuid4()),r['id'])
+  self.assertEqual((edited['item'],edited['vendor']),('仔豬料','新農科'))
  def test_whole_cohort_and_farm_count_shared_order_only_once(self):
   self.order();data=self.store.snapshot();r=self.report();self.assertEqual(r['totals']['feed_orders'],2000);self.assertEqual(len([e for w in r['weeks'] for e in w['feed_details']]),1)
   self.assertEqual(statistics(data,{})['feed_order_kg'],2000);self.assertEqual(statistics(data,{'cohort':['SAME|2026-10-01']})['feed_order_kg'],2000);self.assertEqual(len(data['feed_orders']),1)

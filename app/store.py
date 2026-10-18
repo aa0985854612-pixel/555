@@ -3,7 +3,7 @@ from pathlib import Path
 from datetime import datetime, timezone
 from .domain import Invalid, day, number, herd, consumption, age
 
-VERSION='2.0.18'
+VERSION='2.0.19'
 SCHEMA_VERSION=4
 KINDS=('barns','batches','movements','feed_orders','deliveries','usages','weights','workbooks','source_voids','daily_checks','feed_bins')
 SCHEMA='''
@@ -335,8 +335,8 @@ class Store:
                 from .feed import FEED_TYPES
                 bin=lookup('feed_bins',d['feed_bin_id'])
                 if not bin['active'] and not (previous and previous.get('feed_bin_id')==bin['id']):raise Invalid('feed_bin_inactive')
-                if d['item'] not in FEED_TYPES:raise Invalid('invalid_feed_type')
-                d['vendor']=d.get('vendor') or bin['vendor']
+                if d['item'] and d['item'] not in FEED_TYPES:raise Invalid('invalid_feed_type')
+                d['vendor']=d.get('vendor',bin['vendor'])
                 if d.get('allocations'):raise Invalid('bin_allocation_conflict')
                 if previous and previous.get('feed_bin_id')==bin['id']:
                     d['feed_bin_snapshot']=previous['feed_bin_snapshot']
