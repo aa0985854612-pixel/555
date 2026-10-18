@@ -1,5 +1,12 @@
 'use strict';
 /* Shared UI for source history, compact filters and account security. */
+function filterCohorts(f){
+ const cohorts=data.cohorts||[];
+ if(f.id!=='stats-filter')return cohorts;
+ const active=new Set(data.batches.filter(b=>b.status==='active').map(b=>b._cohort_key||b.name+'|'+b.entry_date));
+ return cohorts.filter(c=>!c.archive&&active.has(c.key));
+}
+
 (() => {
 Object.assign(words,{
  scopeType:['查詢範圍','Phạm vi'],allFarm:['全場','Toàn trại'],cohort:['跨棟批次','Lứa qua các chuồng'],oneBarn:['單棟','Một chuồng'],organization:['整組','Nhóm'],singleBatch:['單棟批次','Lứa tại chuồng'],recordKind:['紀錄類別','Loại bản ghi'],movements:['豬隻異動','Biến động đàn'],deliveries:['飼料到料','Nhập thức ăn'],usages:['實際用料','Tiêu thụ'],sourceStatus:['資料狀態','Trạng thái dữ liệu'],missingOnly:['待補日期／資料','Cần bổ sung ngày/dữ liệu'],sourceMean:['來源提供的均重（樣本頭數未知）','TB từ nguồn (chưa rõ số mẫu)'],sourceMeanShort:['來源均重','TB từ nguồn'],wholeCohort:['整批來源，未分棟','Nguồn cả lứa, chưa chia chuồng'],archive:['歷史舊表','Bảng lịch sử'],dateUnknown:['日期待補','Cần bổ sung ngày'],sourceCell:['來源位置','Ô nguồn'],entryMean:['入場均重公斤／隻（選填）','TB khi nhập kg/con (tùy chọn)'],entryMeanDate:['均重量測日期（空白用進場日）','Ngày đo TB (trống: ngày nhập)'],entryMeanSource:['入場均重資料來源','Nguồn TB khi nhập'],entryMeanNote:['入場均重備註','Ghi chú TB khi nhập'],entryCountSource:['分棟進場頭數的可靠來源','Nguồn đáng tin số nhập từng chuồng'],entryUnknownHint:['缺單棟進場頭數或歷史死亡時，育成率顯示 —；不從暫定存欄反推。可在批次進階設定補入有來源的進場頭數。','Thiếu số nhập hoặc chết từng chuồng: hiển thị —; không suy từ tồn tạm tính. Bổ sung số nhập có nguồn trong cài đặt lứa.'],periodDeaths:['查詢期間死亡','Chết trong kỳ lọc'],cohortDetails:['批次與各棟明細','Chi tiết lứa và chuồng'],sourceAdg:['來源均重的估計平均日增重','Tăng trọng ngày ước tính từ TB nguồn'],sourceMeanHint:['未提供樣本頭數的來源均重，不參與加權抽樣合計；跨棟來源也不當成單棟實測。','TB thiếu số mẫu không gộp theo số con; nguồn nhiều chuồng không coi là đo riêng từng chuồng.'],sourcePending:['來源有差異，保留 App 紀錄','Nguồn khác biệt; giữ bản App'],sourceLoad:['展開查看來源與匯入結果','Mở xem nguồn và kết quả nhập'],updateSummary:['更新核對結果','Kết quả đối chiếu cập nhật'],matchedManual:['與 App 對上，未重複新增','Khớp App, không thêm trùng'],keptManual:['保留 App，來源差異留存','Giữ App, lưu khác biệt nguồn'],unchanged:['相同來源明細','Chi tiết nguồn không đổi'],pendingSource:['待核對批次','Lứa cần đối chiếu'],passwordChange:['修改自己的密碼','Đổi mật khẩu của mình'],currentPassword:['目前密碼','Mật khẩu hiện tại'],newPassword:['新密碼（4～8位數字）','Mật khẩu mới (4–8 chữ số)'],confirmPassword:['再次輸入新密碼','Nhập lại mật khẩu mới'],passwordMismatch:['兩次新密碼不一致','Hai mật khẩu mới không khớp'],passwordChanged:['密碼已變更，請重新登入','Đã đổi mật khẩu; đăng nhập lại'],passwordRequired:['首次登入請先修改密碼，再使用其他功能。','Lần đầu đăng nhập: đổi mật khẩu trước khi dùng.'],setupLink:['產生一次性設定連結（舊密碼失效）','Tạo liên kết đặt mật khẩu một lần (hủy mật khẩu cũ)'],setupHint:['連結有效48小時、使用一次即失效。請私下交給對應使用者；重發會使舊連結失效。','Liên kết dùng một lần trong 48 giờ. Gửi riêng đúng người; cấp lại sẽ hủy liên kết cũ.'],copyLink:['複製設定連結','Sao chép liên kết'],copied:['已複製，請私下分享','Đã sao chép; chia sẻ riêng'],activateAccount:['設定帳號密碼','Đặt mật khẩu tài khoản'],activateHint:['設定完成後，以自己的帳號密碼登入。','Sau khi đặt, đăng nhập bằng tài khoản của bạn.'],setupComplete:['密碼已設定，請登入','Đã đặt mật khẩu; hãy đăng nhập'],firstChange:['首次登入需更換密碼','Cần đổi mật khẩu khi đăng nhập lần đầu'],adminHint:['每人使用自己的帳號。唯讀可查看；編輯人員可新增及更正自己登記的日常資料；管理員管理設定及重要更正。','Dùng tài khoản riêng. Chỉ xem: đọc; nhân viên: thêm/sửa bản ghi hằng ngày của mình; quản trị: cài đặt và sửa quan trọng.'],workbookHint:['新版 Excel 會與既有來源及 App 紀錄比對，先預覽再匯入。只有第一次建立來源時才需填分棟盤點；有衝突保留 App。','Excel mới được đối chiếu với nguồn và App; xem trước rồi nhập. Chỉ nguồn đầu cần kiểm kê từng chuồng; xung đột giữ App.'],dailySub:['先登記今天的異動，現況往下查看。','Ghi biến động hôm nay; xem tình trạng bên dưới.']
@@ -75,16 +82,22 @@ function updateEntryCorrection(){
 translate=()=>{base.translate();updateEntryCorrection();};
 finishForm=f=>{base.finishForm(f);if(f.id==='batch-form'){for(const name of ['entry_mean_kg','entry_mean_date','entry_mean_source','entry_mean_note','entry_count_source','entry_count_reason'])f.elements[name].value='';updateEntryCorrection();}};
 edit=(kind,id)=>{base.edit(kind,id);if(kind==='batches'){const r=data.batches.find(b=>b.id===id),f=$('#batch-form');if(r.legacy_source){f.elements.entry_count.readOnly=false;f.elements.entry_count.required=r.legacy_group?.expected_members===1;}for(const name of ['entry_mean_kg','entry_mean_date','entry_mean_source','entry_mean_note','entry_count_source'])f.elements[name].value=r[name]??'';f.elements.entry_count_reason.value='';updateEntryCorrection();}};
-updateFilterBatch=(f,reset=false)=>{const el=f.elements.batch_id;if(!el||!data)return;replaceOptions(el,option('','all')+data.batches.filter(b=>(!val(f,'barn_id')||b.barn_id===val(f,'barn_id'))&&(!val(f,'cohort')||(b._cohort_key||b.name+'|'+b.entry_date)===val(f,'cohort'))).map(b=>`<option value="${b.id}">${esc(batchName(b.id))}</option>`).join(''));};
+function normalizeStatsCohort(f,key=val(f,'cohort')){
+ if(f.id!=='stats-filter'||!key||filterCohorts(f).some(c=>c.key===key))return;
+ for(const name of ['from','to','cohort','group','barn_id','batch_id'])f.elements[name].value='';
+ f.elements.scope_type.value='cohort';
+}
+updateFilterBatch=(f,reset=false)=>{const el=f.elements.batch_id;if(!el||!data)return;replaceOptions(el,option('','all')+data.batches.filter(b=>(f.id!=='stats-filter'||b.status==='active')&&(!val(f,'barn_id')||b.barn_id===val(f,'barn_id'))&&(!val(f,'cohort')||(b._cohort_key||b.name+'|'+b.entry_date)===val(f,'cohort'))).map(b=>`<option value="${b.id}">${esc(batchName(b.id))}</option>`).join(''));};
 selections=(force=false)=>{
- base.selections(force);const fp=JSON.stringify([data.cohorts,lang]);
- if(force||fp!==cohortFingerprint){cohortFingerprint=fp;$$('.filters [name=cohort]').forEach(el=>replaceOptions(el,option('','all')+(data.cohorts||[]).map(c=>`<option value="${esc(c.key)}">${esc(c.name)} · ${esc(c.entry_date)}${c.archive?' · '+esc(t('archive')):''}</option>`).join('')));}
+ normalizeStatsCohort($('#stats-filter'));
+ base.selections(force);const fp=JSON.stringify([data.cohorts,data.batches.map(b=>[b.id,b.status]),lang]);
+ if(force||fp!==cohortFingerprint){cohortFingerprint=fp;$$('.filters [name=cohort]').forEach(el=>replaceOptions(el,option('','all')+filterCohorts(el.form).map(c=>`<option value="${esc(c.key)}">${esc(c.name)} · ${esc(c.entry_date)}${c.archive?' · '+esc(t('archive')):''}</option>`).join('')));}
  $$('.filters').forEach(f=>filterScope(f));
 };
 syncFilters=source=>{
  for(const key of ['from','to','scope_type','cohort','group','barn_id','batch_id'])sharedFilters[key]=val(source,key);
  localStorage.setItem('pig-filters',JSON.stringify(sharedFilters));
- $$('.filters').forEach(f=>{if(f===source)return;for(const key of ['from','to','scope_type','cohort','group','barn_id'])f.elements[key].value=sharedFilters[key]|| (key==='scope_type'?'all':'');updateFilterBatch(f);f.elements.batch_id.value=sharedFilters.batch_id||'';filterScope(f);});
+ $$('.filters').forEach(f=>{if(f===source)return;for(const key of ['from','to','scope_type','cohort','group','barn_id'])f.elements[key].value=sharedFilters[key]|| (key==='scope_type'?'all':'');updateFilterBatch(f);f.elements.batch_id.value=sharedFilters.batch_id||'';normalizeStatsCohort(f,sharedFilters.cohort);filterScope(f);});
 };
 query=f=>{const p=new URLSearchParams();for(const key of ['from','to','barn_id','batch_id','cohort','group','type','vendor','item','missing'])if(val(f,key))p.set(key,val(f,key));return p.toString();};
 recordActions=(kind,r)=>{
@@ -198,7 +211,7 @@ enter=async user=>{
  if(user.must_change){setPage('settings',false);return;}
  history.replaceState(null,'',location.pathname+'#daily');setPage('daily',false);await refresh({render:false});
  if(!data)return;
- $$('.filters').forEach(f=>{for(const key of ['from','to','scope_type','cohort','group','barn_id'])if(sharedFilters[key])f.elements[key].value=sharedFilters[key];if(!sharedFilters.scope_type&&sharedFilters.barn_id)f.elements.scope_type.value='barn';updateFilterBatch(f);if(sharedFilters.batch_id)f.elements.batch_id.value=sharedFilters.batch_id;filterScope(f);});
+ $$('.filters').forEach(f=>{for(const key of ['from','to','scope_type','cohort','group','barn_id'])if(sharedFilters[key])f.elements[key].value=sharedFilters[key];if(!sharedFilters.scope_type&&sharedFilters.barn_id)f.elements.scope_type.value='barn';updateFilterBatch(f);if(sharedFilters.batch_id)f.elements.batch_id.value=sharedFilters.batch_id;normalizeStatsCohort(f,sharedFilters.cohort);filterScope(f);});
  await renderCurrent();restorePending();persistPending();
 };
 })();
