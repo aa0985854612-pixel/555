@@ -41,7 +41,7 @@ def validate_assignments(reviews,batch,data):
     # Strip reviews to validate against the immutable, unassigned source event.
     rawdata=data|{'batches':[dict(b,source_assignments=[]) for b in data['batches']]}
     if not any(b['id']==batch.get('id') for b in rawdata['batches']):rawdata['batches'].append(batch|{'source_assignments':[]})
-    raw={r['id']:r for r in source_history(rawdata,include_voided=True,include_matched=True)}
+    raw={r['id']:r for r in source_history(rawdata,include_voided=True,include_matched=True,apply_date_reviews=False)}
     seen=set()
     for review in reviews:
         if not isinstance(review,dict) or set(review)!=set(FIELDS)|{'reason'}:raise Invalid('invalid_source_assignment')

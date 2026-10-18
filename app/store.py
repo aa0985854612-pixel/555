@@ -3,7 +3,7 @@ from pathlib import Path
 from datetime import datetime, timezone
 from .domain import Invalid, day, number, herd, consumption, age
 
-VERSION='2.0.19'
+VERSION='2.0.20'
 SCHEMA_VERSION=4
 KINDS=('barns','batches','movements','feed_orders','deliveries','usages','weights','workbooks','source_voids','daily_checks','feed_bins')
 SCHEMA='''
@@ -150,6 +150,8 @@ class Store:
             if target not in batches:raise Invalid('referenced_record')
             key=resolve(batches[target],seen|{b['id']});b['_cohort_key']=key;return key
         for b in data['batches']:resolve(b,set())
+        from .source_dates import adjust_snapshots
+        adjust_snapshots(data)
         from .source_assignment import rebuild_confirmed_stock
         rebuild_confirmed_stock(data)
         from .operations import apply_source_voids
@@ -229,7 +231,7 @@ class Store:
             'weights':{'date','batch_id','age_days','pen','count','total_kg','individual_kg','sampling','note','representative','section','session_id','session_number','session_fingerprint'},
             'daily_checks':{'date','batch_id','status','note'},
             'source_voids':{'target_kind','source_row_id','source_record','reason'},
-            'workbooks':{'filename','base64','counts_text','counts_as_of','closed_barns','source_url','sha256','report','plan','review_decisions'},
+            'workbooks':{'filename','base64','counts_text','counts_as_of','closed_barns','source_url','sha256','report','plan','review_decisions','source_date_reviews'},
         }[kind]
         d={k:v for k,v in d.items() if k in allowed}
         if kind=='barns':
@@ -429,6 +431,8 @@ class Store:
 
     def validate_global(self, data):
         data={kind:[dict(r) for r in rows] for kind,rows in data.items()}
+        from .source_dates import validate_reviews
+        validate_reviews(data)
         self.enrich_legacy(data)
         bid={b['id']:b for b in data['batches']}
         barns={b['id'] for b in data['barns']}

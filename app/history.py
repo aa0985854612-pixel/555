@@ -105,7 +105,7 @@ def update_preview(report,data):
                 [(b['id'],b['revision']) for b in data['workbooks']]],sort_keys=True).encode()).hexdigest()}
 
 
-def source_history(data,kind='movements',include_voided=False,include_matched=False):
+def source_history(data,kind='movements',include_voided=False,include_matched=False,apply_date_reviews=True):
     output=[]
     for source in source_rows(data,archives=True):
         row=source['row'];members=[] if source['archive'] else members_for(data,source)
@@ -147,6 +147,9 @@ def source_history(data,kind='movements',include_voided=False,include_matched=Fa
     if kind=='movements':
         from .source_assignment import apply_assignment
         output=[apply_assignment(row,data) for row in output]
+        if apply_date_reviews:
+            from .source_dates import apply_dates
+            output=[part for row in output for part in apply_dates(row,data)]
     voided={v['source_row_id'] for v in data.get('source_voids',[]) if v['target_kind']==kind}
     anchors={v['source_record'].get('source_anchor') for v in data.get('source_voids',[]) if v['target_kind']==kind};anchors.discard(None)
     return output if include_voided else [r for r in output if r['id'] not in voided and r.get('source_anchor') not in anchors and r.get('source_event_anchor') not in anchors]
