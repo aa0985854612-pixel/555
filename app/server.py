@@ -361,6 +361,13 @@ class Handler(BaseHTTPRequestHandler):
                 if '_snapshot' in result:
                     snapshot=result.pop('_snapshot');seq=result.pop('_sequence');result['sync']=client_snapshot(snapshot,self.server.instance+':'+str(seq))
                 return self.send(result,201)
+            if path in ('/api/feed-orders/bulk-preview','/api/feed-orders/bulk-apply') and method=='POST':
+                from .feed_review import preview_feed_bulk,save_feed_bulk
+                if path.endswith('bulk-preview'):return self.send(preview_feed_bulk(store,user,self.body()))
+                result=save_feed_bulk(store,user,self.body(),self.headers.get('Idempotency-Key'))
+                if '_snapshot' in result:
+                    snapshot=result.pop('_snapshot');seq=result.pop('_sequence');result['sync']=client_snapshot(snapshot,self.server.instance+':'+str(seq))
+                return self.send(result,201)
             if path=='/api/source-edit-record' and method=='GET':
                 from .source_edit import base_rows
                 store.require(user,True);data=store.snapshot(include_source=False)

@@ -32,8 +32,9 @@ with tempfile.TemporaryDirectory() as temp:
    passed('lost response restores the exact split request; retry creates no duplicate and clears completed portions only after server success')
    page.locator('nav [href="#stats"]').click();page.locator('#open-weekly-report').click()
    for group,expected in [('JD-A',{'1棟','18棟'}),('JD-B',{'2棟','3棟','4棟'})]:
-    page.locator('#weekly-cohort').select_option(group+'|2026-10-01');page.locator('#weekly-to').fill('2026-10-18');page.locator('#weekly-generate').click();page.wait_for_selector('#weekly-export-actions:not([hidden])');sheet=page.locator('#weekly-sheet-body');assert '10/12+2（1）' in sheet.inner_text();assert '10/12+4' not in sheet.inner_text();assert all(x in sheet.inner_text() for x in expected)
+    page.locator('#weekly-cohort').select_option(group+'|2026-10-01');page.locator('#weekly-to').fill('2026-10-18');page.locator('#weekly-generate').click();page.wait_for_selector('#weekly-export-actions:not([hidden])');page.wait_for_selector('#weekly-a4-preview img');page.locator('#weekly-sheet-body > details').evaluate('(e)=>e.open=true');sheet=page.locator('#weekly-sheet-body');assert '10/12+2（1）' in sheet.inner_text();assert '10/12+4' not in sheet.inner_text();assert all(x in sheet.inner_text() for x in expected)
     page.evaluate('()=>{window.splitDraws=[];const old=window.originalSplitDraw||CanvasRenderingContext2D.prototype.fillText;window.originalSplitDraw=old;CanvasRenderingContext2D.prototype.fillText=function(...a){splitDraws.push(a[0]);return old.apply(this,a)}}')
+    page.locator('#weekly-generate').click();page.wait_for_selector('#weekly-a4-preview img')
     with page.expect_download() as dl:page.locator('#weekly-print').click()
     pdf=root/f'artifacts/feed-split-{group}.pdf';dl.value.save_as(pdf);info=subprocess.check_output(['pdfinfo',str(pdf)],text=True);assert re.search(r'Pages:\s+1\b',info) and '595.28 x 841.89' in info;assert page.evaluate('splitDraws').count('10/12+2（1）')==1
     with page.expect_download() as dl:page.locator('#weekly-csv').click()

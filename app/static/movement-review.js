@@ -39,4 +39,3 @@ saveForm=async e=>{
 };
 hasUnsavedWork=()=>base.hasUnsavedWork()||!!row||!!duplicateDraft;
 })();
-boot();
