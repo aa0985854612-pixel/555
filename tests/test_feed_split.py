@@ -55,7 +55,7 @@ class FeedSplitTests(unittest.TestCase):
   with self.assertRaises(Problem) as e:self.s.mutate(self.viewer,'feed_orders',self.body(),str(uuid.uuid4()))
   self.assertEqual(e.exception.status,403);r=self.order();self.s.mutate(self.u,'feed_orders',{'revision':1},str(uuid.uuid4()),r['id'],delete=True);self.assertEqual(self.report(1)['totals']['feed_orders'],0);self.assertEqual(self.report(2)['totals']['feed_orders'],0);self.assertEqual(statistics(self.s.snapshot(),{})['feed_order_kg'],0)
  def test_only_confirmed_short_names_change_display(self):
-  for original,short in [('1、2','1'),('16、17','16'),('3、4','3、4'),('15-1','15-1'),('自訂桶','自訂桶')]:self.assertEqual(bin_label({'name':original}),short)
+  for original,short in [('1、2','1'),('16、17','16'),('3、4','3'),('5、6','5'),('15-1','15-1'),('自訂桶','自訂桶')]:self.assertEqual(bin_label({'name':original}),short)
 
 class CloudFeedSplitTests(FeedSplitTests):
  def setUp(self):

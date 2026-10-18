@@ -7,7 +7,7 @@ YANG_QUAN_BARNS={1,2,3,4,8,9,12,14,18,21,23,24}
 
 def bin_label(bin):
     """Confirmed shorthand only; keep original physical bin IDs and snapshots."""
-    return {'1、2':'1','16、17':'16'}.get(bin['name'],bin['name'])
+    return {'1、2':'1','3、4':'3','5、6':'5','16、17':'16'}.get(bin['name'],bin['name'])
 
 
 def validate_bin_allocations(rows,total,targets,barn_ids,batches):
