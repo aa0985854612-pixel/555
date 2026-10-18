@@ -37,8 +37,8 @@ def weekly_report(data,query,today=None):
             pending.append({'id':r['id'],'type':r['type'],'date':r.get('date'),'quantity':r['quantity'],'reason':'missing_date' if not r.get('date') else 'missing_barn','until':source_until.get(r.get('legacy_source'),today),'source_cell':r.get('source_cell','')})
     scope={k:v for k,v in query.items() if k in ('cohort','barn_id','batch_id','group')}
     # Shared filtering includes only explicitly allocated orders for this scope.
-    from .feed import order_scope,order_detail,report_feed_setup,preentry_order
-    candidates=filter_rows('feed_orders',data,scope|{'to':[min(end,today)]})
+    from .feed import order_scope,order_detail,report_feed_setup,preentry_order,report_order_parts
+    candidates=[part for order in filter_rows('feed_orders',data,scope|{'to':[min(end,today)]}) for part in report_order_parts(order,data,ids)]
     preentry=[]
     for o in candidates:
         if not preentry_order(o,data,ids):continue
@@ -53,7 +53,7 @@ def weekly_report(data,query,today=None):
         else:
             pre_details.extend(order_detail(o,data,a['batch_id']) for a in o['allocations'] if a['batch_id'] in ids)
     pre_known=sum(d['kg'] for d in pre_details)
-    preentry_feed={'details':pre_details,'shared_details':pre_shared,'known_kg':pre_known,'total_kg':None if pre_shared else pre_known,'count':len(preentry),'basis':'before_explicit_batch_entry_not_in_period_totals'}
+    preentry_feed={'details':pre_details,'shared_details':pre_shared,'known_kg':pre_known,'total_kg':None if pre_shared else pre_known,'count':len({r['id'] for r in preentry}),'basis':'before_explicit_batch_entry_not_in_period_totals'}
     unassigned=[o for o in data.get('feed_orders',[]) if start<=o['date']<=end and not o['allocations'] and not o.get('feed_bin_id')]
     bin_pending=[o for o in orders if o.get('feed_bin_id') and order_scope(o,data,ids)['kg'] is None]
     pending.extend({'id':o['id'],'type':'feed_orders','date':o['date'],'kg':o['kg'],'bin':o['feed_bin_snapshot']['name'],'reason':'shared_bin_unallocated' if len(o['feed_bin_snapshot']['barn_ids'])>1 else 'bin_batch_unknown'} for o in bin_pending)

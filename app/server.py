@@ -466,11 +466,12 @@ class Handler(BaseHTTPRequestHandler):
                     mean=(r.get('mean_kg') if r.get('source_mean') else r['total_kg']/r['count']) if kind=='weights' else ''
                     values=[r['id'],r['revision'],r.get('date',r.get('start','')),r.get('end',''),barns.get(batch.get('barn_id') or r.get('barn_id'),r.get('barn_number') or ''),batch.get('name',r.get('legacy_batch','')),r.get('type',r.get('method','sample' if kind=='weights' else 'feed_order' if kind=='feed_orders' else 'delivery')),q,'heads' if kind=='movements' else 'kg',mean,r.get('age_days',''),r.get('vendor',''),r.get('item',''),r.get('note',''),encode(r.get('allocations',[])),('active' if r['active'] else 'excluded') if kind=='usages' else '',r.get('count',''),encode(r.get('individual_kg',[])),r.get('pen',''),sum(a['kg'] for a in r.get('allocations',[]) if a['batch_id'] in set(selected_ids(data,query))) ,'source_mean' if r.get('source_mean') else 'legacy_excel_readonly' if r.get('legacy_source') else r.get('method','recorded'),r.get('source_cell',''),r.get('section',''),r.get('session_id',''),r.get('session_number','')]
                     if kind=='feed_orders' and r.get('feed_bin_id'):
-                        from .feed import order_scope
+                        from .feed import order_scope,bin_label
                         scoped=any(query.get(k,[''])[0] for k in ('batch_id','barn_id','group','cohort'))
                         attribution=order_scope(r,data,selected_ids(data,query) if scoped else None)
                         values[4]='、'.join(r['feed_bin_snapshot']['barn_names']);values[5]='、'.join(batches[x]['name'] for x in r['target_batch_ids']);values[19]=attribution['kg']
-                        values.extend([r['feed_bin_snapshot']['name'],'、'.join(r['feed_bin_snapshot']['barn_names']),encode(r['target_batch_ids']),attribution['state']])
+                        values[14]=encode(r.get('bin_allocations') or r.get('allocations',[]))
+                        values.extend([bin_label(r['feed_bin_snapshot']),'、'.join(r['feed_bin_snapshot']['barn_names']),encode(r['target_batch_ids']),attribution['state']])
                     else:values.extend(['','','',''])
                     values.append(r.get('outgoing_destination',''))
                     # Spreadsheet formula injection protection; original fields remain intact in backups.
