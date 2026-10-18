@@ -3,14 +3,15 @@
 (() => {
 Object.assign(words,{
  feedSub:['只需登記日期與叫料量，其他資料可選填。','Chỉ ghi ngày và lượng đặt; thông tin khác tùy chọn.'],
- feed_orders:['叫料量','Lượng đặt thức ăn'],newFeedOrder:['登記叫料量','Ghi lượng đặt thức ăn'],orderAmount:['叫料量','Lượng đặt'],orderHistory:['叫料紀錄','Lịch sử đặt thức ăn'],orderTotal:['叫料合計','Tổng lượng đặt'],orderScope:['預設全場；指定棟舍時請選擇批次。','Mặc định toàn trại; chọn lứa nếu chỉ định chuồng.'],orderMeaning:['叫料量不代表實際耗料，不用於FCR計算。','Lượng đặt không phải lượng tiêu thụ, không dùng tính FCR.'],legacyFeed:['舊到料／用料紀錄','Lịch sử nhập / tiêu thụ'],legacyFeedHint:['保留原紀錄及計算依據；日常只使用上方叫料登記。','Giữ bản gốc và cơ sở tính; hằng ngày chỉ ghi lượng đặt phía trên.']
+ feedRecordDetails:['用藥、來源與批次明細','Thuốc, nguồn và chi tiết lứa'],feed_orders:['叫料量','Lượng đặt thức ăn'],newFeedOrder:['登記叫料量','Ghi lượng đặt thức ăn'],orderAmount:['叫料量','Lượng đặt'],orderHistory:['叫料紀錄','Lịch sử đặt thức ăn'],orderTotal:['叫料合計','Tổng lượng đặt'],orderScope:['預設全場；指定棟舍時請選擇批次。','Mặc định toàn trại; chọn lứa nếu chỉ định chuồng.'],orderMeaning:['叫料量不代表實際耗料，不用於FCR計算。','Lượng đặt không phải lượng tiêu thụ, không dùng tính FCR.'],legacyFeed:['舊到料／用料紀錄','Lịch sử nhập / tiêu thụ'],legacyFeedHint:['保留原紀錄及計算依據；日常只使用上方叫料登記。','Giữ bản gốc và cơ sở tính; hằng ngày chỉ ghi lượng đặt phía trên.']
 });
 const base={build,renderCurrent,rowsHTML,collect,edit,restorePending,finishForm,selections,enter};
 let feedUser=null;
 function replaceRecords(id,html){
  const list=$('#'+id);if(list.innerHTML===html)return;
+ const open=new Set(Array.from(list.querySelectorAll('details[open][data-key]')).map(e=>e.dataset.key));
  const active=list.contains(document.activeElement)?document.activeElement:null,key=active?.dataset;
- list.innerHTML=html;
+ list.innerHTML=html;list.querySelectorAll('details[data-key]').forEach(e=>e.open=open.has(e.dataset.key));
  if(active){const match=key?.id?Array.from(list.querySelectorAll('button[data-id]')).find(b=>b.dataset.id===key.id&&b.dataset.edit===key.edit&&b.dataset.delete===key.delete):null;list.tabIndex=-1;(match||list).focus({preventScroll:true});}
 }
 function loadOrder(f,r){
@@ -49,7 +50,7 @@ collect=f=>{
 };
 rowsHTML=(kind,rows)=>{
  if(kind!=='feed_orders')return base.rowsHTML(kind,rows);
- return rows.map(r=>`<article class="feed-order-record"><div class="section-row"><strong>${esc(r.date)}</strong><strong class="order-quantity">${fmt(r.display_unit==='ton'?r.kg/1000:r.kg)} <small>${esc(t(r.display_unit))}</small></strong></div><p>${[r.vendor,r.item,r.feed_bin_id?r.feed_bin_snapshot.name+' · '+r.feed_bin_snapshot.barn_names.join('、')+(r.target_batch_ids.length?' · '+[...new Set(r.target_batch_ids.map(id=>data.batches.find(b=>b.id===id)?.name||t('unassigned')))].join('、'):' · '+t('feedTargetUnknown')):r.allocations.length?r.allocations.map(a=>batchName(a.batch_id)).join('、'):t('allFarm')].filter(Boolean).map(esc).join(' · ')}</p>${r.scope_attribution?.kg===null?`<p class="feed-shared-note">${t('feedSharedReference')}</p>`:''}${r.note?`<p class="order-note">${esc(r.note)}</p>`:''}<div class="actions">${recordActions(kind,r)}</div></article>`).join('')||empty();
+ return rows.map(r=>{const ids=r.target_batch_ids||r.allocations.map(a=>a.batch_id),targets=data.batches.filter(b=>ids.includes(b.id)),pre=targets.length&&targets.every(b=>r.date<b.entry_date);const bin=r.feed_bin_snapshot,scope=bin?bin.name:r.allocations.length?r.allocations.map(a=>batchName(a.batch_id)).join('、'):t('allFarm');return `<article class="feed-order-record"><div class="section-row"><strong>${esc(r.date)}</strong><strong class="order-quantity">${fmtFeed(r.display_unit==='ton'?r.kg/1000:r.kg)} <small>${esc(t(r.display_unit))}</small></strong></div>${pre?`<span class="feed-preentry-tag">${t('weeklyPreentry')}</span>`:''}<p class="feed-order-main"><strong>${bin?t('feedBin')+' ':''}${esc(scope)}</strong><span>${esc(r.item||'—')} · ${esc(r.vendor||'—')}</span></p>${r.scope_attribution?.kg===null?`<p class="feed-shared-note">${t('feedSharedReference')}</p>`:''}<details class="feed-order-details" data-key="feed-note-${esc(r.id)}"><summary>${t('feedRecordDetails')}</summary>${bin?`<p>${esc(bin.barn_names.join('、'))} · ${esc([...new Set((r.target_batch_ids||[]).map(id=>data.batches.find(b=>b.id===id)?.name||t('unassigned')))].join('、')||t('feedTargetUnknown'))}</p>`:''}${r.note?`<p class="order-note">${esc(r.note)}</p>`:''}</details><div class="actions">${recordActions(kind,r)}</div></article>`;}).join('')||empty();
 };
 renderCurrent=async()=>{
  if(current!=='feed')return base.renderCurrent();
@@ -57,7 +58,7 @@ renderCurrent=async()=>{
  try{
   const requests=[api('/api/feed_orders?'+q)];if(archive.open)requests.push(api('/api/deliveries?'+q),api('/api/usages?'+q));
   const [orders,deliveries,usages]=await Promise.all(requests);if(ticket!==renderTicket||current!=='feed')return;
-  replaceRecords('feed-order-results',rowsHTML('feed_orders',orders));const partial=orders.filter(r=>r.scope_attribution?.kg===null),known=orders.reduce((n,r)=>n+(r.scope_attribution?r.scope_attribution.kg||0:r.kg),0);$('#feed-order-total').textContent=(partial.length?t('feedKnownTotal'):t('orderTotal'))+' '+fmt(known)+' kg'+(partial.length?' · '+t('feedReferenceTotal')+' '+fmt(partial.reduce((n,r)=>n+r.kg,0))+' kg':'');
+  replaceRecords('feed-order-results',rowsHTML('feed_orders',orders));const partial=orders.filter(r=>r.scope_attribution?.kg===null),known=orders.reduce((n,r)=>n+(r.scope_attribution?r.scope_attribution.kg||0:r.kg),0);$('#feed-order-total').textContent=(partial.length?t('feedKnownTotal'):t('orderTotal'))+' '+fmtFeed(known)+' kg'+(partial.length?' · '+t('feedReferenceTotal')+' '+fmtFeed(partial.reduce((n,r)=>n+r.kg,0))+' kg':'');
   if(deliveries){replaceRecords('delivery-results',rowsHTML('deliveries',deliveries));replaceRecords('usage-results',rowsHTML('usages',usages.map(u=>({...u,computed_kg:calcConsumption(u)}))));}
  }catch(e){toast(messageError(e));}
 };
@@ -73,7 +74,7 @@ edit=(kind,id)=>{
  if(['deliveries','usages'].includes(kind))showLegacyForm($('#'+(kind==='deliveries'?'delivery-form':'usage-form')));
  base.edit(kind,id);
 };
-restorePending=()=>{base.restorePending();if(!pending||pending.user!==me?.id)return;if(pending.formId==='feed-order-form')loadOrder($('#feed-order-form'),pending.body);if(['delivery-form','usage-form'].includes(pending.formId))showLegacyForm($('#'+pending.formId));};
+restorePending=()=>{base.restorePending();if(!pending||pending.user!==me?.id)return;if(pending.formId==='feed-order-form')loadOrder($('#feed-order-form'),pending.body.record||pending.body);if(['delivery-form','usage-form'].includes(pending.formId))showLegacyForm($('#'+pending.formId));};
 finishForm=f=>{base.finishForm(f);if(['delivery-form','usage-form'].includes(f.id)){$('#legacy-feed-forms').hidden=true;}if(f.id==='feed-order-form')delete f.dataset.pendingRestored;};
 enter=async user=>{
  if(feedUser!==user.id){

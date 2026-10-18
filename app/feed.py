@@ -42,7 +42,7 @@ def order_scope(order, data, selected=None):
 def order_detail(order, data, batch_id=None):
     batches={b['id']:b for b in data['batches']};barns={b['id']:b['name'] for b in data['barns']}
     if order.get('feed_bin_id'):
-        snap=order['feed_bin_snapshot'];label=snap['name']+('共用' if len(snap['barn_ids'])>1 else '')
+        snap=order['feed_bin_snapshot'];label=snap['name']
         return {'id':order['id'],'date':order['date'],'batch_id':None,'barn':'、'.join(snap['barn_names']),
             'bin':snap['name'],'bin_label':label,'kg':order['kg'],'vendor':order['vendor'],'item':order['item'],'target_batch_ids':order['target_batch_ids']}
     a=next(a for a in order['allocations'] if a['batch_id']==batch_id)
@@ -61,3 +61,10 @@ def report_feed_setup(data, members, orders):
     return {'configured_vendors':suppliers,'recorded_vendors':sorted({o['vendor'] for o in orders if o.get('vendor')}),
         'recorded_types':sorted({o['item'] for o in orders if o.get('item')}),
         'bins':[{'name':b['name'],'vendor':b['vendor'],'barns':[x['name'] for x in data['barns'] if x['id'] in b['barn_ids']]} for b in bins]}
+
+
+def preentry_order(order,data,selected):
+    """Only explicit batch links identify feed ordered before those pigs arrive."""
+    chosen=set(selected);ids=set(order.get('target_batch_ids',[])) if order.get('feed_bin_id') else {a['batch_id'] for a in order.get('allocations',[])}
+    members=[b for b in data['batches'] if b['id'] in ids&chosen]
+    return bool(members) and all(order['date']<b['entry_date'] for b in members)

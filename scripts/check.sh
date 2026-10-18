@@ -15,3 +15,5 @@ node --check app/static/review.js
 node --check app/static/feed-setup.js
 
 node --check app/static/weekly-pdf.js
+
+node --check app/static/feed-review.js

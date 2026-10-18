@@ -252,7 +252,7 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header('X-Content-Type-Options','nosniff')
         self.send_header('Referrer-Policy','same-origin')
         self.send_header('X-Frame-Options','DENY')
-        self.send_header('Content-Security-Policy',"default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; worker-src 'self'; manifest-src 'self'; frame-ancestors 'none'")
+        self.send_header('Content-Security-Policy',"default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; connect-src 'self'; worker-src 'self'; manifest-src 'self'; frame-ancestors 'none'")
         self.send_header('Cache-Control','no-store' if self.path.startswith('/api/') else 'no-cache')
         if self.server.secure:self.send_header('Strict-Transport-Security','max-age=31536000')
         for k,v in (headers or {}).items():self.send_header(k,v)
@@ -349,6 +349,15 @@ class Handler(BaseHTTPRequestHandler):
             if path=='/api/daily-checks/bulk' and method=='POST':
                 from .review import save_bulk_checks
                 result=save_bulk_checks(store,user,self.body(),self.headers.get('Idempotency-Key'))
+                if '_snapshot' in result:
+                    snapshot=result.pop('_snapshot');seq=result.pop('_sequence');result['sync']=client_snapshot(snapshot,self.server.instance+':'+str(seq))
+                return self.send(result,201)
+            if path=='/api/feed-order-preview' and method=='POST':
+                from .feed_review import preview_feed_order
+                return self.send(preview_feed_order(store,user,self.body()))
+            if path=='/api/feed-order-apply' and method=='POST':
+                from .feed_review import save_reviewed_feed
+                result=save_reviewed_feed(store,user,self.body(),self.headers.get('Idempotency-Key'))
                 if '_snapshot' in result:
                     snapshot=result.pop('_snapshot');seq=result.pop('_sequence');result['sync']=client_snapshot(snapshot,self.server.instance+':'+str(seq))
                 return self.send(result,201)

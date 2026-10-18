@@ -25,10 +25,21 @@ window.weeklyPdf = async function(model) {
   y+=6;const ew=[.12,.24,.19,.20,.25].map(n=>W*n);
   const entryRows=[model.entryHeaders,...model.entries];for(let i=0;i<entryRows.length;i++){let x=M;for(let j=0;j<5;j++){cell(entryRows[i][j],x,y,ew[j],i?21:19,{size:8.5,bold:i===0,shade:i===0});x+=ew[j];}y+=i?21:19;}
   y+=6;text(model.period+(model.pages.length>1?` (${page+1}/${model.pages.length})`:''),M,y,W,8,false,'left',14);y+=17;
-  const bands=model.pages[page];for(const band of bands){
+  const pre=model.preentry;
+  if(pre){
+   const shown=pre.entries.slice(0,6),rows=Math.ceil(shown.length/3),h=18+rows*12+(pre.entries.length>shown.length?12:0)+4;
+   cell('',M,y,W,h);text(pre.title+' · '+pre.summary,M+4,y+3,W-8,9,true,'left',13,true);
+   shown.forEach((entry,i)=>text(entry,M+4+(i%3)*W/3,y+18+Math.floor(i/3)*12,W/3-8,8.5,false,'left',12,true));
+   if(pre.entries.length>shown.length)text(pre.more.replace('{n}',pre.entries.length-shown.length),M+4,y+h-12,W-8,8,false,'left',11,true);
+   y+=h+5;
+  }
+  const bands=model.pages[page],tableHeight=bands.reduce((n,b)=>n+19+b.rows.reduce((sum,r)=>sum+r.height,0)+8,0);
+  // Reserve room for the separate pre-entry section and all footer blocks.
+  const feedRows=bands.flatMap(b=>b.rows).filter(r=>r.left),shrink=pre&&feedRows.length?Math.max(0,Math.ceil((y+tableHeight+112+8+120-(PH-M))/feedRows.length)):0;
+  for(const band of bands){
    const n=band.headers.length,labelW=58,cw=(W-labelW)/n,size=n>16?7:8;
    const rows=[{label:model.cycle,cells:band.headers,height:19,shade:true,bold:true},...band.rows];
-   for(const row of rows){cell(row.label,M,y,labelW,row.height,{size:8.5,bold:true,shade:row.shade});for(let j=0;j<n;j++)cell(row.cells[j]||'',M+labelW+j*cw,y,cw,row.height,{size:row.bold?size+.5:size,bold:row.bold,shade:row.shade,align:row.left?'left':'center',singleLine:row.singleLine});y+=row.height;}
+   for(const originalRow of rows){const row=originalRow.left?{...originalRow,height:Math.max(30,originalRow.height-shrink)}:originalRow;cell(row.label,M,y,labelW,row.height,{size:8.5,bold:true,shade:row.shade});for(let j=0;j<n;j++)cell(row.cells[j]||'',M+labelW+j*cw,y,cw,row.height,{size:row.bold?size+.5:size,bold:row.bold,shade:row.shade,align:row.left?'left':'center',singleLine:row.singleLine});y+=row.height;}
    y+=8;
   }
   // One death column per barn; each date stays under its own barn heading.
