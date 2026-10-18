@@ -21,7 +21,8 @@ def apply_dates(row,data):
         item=row|{'id':row['id'] if i==0 else str(uuid.uuid5(uuid.NAMESPACE_URL,'source-date-part:'+row['id']+':'+str(i))),
             'date':part['date'],'quantity':part['quantity'],'note':part['note'],
             'source_original_date':row['date'],'source_original_note':row.get('note',''),'source_original_id':row['id'],'date_review':review}
-        if i:
+        if len(review['parts'])>1:
+            # A void of either dated part must not suppress its sibling.
             item['source_anchor']=hashlib.sha256(('source-date-part:'+row.get('source_anchor',row['id'])+':'+str(i)).encode()).hexdigest()
             item['source_event_anchor']=row.get('source_anchor') or row.get('source_event_anchor')
         if part.get('outgoing_destination'):item['outgoing_destination']=part['outgoing_destination']
