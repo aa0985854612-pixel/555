@@ -113,4 +113,3 @@ renderSettings=()=>{
  preserveBox('feed-bin-list',(data.feed_bins||[]).map(b=>`<article class="feed-bin-row"><div><strong>${esc(feedBinLabel(b))}</strong><span>${esc(b.vendor)} · ${b.barn_ids.map(id=>esc(data.barns.find(x=>x.id===id)?.name||'')).join('、')}${b.active?'':' · '+t('feedDisabled')}</span></div>${me?.role==='admin'?`<button type="button" data-edit="feed_bins" data-id="${b.id}">${t('edit')}</button>`:''}</article>`).join('')||empty());persistPending();
 };
 })();
-boot();

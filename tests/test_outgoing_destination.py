@@ -12,7 +12,13 @@ class OutgoingDestinationTests(unittest.TestCase):
   for n in (9,23):
    barn=self.add('barns',name=f'{n}棟');self.batches.append(self.add('batches',name='DEMO',barn_id=barn['id'],entry_date='2026-01-01',entry_age_days=71,entry_count=100,status='active'))
  def tearDown(self):self.tmp.cleanup()
- def add(self,kind,**d):return self.store.mutate(self.admin,kind,d,str(uuid.uuid4()))
+ def add(self,kind,**d):
+  if kind=='movements':
+   from app.source_edit import duplicates,duplicate_token
+   data=self.store.snapshot()
+   if duplicates(data,d):
+    clean=self.store.validate(kind,d,data,self.admin);d['duplicate_confirmation']=duplicate_token(data,clean)
+  return self.store.mutate(self.admin,kind,d,str(uuid.uuid4()))
  def move(self,destination='',typ='sale',index=0,**extra):return self.add('movements',batch_id=self.batches[index]['id'],date='2026-01-02',type=typ,quantity=1,outgoing_destination=destination,**extra)
  def report(self,**query):return weekly_report(self.store.snapshot(),{'cohort':['DEMO|2026-01-01'],'to':['2026-01-14']}|{k:[v] for k,v in query.items()},today='2026-01-14')
  def test_three_places_and_culls_are_preserved(self):

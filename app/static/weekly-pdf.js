@@ -81,5 +81,8 @@ window.weeklyPdf = async function(model) {
   object(id+2,[`<< /Length ${enc.encode(stream).length} >>\nstream\n`,stream,'endstream']);
  }
  const xref=length;append(`xref\n0 ${offsets.length}\n0000000000 65535 f \n`);for(const n of offsets.slice(1))append(String(n).padStart(10,'0')+' 00000 n \n');append(`trailer\n<< /Size ${offsets.length} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`);
- return new Blob(parts,{type:'application/pdf'});
+ const pdf=new Blob(parts,{type:'application/pdf'});
+ // These exact JPEG bytes are embedded in the PDF, so preview and download agree.
+ pdf.previewPages=images.map(im=>new Blob([im.bytes],{type:'image/jpeg'}));
+ return pdf;
 };

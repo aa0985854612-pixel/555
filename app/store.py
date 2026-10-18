@@ -3,7 +3,7 @@ from pathlib import Path
 from datetime import datetime, timezone
 from .domain import Invalid, day, number, herd, consumption, age
 
-VERSION='2.0.21'
+VERSION='2.0.22'
 SCHEMA_VERSION=4
 KINDS=('barns','batches','movements','feed_orders','deliveries','usages','weights','workbooks','source_voids','daily_checks','feed_bins')
 SCHEMA='''
@@ -152,6 +152,8 @@ class Store:
         for b in data['batches']:resolve(b,set())
         from .source_dates import adjust_snapshots
         adjust_snapshots(data)
+        from .source_edit import adjust_snapshots as adjust_edits
+        adjust_edits(data)
         from .source_assignment import rebuild_confirmed_stock
         rebuild_confirmed_stock(data)
         from .operations import apply_source_voids
@@ -231,7 +233,7 @@ class Store:
             'weights':{'date','batch_id','age_days','pen','count','total_kg','individual_kg','sampling','note','representative','section','session_id','session_number','session_fingerprint'},
             'daily_checks':{'date','batch_id','status','note'},
             'source_voids':{'target_kind','source_row_id','source_record','reason'},
-            'workbooks':{'filename','base64','counts_text','counts_as_of','closed_barns','source_url','sha256','report','plan','review_decisions','source_date_reviews'},
+            'workbooks':{'filename','base64','counts_text','counts_as_of','closed_barns','source_url','sha256','report','plan','review_decisions','source_date_reviews','source_movement_edits'},
         }[kind]
         d={k:v for k,v in d.items() if k in allowed}
         if kind=='barns':
@@ -433,6 +435,8 @@ class Store:
         data={kind:[dict(r) for r in rows] for kind,rows in data.items()}
         from .source_dates import validate_reviews
         validate_reviews(data)
+        from .source_edit import validate_edits
+        validate_edits(data)
         self.enrich_legacy(data)
         bid={b['id']:b for b in data['batches']}
         barns={b['id'] for b in data['barns']}
@@ -489,8 +493,8 @@ class Store:
         for changes in deltas.values():
             balance=0
             for date in sorted(changes):
-                balance+=changes[date]
-                if balance<0:raise Invalid('insufficient_heads')
+                balance=None if balance is None or changes[date] is None else balance+changes[date]
+                if balance is not None and balance<0:raise Invalid('insufficient_heads')
         for book in data['workbooks']:
             if book.get('base_book_id'):continue
             for row in book['report']['rows']:
@@ -561,7 +565,12 @@ class Store:
                     if any(payload.get(k)!=previous.get(k) for k in ('legacy_source','legacy_row','legacy_barn','barn_id','entry_date')):raise Problem('legacy_source_conflict')
                 if kind=='feed_orders' and previous and 'feed_bin_id' not in payload:
                     payload={k:previous[k] for k in ('feed_bin_id','target_batch_ids') if k in previous}|payload
+                duplicate_confirmation=payload.get('duplicate_confirmation') if kind=='movements' else None
+                if kind=='movements':payload={k:v for k,v in payload.items() if k!='duplicate_confirmation'}
                 cleaned=self.validate(kind,payload,data,user,previous)
+                if kind=='movements':
+                    from .source_edit import duplicates,duplicate_token
+                    if duplicates(data,cleaned,rid) and duplicate_confirmation!=duplicate_token(data,cleaned,rid):raise Problem('movement_duplicate',409,duplicates(data,cleaned,rid))
                 if kind=='batches' and previous and previous.get('legacy_group',{}).get('expected_members')==1:
                     if cleaned['entry_count']!=previous['entry_count']:
                         if not cleaned.get('entry_count_reason'):raise Problem('entry_count_reason_required')

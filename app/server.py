@@ -361,6 +361,28 @@ class Handler(BaseHTTPRequestHandler):
                 if '_snapshot' in result:
                     snapshot=result.pop('_snapshot');seq=result.pop('_sequence');result['sync']=client_snapshot(snapshot,self.server.instance+':'+str(seq))
                 return self.send(result,201)
+            if path=='/api/source-edit-record' and method=='GET':
+                from .source_edit import base_rows
+                store.require(user,True);data=store.snapshot(include_source=False)
+                row=next((r for r in source_history(data) if r['id']==query.get('id',[''])[0]),None)
+                if not row:raise Problem('not_found',404)
+                return self.send({'record':row,'original':next((r for r in source_history(data,include_voided=True,include_matched=True,apply_date_reviews=False) if r['id']==row.get('source_original_id',row['id'])),base_rows(data)[row['id']]),'members':[b for b in data['batches'] if b['id'] in row['legacy_members']]})
+            if path=='/api/source-edit-preview' and method=='POST':
+                from .source_edit import preview
+                return self.send(preview(store,user,self.body()))
+            if path=='/api/source-edit' and method=='POST':
+                from .source_edit import save
+                result=save(store,user,self.body(),self.headers.get('Idempotency-Key'))
+                if '_snapshot' in result:
+                    snapshot=result.pop('_snapshot');seq=result.pop('_sequence');result['sync']=client_snapshot(snapshot,self.server.instance+':'+str(seq))
+                return self.send(result,201)
+            if path=='/api/movement-preview' and method=='POST':
+                from .source_edit import duplicates,duplicate_token
+                body=self.body();store.require(user);data=store.snapshot(include_source=False);rid=body.pop('id',None)
+                previous=next((r for r in data['movements'] if r['id']==rid),None)
+                if previous and (previous.get('legacy_source') or previous.get('_source_derived')):raise Problem('legacy_source_readonly',403)
+                clean=store.validate('movements',body,data|{'movements':[r for r in data['movements'] if r['id']!=rid]},user,previous)
+                return self.send({'duplicates':duplicates(data,clean,rid),'duplicate_confirmation':duplicate_token(data,clean,rid)})
             if path=='/api/void-preview' and method=='GET':
                 from .operations import void_preview
                 return self.send(void_preview(store,user,store.snapshot(include_source=False),query.get('kind',[''])[0],query.get('id',[''])[0]))

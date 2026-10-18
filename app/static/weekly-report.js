@@ -14,7 +14,21 @@ Object.assign(words,{weeklyPlanned:['週期預排至32週；所選日期以外�
 Object.assign(words,{weeklyShippingMore:['另有{n}筆出豬備註，完整內容詳CSV。','Còn {n} ghi chú xuất heo; xem đầy đủ trong CSV.']});
 Object.assign(words,{weeklyPaperSale:['正常出豬','Xuất bán'],weeklyPaperCull:['淘汰數（隻）','Loại (con)'],weeklyPaperDeath:['死亡數（隻）','Chết (con)'],weeklyPaperStart:['起始日','Ngày đầu']});
 const base={build,clickAction,translate,enter};
-let report=null,reportUser=null,serial=0,printing=false,title=null;
+let report=null,reportUser=null,serial=0,printing=false,title=null,pdfCache=null,pdfTask=null,previewURLs=[];
+Object.assign(words,{weeklyActualPreview:['A4列印預覽（與下載PDF相同）','Xem trước in A4 (giống PDF tải xuống)'],weeklyScreenDetails:['查看完整畫面明細','Xem chi tiết trên màn hình']});
+function clearPDF(){pdfCache=null;pdfTask=null;previewURLs.forEach(u=>URL.revokeObjectURL(u));previewURLs=[];el('weekly-a4-preview')?.replaceChildren();}
+async function ensurePDF(){
+ if(!report||reportUser!==me?.id)return null;const original=report,user=me.id,language=lang;
+ if(pdfCache?.report===original&&pdfCache.lang===language)return pdfCache.blob;
+ if(pdfTask?.report===original&&pdfTask.lang===language)return pdfTask.promise;
+ const task={report:original,lang:language};task.promise=(async()=>{
+  const blob=await window.weeklyPdf(pdfModel());
+  if(report!==original||me?.id!==user||lang!==language||!el('weekly-report-dialog').open)return null;
+  pdfCache={report:original,lang:language,blob};previewURLs.forEach(u=>URL.revokeObjectURL(u));previewURLs=(blob.previewPages||[]).map(b=>URL.createObjectURL(b));
+  const root=el('weekly-a4-preview');root.replaceChildren();const heading=document.createElement('h3');heading.textContent=t('weeklyActualPreview');root.append(heading);previewURLs.forEach((url,i)=>{const im=document.createElement('img');im.src=url;im.alt=t('weeklyActualPreview')+' '+(i+1)+'/'+previewURLs.length;im.width=595;im.height=842;root.append(im);});
+  return blob;
+ })().finally(()=>{if(pdfTask===task)pdfTask=null;});pdfTask=task;return task.promise;
+}
 const el=id=>document.getElementById(id),safe=esc;
 function label(key,n){return t(key).replace('{n}',n);}
 function resetPrint(){if(title!==null){document.title=title;title=null;}printing=false;el('weekly-print-root')?.replaceChildren();}
@@ -27,7 +41,7 @@ function syncBarns(resetDates=false){
  if(resetDates){el('weekly-from').value=chosen()?.entry_date||'';el('weekly-to').value=today();}
 }
 function openWeekly(){
- if(!data)return;report=null;el('weekly-sheet-body').replaceChildren();el('weekly-export-actions').hidden=true;el('weekly-error').textContent='';
+ if(!data)return;clearPDF();report=null;el('weekly-sheet-body').replaceChildren();el('weekly-export-actions').hidden=true;el('weekly-error').textContent='';
  const cohorts=(data.cohorts||[]).filter(c=>!c.archive),f=current==='daily'?el('movement-form'):el('stats-filter');
  const options=cohorts.map(c=>`<option value="${safe(c.key)}">${safe(c.name)}｜${safe(c.barns.join('、'))} · ${safe(c.entry_date)}</option>`).join('');
  el('weekly-cohort').innerHTML=`<option value="">${t('choose')}</option>`+options;
@@ -37,10 +51,10 @@ function openWeekly(){
  const d=el('weekly-report-dialog');if(!d.open)d.showModal();d.scrollTop=0;
 }
 async function generate(e){
- e.preventDefault();const f=el('weekly-report-form');if(!f.reportValidity())return;const mine=++serial,user=me?.id,button=el('weekly-generate');button.disabled=true;el('weekly-error').textContent=t('weeklyLoading');el('weekly-export-actions').hidden=true;report=null;el('weekly-sheet-body').replaceChildren();
+ e.preventDefault();const f=el('weekly-report-form');if(!f.reportValidity())return;const mine=++serial,user=me?.id,button=el('weekly-generate');button.disabled=true;el('weekly-error').textContent=t('weeklyLoading');el('weekly-export-actions').hidden=true;clearPDF();report=null;el('weekly-sheet-body').replaceChildren();
  try{
   const q=new URLSearchParams({cohort:el('weekly-cohort').value,from:el('weekly-from').value,to:el('weekly-to').value});if(el('weekly-barn').value)q.set('barn_id',el('weekly-barn').value);
-  const result=await api('/api/weekly-report?'+q);if(mine!==serial||me?.id!==user||!el('weekly-report-dialog').open)return;report=result;reportUser=user;render();el('weekly-error').textContent='';el('weekly-export-actions').hidden=false;el('weekly-sheet-body').scrollIntoView({block:'start',behavior:'smooth'});
+  const result=await api('/api/weekly-report?'+q);if(mine!==serial||me?.id!==user||!el('weekly-report-dialog').open)return;report=result;reportUser=user;render();el('weekly-error').textContent='';el('weekly-export-actions').hidden=false;ensurePDF().then(blob=>{if(blob&&mine===serial&&me?.id===user)el('weekly-a4-preview').scrollIntoView({block:'start',behavior:'smooth'});}).catch(()=>{});
  }catch(err){if(mine===serial)el('weekly-error').textContent=messageError(err);}finally{if(mine===serial)button.disabled=false;}
 }
 const metrics=['cull','death','feed_orders','sale'];
@@ -122,7 +136,7 @@ function pdfModel(){
 }
 async function downloadPDF(){
  if(!report||reportUser!==me?.id)return;const user=me.id,original=report,button=el('weekly-print'),name=filename();button.disabled=true;el('weekly-error').textContent=t('weeklyPDFMaking');
- try{const blob=await window.weeklyPdf(pdfModel());if(me?.id!==user||report!==original||!el('weekly-report-dialog').open)return;const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=name+'.pdf';document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);el('weekly-error').textContent='';}
+ try{const blob=await ensurePDF();if(!blob||me?.id!==user||report!==original||!el('weekly-report-dialog').open)return;const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=name+'.pdf';document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);el('weekly-error').textContent='';}
  catch(err){if(me?.id===user&&report===original)el('weekly-error').textContent=t('weeklyFailure');}finally{button.disabled=false;}
 }
 function markup(compact=false){
@@ -134,7 +148,7 @@ function markup(compact=false){
  return `<article class="weekly-sheet${compact?' weekly-one-page':''}"><header class="weekly-heading"><h1>嘉得 · ${t('weeklyReport')}</h1></header><dl class="weekly-basics">${paperBasics().map(([k,v])=>`<div><dt>${t(k)}</dt><dd>${safe(v)}</dd></div>`).join('')}</dl>${entryFacts()}<p class="weekly-period-line">${t('weeklyDates')}：${safe(r.from)} → ${safe(r.to)} · ${t('weeklyObserved')} ${safe(r.observed_to)}<br>${t('weeklyPaperPeriod')} ${safe(planningHint())}</p>${preentryBlock(compact)}${blocks.join('')}${notesBlock(compact)}<section class="weekly-totals"><h2>${t('weeklyTotal')}</h2><div class="weekly-totals-grid">${totals}</div></section><p class="weekly-cumulative"><span>${t('weeklyCurrent')} · ${safe(r.observed_to)}</span><span>${t('remaining')} <strong>${r.cumulative.remaining==null?'—':fmt(r.cumulative.remaining,0)}</strong></span><span>${t('weeklySurvival')} <strong>${r.cumulative.survival==null?'—':fmt(r.cumulative.survival)+'%'}</strong></span></p>${r.pending.length?compact?`<p class="weekly-compact-pending">${safe(label('weeklyPendingCount',r.pending.length))}</p>`:`<details class="weekly-pending"><summary>${safe(label('weeklyPendingCount',r.pending.length))}</summary><ul>${r.pending.map(p=>`<li>${safe(pendingText(p))}</li>`).join('')}</ul></details>`:''}${footnotes(true)}${details}</article>`;
 }
 function fitFeedLines(root){const canvas=document.createElement('canvas'),c=canvas.getContext('2d');for(const line of root.querySelectorAll('.weekly-feed-entry')){const style=getComputedStyle(line),size=parseFloat(style.fontSize);c.font=style.font;const width=line.clientWidth,needed=c.measureText(line.textContent).width;if(width&&needed>width)line.style.fontSize=(size*(width-1)/needed)+'px';}}
-function render(){if(report&&reportUser===me?.id){el('weekly-sheet-body').innerHTML=markup();fitFeedLines(el('weekly-sheet-body'));}}
+function render(){if(report&&reportUser===me?.id){el('weekly-sheet-body').innerHTML='<details><summary>'+t('weeklyScreenDetails')+'</summary>'+markup()+'</details>';fitFeedLines(el('weekly-sheet-body'));el('weekly-sheet-body').firstElementChild.addEventListener('toggle',()=>fitFeedLines(el('weekly-sheet-body')));ensurePDF().catch(()=>{el('weekly-error').textContent=t('weeklyFailure');});}}
 function filename(){return `${t('weeklyReport')}_${report.name}_${report.barns.join('-')}_${report.from}_${report.to}`.replace(/[\\/:*?"<>|\r\n]/g,'-');}
 function printSheet(){if(!report||reportUser!==me?.id)return;printing=true;el('weekly-print-root').innerHTML=markup(true);fitFeedLines(el('weekly-print-root'));title=document.title;document.title=filename();window.print();}
 function csvCell(v){let s=String(v??'');if(/^[\s\uFEFF]*[=+\-@]/.test(s))s="'"+s;return '"'+s.replaceAll('"','""')+'"';}
@@ -145,13 +159,13 @@ function csvSheet(){
 build=()=>{
  base.build();el('stats-filter').closest('.card').insertAdjacentHTML('beforeend',`<div class="weekly-entry"><button type="button" id="open-weekly-report">${txt('weeklyOpen')}</button><p class="hint">${txt('weeklyBasis')}</p></div>`);
  el('movement-form').insertAdjacentHTML('afterend',`<div class="weekly-entry"><button type="button" id="open-daily-weekly-report">${txt('weeklyOpen')}</button></div>`);
- document.body.insertAdjacentHTML('beforeend',`<dialog id="weekly-report-dialog" aria-labelledby="weekly-title"><div class="weekly-toolbar"><div class="section-row"><h2 id="weekly-title">${txt('weeklyReport')}</h2><button type="button" id="weekly-close">${txt('reportClose')}</button></div><form id="weekly-report-form"><div class="grid"><label>${txt('batch')}<select id="weekly-cohort" required></select></label><label>${txt('barn')}<select id="weekly-barn"></select></label><label>${txt('from')}<input type="date" id="weekly-from" required></label><label>${txt('to')}<input type="date" id="weekly-to" required></label></div><p class="hint">${txt('weeklyBasis')}</p><button type="submit" id="weekly-generate" class="primary">${txt('weeklyMake')}</button><p id="weekly-error" role="status"></p></form><div id="weekly-export-actions" class="actions" hidden><button type="button" id="weekly-print" class="primary">${txt('weeklyDownloadPDF')}</button><button type="button" id="weekly-browser-print">${txt('weeklyBrowserPrint')}</button><button type="button" id="weekly-csv">${txt('reportCSV')}</button></div></div><p class="weekly-export-hint hint">${txt('weeklyPDFHint')}</p><div id="weekly-sheet-body"></div></dialog><div id="weekly-print-root"></div>`);
- el('open-weekly-report').onclick=openWeekly;el('weekly-cohort').onchange=()=>syncBarns(true);el('weekly-report-form').onsubmit=generate;el('weekly-print').onclick=downloadPDF;el('weekly-browser-print').onclick=printSheet;el('weekly-csv').onclick=csvSheet;el('weekly-close').onclick=()=>el('weekly-report-dialog').close();el('weekly-report-dialog').addEventListener('close',()=>{serial++;report=null;reportUser=null;el('weekly-generate').disabled=false;resetPrint();});
+ document.body.insertAdjacentHTML('beforeend',`<dialog id="weekly-report-dialog" aria-labelledby="weekly-title"><div class="weekly-toolbar"><div class="section-row"><h2 id="weekly-title">${txt('weeklyReport')}</h2><button type="button" id="weekly-close">${txt('reportClose')}</button></div><form id="weekly-report-form"><div class="grid"><label>${txt('batch')}<select id="weekly-cohort" required></select></label><label>${txt('barn')}<select id="weekly-barn"></select></label><label>${txt('from')}<input type="date" id="weekly-from" required></label><label>${txt('to')}<input type="date" id="weekly-to" required></label></div><p class="hint">${txt('weeklyBasis')}</p><button type="submit" id="weekly-generate" class="primary">${txt('weeklyMake')}</button><p id="weekly-error" role="status"></p></form><div id="weekly-export-actions" class="actions" hidden><button type="button" id="weekly-print" class="primary">${txt('weeklyDownloadPDF')}</button><button type="button" id="weekly-browser-print">${txt('weeklyBrowserPrint')}</button><button type="button" id="weekly-csv">${txt('reportCSV')}</button></div></div><p class="weekly-export-hint hint">${txt('weeklyPDFHint')}</p><div id="weekly-a4-preview" aria-live="polite"></div><div id="weekly-sheet-body"></div></dialog><div id="weekly-print-root"></div>`);
+ el('open-weekly-report').onclick=openWeekly;el('weekly-cohort').onchange=()=>syncBarns(true);el('weekly-report-form').onsubmit=generate;el('weekly-print').onclick=downloadPDF;el('weekly-browser-print').onclick=printSheet;el('weekly-csv').onclick=csvSheet;el('weekly-close').onclick=()=>el('weekly-report-dialog').close();el('weekly-report-dialog').addEventListener('close',()=>{serial++;clearPDF();report=null;reportUser=null;el('weekly-generate').disabled=false;resetPrint();});
  el('open-daily-weekly-report').onclick=openWeekly;
- for(const event of ['input','change'])el('weekly-report-form').addEventListener(event,()=>{serial++;report=null;reportUser=null;el('weekly-sheet-body').replaceChildren();el('weekly-export-actions').hidden=true;el('weekly-generate').disabled=false;el('weekly-error').textContent='';});
+ for(const event of ['input','change'])el('weekly-report-form').addEventListener(event,()=>{serial++;clearPDF();report=null;reportUser=null;el('weekly-sheet-body').replaceChildren();el('weekly-export-actions').hidden=true;el('weekly-generate').disabled=false;el('weekly-error').textContent='';});
 };
 window.addEventListener('beforeprint',()=>{if(printing&&report&&reportUser===me?.id){el('weekly-print-root').innerHTML=markup(true);fitFeedLines(el('weekly-print-root'));}});window.addEventListener('afterprint',resetPrint);
-document.addEventListener('pigledger:logout',()=>{serial++;report=null;reportUser=null;if(el('weekly-report-dialog').open)el('weekly-report-dialog').close();el('weekly-sheet-body').replaceChildren();resetPrint();});
+document.addEventListener('pigledger:logout',()=>{serial++;clearPDF();report=null;reportUser=null;if(el('weekly-report-dialog').open)el('weekly-report-dialog').close();el('weekly-sheet-body').replaceChildren();resetPrint();});
 translate=()=>{base.translate();render();};
 enter=async user=>{if(el('weekly-report-dialog')?.open)el('weekly-report-dialog').close();return base.enter(user);};
 })();
