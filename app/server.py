@@ -59,10 +59,17 @@ def legacy_history_rows(data):
 def statistics(data,query):
     get=lambda k:query.get(k,[''])[0]
     until=get('to') or datetime.now(timezone(timedelta(hours=8))).date().isoformat();start=get('from')
+    ids=selected_ids(data,query)
+    entry_dates=[b['entry_date'] for b in data['batches'] if (cohort_key(b)==get('cohort') if get('cohort') else get('batch_id') and b['id'] in ids)]
+    if get('cohort') and not entry_dates:
+        entry_dates=[s['row']['entry_date'] for s in source_rows(data,archives=True) if cohort_key(s['row'])==get('cohort')]
+    entry_start=min(entry_dates) if entry_dates else None
+    # A selected batch defaults to its complete life in the farm. Explicit
+    # dates still define a custom interval; the unscoped date view stays daily.
+    if not start and entry_start:start=min(entry_start,until)
     day(until)
     if start:day(start)
     if start and start>until:raise Invalid('invalid_period')
-    ids=selected_ids(data,query)
     cumulative=herd(data['batches'],data['movements'],until,ids)
     scoped=any(get(k) for k in ('batch_id','barn_id','group','cohort'))
     supported=[d for book in data.get('workbooks',[]) for row in book['plan']['rows'] for d in row['snapshots']]
@@ -186,7 +193,7 @@ def statistics(data,query):
     relevant=[r for r in source_history(data) if r['type']=='death' and (not scoped or r.get('batch_id') in chosen or (not r.get('batch_id') and (set(r.get('legacy_members',[]))&chosen or get('cohort')==r.get('cohort'))))]
     incomplete=any((not r.get('date') and (not r.get('archive') or get('cohort')==r.get('cohort'))) or (r.get('date') and death_start<=r['date']<=until and scoped and not r.get('batch_id') and not set(r.get('legacy_members',[]))<=chosen) for r in relevant)
     known=sum(r['quantity'] for r in death_rows)
-    stats['death_summary']={'from':death_start,'to':until,'scope':{k:v[0] for k,v in scope.items()},'known':known,'total':None if incomplete else known,'rows':death_rows}
+    stats['death_summary']={'from':death_start,'to':until,'from_entry':bool(entry_start and death_start==entry_start),'scope':{k:v[0] for k,v in scope.items()},'known':known,'total':None if incomplete else known,'rows':death_rows}
     # The compact list uses the same scope as history/CSV, including dated
     # archived source events. Archives never become new stock or batch records.
     stats['death_groups']=[{k:c[k] for k in ('cohort','name','entry_date','age_days','age_mixed','period_deaths','known_period_deaths','barns')} for c in stats['cohorts']]

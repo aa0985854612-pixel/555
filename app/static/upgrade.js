@@ -31,6 +31,15 @@ function filterScope(f,clear=false){
  if(f.id==='history-filter'){const type=f.elements.type;type.closest('label').hidden=val(f,'record_kind')!=='movements';if(type.closest('label').hidden)type.value='';}
  updateFilterBatch(f);
 }
+function statsEntryPeriod(f){
+ if(f.id!=='stats-filter'||!data)return;
+ const cohort=data.cohorts.find(c=>c.key===val(f,'cohort')),batch=data.batches.find(b=>b.id===val(f,'batch_id')),entry=cohort?.entry_date||batch?.entry_date;
+ if(entry){f.elements.from.value=entry;f.elements.to.value=today();}
+}
+function refreshStatsFilter(f){
+ if(f.id!=='stats-filter')return;
+ syncFilters(f);if(current==='stats')renderCurrent();
+}
 build=()=>{
  base.build();
  const daily=$('#page-daily');daily.prepend($('#movement-form').closest('.split'));
@@ -41,8 +50,10 @@ build=()=>{
  $('#password-form').onsubmit=changeOwnPassword;
  const workbook=$('#workbook-form');workbook.elements.counts_text.required=false;workbook.elements.counts_as_of.required=false;
  $$('.filters').forEach(f=>{
-  f.elements.scope_type.addEventListener('change',()=>{filterScope(f,true);syncFilters(f);});
-  f.elements.cohort.addEventListener('change',()=>{f.elements.batch_id.value='';updateFilterBatch(f);});
+  f.elements.scope_type.addEventListener('change',()=>{filterScope(f,true);syncFilters(f);refreshStatsFilter(f);});
+  f.elements.cohort.addEventListener('change',()=>{f.elements.batch_id.value='';if(f.id==='stats-filter')f.elements.barn_id.value='';updateFilterBatch(f);statsEntryPeriod(f);refreshStatsFilter(f);});
+  f.elements.batch_id.addEventListener('change',()=>{statsEntryPeriod(f);refreshStatsFilter(f);});
+  for(const name of ['barn_id','group'])f.elements[name].addEventListener('change',()=>refreshStatsFilter(f));
   f.elements.record_kind?.addEventListener('change',()=>filterScope(f));filterScope(f);
  });
  $('#user-form').insertAdjacentHTML('beforebegin',`<p class="hint">${txt('adminHint')}</p><p class="hint">${txt('setupHint')}</p>`);
