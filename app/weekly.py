@@ -59,6 +59,15 @@ def weekly_report(data,query,today=None):
     pending.extend({'id':o['id'],'type':'feed_orders','date':o['date'],'kg':o['kg'],'bin':o['feed_bin_snapshot']['name'],'reason':'shared_bin_unallocated' if len(o['feed_bin_snapshot']['barn_ids'])>1 else 'bin_batch_unknown'} for o in bin_pending)
     pending.extend({'id':o['id'],'type':'feed_orders','date':o['date'],'kg':o['kg'],'reason':'unassigned_order'} for o in unassigned)
     age_values={age(b,entry) for b in members};entry_age=next(iter(age_values)) if len(age_values)==1 else None
+    # A named earliest-entry barn supplies grid labels, never a fake cohort age.
+    week_reference=None
+    if entry_age is None:
+        from .feed import barn_number
+        candidates=[b for b in members if b['entry_date']==entry and age(b,entry) is not None]
+        if candidates:
+            ref=min(candidates,key=lambda b:(barn_number(barns[b['barn_id']]) or 10**9,barns[b['barn_id']],b['id']))
+            ref_age=age(ref,entry)
+            week_reference={'batch_id':ref['id'],'barn':barns[ref['barn_id']],'entry_date':entry,'age_days':ref_age,'start_week':int(ref_age//7)+1,'basis':'named_earliest_entry_barn_only'}
     weeks=[];first=(day(start)-day(entry)).days//7;last=(day(end)-day(entry)).days//7
     for index in range(first,last+1):
         anchor=day(entry)+timedelta(days=index*7);lo=max(anchor,day(start));hi=min(anchor+timedelta(days=6),day(end));future=lo>day(today);hi_observed=min(hi,day(today))
@@ -92,4 +101,4 @@ def weekly_report(data,query,today=None):
     entry_details=[{'batch_id':b['id'],'barn':barns[b['barn_id']],'date':b['entry_date'],
         'count':herd(data['batches'],data['movements'],until,[b['id']])['entry'] if b.get('legacy_group') else b['entry_count'],
         'age_days':age(b,b['entry_date']),'mean_kg':b.get('entry_mean_kg'),'mean_date':b.get('entry_mean_date')} for b in members]
-    return {'preentry_feed':preentry_feed,'entry_details':entry_details,'outgoing_destinations':destinations,'feed_setup':report_feed_setup(data,members,orders+preentry),'death_check_coverage':coverage,'cohort':key,'name':members[0]['name'],'entry_date':entry,'entry_age_days':entry_age,'entry_mean_kg':mean,'barns':[barns[b['barn_id']] for b in members],'batch_ids':sorted(ids),'from':start,'to':end,'observed_to':until,'weeks':weeks,'totals':totals,'known_totals':known,'cumulative':h,'pending':pending,'age_mixed':entry_age is None and all(b.get('entry_age_days') is not None for b in members),'barn_ages':[{'barn':barns[b['barn_id']],'age_days':age(b,until),'entry_date':b['entry_date']} for b in members],'week_basis':'entry_date_every_7_days','age_basis':'ordinal_week_entry_age_floor_plus_one','feed_basis':'allocated_manual_orders_kg_not_consumption'}
+    return {'week_reference':week_reference,'preentry_feed':preentry_feed,'entry_details':entry_details,'outgoing_destinations':destinations,'feed_setup':report_feed_setup(data,members,orders+preentry),'death_check_coverage':coverage,'cohort':key,'name':members[0]['name'],'entry_date':entry,'entry_age_days':entry_age,'entry_mean_kg':mean,'barns':[barns[b['barn_id']] for b in members],'batch_ids':sorted(ids),'from':start,'to':end,'observed_to':until,'weeks':weeks,'totals':totals,'known_totals':known,'cumulative':h,'pending':pending,'age_mixed':entry_age is None and all(b.get('entry_age_days') is not None for b in members),'barn_ages':[{'barn':barns[b['barn_id']],'age_days':age(b,until),'entry_date':b['entry_date']} for b in members],'week_basis':'entry_date_every_7_days','age_basis':'ordinal_week_entry_age_floor_plus_one','feed_basis':'allocated_manual_orders_kg_not_consumption'}
