@@ -427,6 +427,9 @@ class Handler(BaseHTTPRequestHandler):
                 from .review import daily_review, farm_today
                 return self.send(daily_review(store.snapshot(include_source=False),query.get('date',[farm_today()])[0]))
             if path=='/api/statistics' and method=='GET':return self.send(statistics(store.snapshot(include_source=False),query))
+            if path=='/api/work-calendar' and method=='GET':
+                from .work_calendar import calendar_week
+                return self.send(calendar_week(store.snapshot(include_source=False),query.get('week',[''])[0]))
             if path=='/api/weekly-report' and method=='GET':
                 from .weekly import weekly_report
                 return self.send(weekly_report(store.snapshot(include_source=False),query))

@@ -21,3 +21,6 @@ node --check app/static/feed-review.js
 node --check app/static/movement-review.js
 
 node --check app/static/feed-bulk.js
+
+node --check app/static/work-calendar.js
+node --check app/static/work-calendar-pdf.js

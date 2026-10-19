@@ -3,9 +3,9 @@ from pathlib import Path
 from datetime import datetime, timezone
 from .domain import Invalid, day, number, herd, consumption, age
 
-VERSION='2.0.28'
+VERSION='2.0.29'
 SCHEMA_VERSION=4
-KINDS=('barns','batches','movements','feed_orders','deliveries','usages','weights','workbooks','source_voids','daily_checks','feed_bins')
+KINDS=('barns','batches','movements','feed_orders','deliveries','usages','weights','workbooks','source_voids','daily_checks','feed_bins','work_tasks')
 SCHEMA='''
 CREATE TABLE IF NOT EXISTS records(kind TEXT NOT NULL, id TEXT PRIMARY KEY, revision INTEGER NOT NULL, deleted INTEGER NOT NULL DEFAULT 0, data TEXT NOT NULL);
 CREATE INDEX IF NOT EXISTS records_kind ON records(kind,deleted);
@@ -224,6 +224,7 @@ class Store:
         d={k:v for k,v in d.items() if k not in ('id','revision','created_at','created_by','updated_at','deleted')}
         allowed={
             'barns':{'name','group','feed_vendor'},
+            'work_tasks':{'title','mode','weekday','date','start_date','end_date','time','note','active'},
             'batches':{'barn_id','name','group','entry_date','entry_count','entry_age_days','age_date','status','cohort_id','same_batch_as','legacy_source','legacy_row','legacy_barn','note','entry_mean_kg','entry_mean_date','entry_mean_source','entry_mean_note','entry_count_source','entry_count_reason','source_assignments','stock_basis','quality_review','weekly_start_date','report_entry_lots','report_entry_lots_source'},
             'movements':{'date','batch_id','type','quantity','note','target_batch_id','total_weight_kg','outgoing_destination'},
             'feed_orders':{'date','kg','display_unit','vendor','item','note','allocations','feed_bin_id','feed_bin_snapshot','target_batch_ids','bin_allocations'},
@@ -236,7 +237,10 @@ class Store:
             'workbooks':{'filename','base64','counts_text','counts_as_of','closed_barns','source_url','sha256','report','plan','review_decisions','source_date_reviews','source_movement_edits'},
         }[kind]
         d={k:v for k,v in d.items() if k in allowed}
-        if kind=='barns':
+        if kind=='work_tasks':
+            from .work_calendar import validate_task
+            d=validate_task(d)
+        elif kind=='barns':
             text('name',True); text('group')
             if 'feed_vendor' in d and d['feed_vendor'] not in ('','養全','新農科'):raise Invalid('invalid_vendor')
             if any(x['name']==d['name'] for x in data['barns']): raise Invalid('duplicate_barn')
