@@ -738,3 +738,5 @@ body [hidden] { display: none !important; }
 #feed-bulk-list{border-top:1px solid var(--line,#ddd);margin-top:24px;padding-top:16px}#feed-bulk-list .section-row{flex-wrap:wrap}.feed-bulk-row{border-bottom:1px solid #ddd;padding:12px 0;overflow-wrap:anywhere}.feed-bulk-row small{display:block;white-space:pre-wrap;margin-top:4px}.feed-bulk-row .actions{margin-top:8px}#feed-bulk-dialog{width:min(700px,calc(100vw - 24px));max-height:90dvh;overflow:auto}#feed-bulk-dialog fieldset{min-width:0;margin:16px 0;padding:10px;overflow-wrap:anywhere}#feed-bulk-dialog legend{max-width:100%;font-weight:700}#feed-bulk-editing{font-weight:600}
 
 #feed-bulk-dialog small{display:block}
+
+.report-entry-settings{margin-top:18px;border-top:1px solid var(--line);padding-top:14px}.report-entry-lot{padding:10px 0;border-bottom:1px solid var(--line);margin-bottom:8px}.report-entry-lot button{align-self:end}

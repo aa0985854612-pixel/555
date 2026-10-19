@@ -38,7 +38,7 @@ function syncBarns(resetDates=false){
  const bs=data?.batches.filter(b=>(b._cohort_key||b.name+'|'+b.entry_date)===key)||[];
  el('weekly-barn').innerHTML=`<option value="">${t('weeklyAllBarns')}</option>`+bs.map(b=>`<option value="${safe(b.barn_id)}">${safe(data.barns.find(x=>x.id===b.barn_id)?.name||'—')}</option>`).join('');
  if(bs.some(b=>b.barn_id===selected))el('weekly-barn').value=selected;
- if(resetDates){el('weekly-from').value=chosen()?.entry_date||'';el('weekly-to').value=today();}
+ if(resetDates){el('weekly-from').value=chosen()?.weekly_start_date||chosen()?.entry_date||'';el('weekly-to').value=today();}
 }
 function openWeekly(){
  if(!data)return;clearPDF();report=null;el('weekly-sheet-body').replaceChildren();el('weekly-export-actions').hidden=true;el('weekly-error').textContent='';
@@ -47,7 +47,7 @@ function openWeekly(){
  el('weekly-cohort').innerHTML=`<option value="">${t('choose')}</option>`+options;
  const b=data.batches.find(b=>b.id===val(f,'batch_id'));el('weekly-cohort').value=val(f,'cohort')||(b?(b._cohort_key||b.name+'|'+b.entry_date):'');syncBarns(true);
  if(val(f,'barn_id'))el('weekly-barn').value=val(f,'barn_id');
- if(val(f,'from'))el('weekly-from').value=val(f,'from');if(val(f,'to'))el('weekly-to').value=val(f,'to');
+ if(val(f,'from')&&!chosen()?.weekly_start_date)el('weekly-from').value=val(f,'from');if(val(f,'to'))el('weekly-to').value=val(f,'to');
  const d=el('weekly-report-dialog');if(!d.open)d.showModal();d.scrollTop=0;
 }
 async function generate(e){

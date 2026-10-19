@@ -13,7 +13,9 @@ def weekly_report(data,query,today=None):
     members=[b for b in data['batches'] if b['id'] in ids]
     keys={cohort_key(b) for b in members}
     if not members or len(keys)!=1 or not (get('cohort') or get('batch_id')):raise Invalid('weekly_choose_batch')
-    entry=min(b['entry_date'] for b in members);start=max(get('from') or entry,entry);end=get('to') or today
+    entry=min(b['entry_date'] for b in members)
+    default_start=min(b.get('weekly_start_date') or b['entry_date'] for b in members)
+    start=max(get('from') or default_start,entry);end=get('to') or today
     day(start);day(end)
     if start>end:raise Invalid('invalid_period')
     if (day(end)-day(entry)).days>1092:raise Invalid('weekly_period_too_long')
@@ -101,4 +103,6 @@ def weekly_report(data,query,today=None):
     entry_details=[{'batch_id':b['id'],'barn':barns[b['barn_id']],'date':b['entry_date'],
         'count':herd(data['batches'],data['movements'],until,[b['id']])['entry'] if b.get('legacy_group') else b['entry_count'],
         'age_days':age(b,b['entry_date']),'mean_kg':b.get('entry_mean_kg'),'mean_date':b.get('entry_mean_date')} for b in members]
+    entry_details=[detail for b,original in zip(members,entry_details) for detail in ([original|{'date':lot['date'],'count':lot['count'],'mean_kg':lot['mean_kg'],'mean_date':lot['date'] if lot['mean_kg'] is not None else None,'age_days':original['age_days'] if lot['date']==b['entry_date'] else None} for lot in b.get('report_entry_lots',[])] or [original])]
+    means={d['mean_kg'] for d in entry_details};mean=next(iter(means)) if len(means)==1 else None
     return {'week_reference':week_reference,'preentry_feed':preentry_feed,'entry_details':entry_details,'outgoing_destinations':destinations,'feed_setup':report_feed_setup(data,members,orders+preentry),'death_check_coverage':coverage,'cohort':key,'name':members[0]['name'],'entry_date':entry,'entry_age_days':entry_age,'entry_mean_kg':mean,'barns':[barns[b['barn_id']] for b in members],'batch_ids':sorted(ids),'from':start,'to':end,'observed_to':until,'weeks':weeks,'totals':totals,'known_totals':known,'cumulative':h,'pending':pending,'age_mixed':entry_age is None and all(b.get('entry_age_days') is not None for b in members),'barn_ages':[{'barn':barns[b['barn_id']],'age_days':age(b,until),'entry_date':b['entry_date']} for b in members],'week_basis':'entry_date_every_7_days','age_basis':'ordinal_week_entry_age_floor_plus_one','feed_basis':'allocated_manual_orders_kg_not_consumption'}

@@ -3,7 +3,7 @@ from pathlib import Path
 from datetime import datetime, timezone
 from .domain import Invalid, day, number, herd, consumption, age
 
-VERSION='2.0.27'
+VERSION='2.0.28'
 SCHEMA_VERSION=4
 KINDS=('barns','batches','movements','feed_orders','deliveries','usages','weights','workbooks','source_voids','daily_checks','feed_bins')
 SCHEMA='''
@@ -224,7 +224,7 @@ class Store:
         d={k:v for k,v in d.items() if k not in ('id','revision','created_at','created_by','updated_at','deleted')}
         allowed={
             'barns':{'name','group','feed_vendor'},
-            'batches':{'barn_id','name','group','entry_date','entry_count','entry_age_days','age_date','status','cohort_id','same_batch_as','legacy_source','legacy_row','legacy_barn','note','entry_mean_kg','entry_mean_date','entry_mean_source','entry_mean_note','entry_count_source','entry_count_reason','source_assignments','stock_basis','quality_review'},
+            'batches':{'barn_id','name','group','entry_date','entry_count','entry_age_days','age_date','status','cohort_id','same_batch_as','legacy_source','legacy_row','legacy_barn','note','entry_mean_kg','entry_mean_date','entry_mean_source','entry_mean_note','entry_count_source','entry_count_reason','source_assignments','stock_basis','quality_review','weekly_start_date','report_entry_lots','report_entry_lots_source'},
             'movements':{'date','batch_id','type','quantity','note','target_batch_id','total_weight_kg','outgoing_destination'},
             'feed_orders':{'date','kg','display_unit','vendor','item','note','allocations','feed_bin_id','feed_bin_snapshot','target_batch_ids','bin_allocations'},
             'feed_bins':{'name','barn_ids','vendor','active','note'},
@@ -289,6 +289,25 @@ class Store:
                 if d['entry_mean_date']<d['entry_date']:raise Invalid('before_entry')
             else:d['entry_mean_kg']=None;d['entry_mean_date']=None
             text('entry_mean_source');text('entry_mean_note');text('entry_count_source')
+            if 'weekly_start_date' in d:
+                d['weekly_start_date']=d.get('weekly_start_date') or ''
+                if d['weekly_start_date']:
+                    day(d['weekly_start_date'])
+                    if d['weekly_start_date']<d['entry_date']:raise Invalid('before_entry')
+            if 'report_entry_lots' in d or 'report_entry_lots_source' in d:
+                lots=d.get('report_entry_lots',[])
+                if not isinstance(lots,list) or len(lots)>12:raise Invalid('invalid_report_entry_lots')
+                dates=set()
+                for lot in lots:
+                    if not isinstance(lot,dict) or set(lot)!={'date','count','mean_kg'}:raise Invalid('invalid_report_entry_lots')
+                    day(lot['date'])
+                    if lot['date']<d['entry_date'] or lot['date'] in dates:raise Invalid('invalid_report_entry_lots')
+                    dates.add(lot['date']);lot['count']=number(lot['count'],True,True)
+                    if lot['mean_kg'] is not None:lot['mean_kg']=number(lot['mean_kg'],True)
+                if lots and (sum(lot['count'] for lot in lots)!=d['entry_count'] or min(dates)!=d['entry_date']):raise Invalid('report_entry_total_mismatch')
+                text('report_entry_lots_source')
+                if lots and not d['report_entry_lots_source']:raise Invalid('entry_source_required')
+                d['report_entry_lots']=sorted(lots,key=lambda lot:lot['date'])
             if d.get('status') not in ('active','ended'): raise Invalid('invalid_status')
             if any(x['barn_id']==d['barn_id'] and x['name']==d['name'] for x in data['batches']): raise Invalid('duplicate_batch')
             # Transfer destination is a separate zero-entry batch tied to the source cohort.
@@ -561,6 +580,8 @@ class Store:
                     payload=payload|{'outgoing_destination':previous['outgoing_destination']}
                 if kind=='batches' and previous and 'same_batch_as' not in payload:
                     payload=payload|{'same_batch_as':previous.get('same_batch_as')}
+                if kind=='batches' and previous:
+                    payload={k:previous[k] for k in ('weekly_start_date','report_entry_lots','report_entry_lots_source') if k in previous and k not in payload}|payload
                 if kind=='batches' and previous and previous.get('legacy_source'):
                     if any(payload.get(k)!=previous.get(k) for k in ('legacy_source','legacy_row','legacy_barn','barn_id','entry_date')):raise Problem('legacy_source_conflict')
                 if kind=='feed_orders' and previous and 'feed_bin_id' not in payload:

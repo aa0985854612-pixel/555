@@ -16,6 +16,8 @@ Object.assign(errorWords,{
 });
 Object.assign(errorWords,{invalid_password_policy:['密碼須為4～8位數字（0～9）','Mật khẩu phải gồm 4–8 chữ số (0–9)'],invalid_current_password:['目前密碼不正確，請重新輸入','Mật khẩu hiện tại không đúng'],heads_unknown:['這棟的來源異動尚未分配，請先核對頭數','Biến động nguồn chưa phân chuồng; đối chiếu số con trước']});
 Object.assign(words,{recorded:['使用者登記','Ghi trong App']});
+Object.assign(words,{weeklyStartDate:['肉豬紀錄表起始日（選填）','Ngày bắt đầu phiếu tuần (tùy chọn)'],reportEntryLots:['分次進場明細','Chi tiết các lần nhập'],reportEntryLotsHint:['列出這棟同批每次進場日期、頭數及均重；合計須等於已填入場頭數。只補充報表明細，不會重複增加頭數。均重未知可留空。','Ghi ngày, số con và cân nặng từng lần nhập cùng lứa tại chuồng; tổng phải bằng số nhập đã lưu. Chi tiết bổ sung cho phiếu, không cộng heo lần nữa. Chưa rõ cân nặng: để trống.'],addEntryLot:['增加一次進場','Thêm lần nhập'],removeEntryLot:['移除這次明細','Bỏ chi tiết lần này'],entryLotsSource:['分次進場明細依據','Căn cứ các lần nhập']});
+Object.assign(errorWords,{invalid_report_entry_lots:['請檢查分次進場日期、頭數及均重，日期不能重複或早於最初進場日。','Kiểm tra ngày, số con và cân nặng; ngày không được trùng hoặc trước ngày nhập đầu.'],report_entry_total_mismatch:['分次進場合計須等於入場頭數，第一筆日期須為最初進場日。','Tổng các lần phải bằng số nhập; lần đầu phải đúng ngày nhập đầu.']});
 Object.assign(words,{entryCountReason:['入場頭數更正原因／依據','Lý do / căn cứ sửa số nhập'],entryCountOriginal:['原始 Excel 入場頭數','Số nhập trong Excel gốc'],entryCountSaved:['目前已保存','Hiện đã lưu'],entryCountChange:['本次頭數差額','Chênh lệch lần này'],entryCountHint:['管理員可更正入場頭數。差額會同步調整此批存欄及育成率分母，不新增豬隻異動；原始 Excel 與操作前後值保留。數量不確定時請先取消。','Quản trị có thể sửa số nhập. Chênh lệch cập nhật tồn đàn và mẫu số tỷ lệ sống, không tạo biến động; giữ Excel gốc và lịch sử. Chưa chắc số lượng: hủy trước.']});
 Object.assign(errorWords,{entry_count_reason_required:['修改入場頭數時，請填更正原因／依據','Nhập lý do / căn cứ khi sửa số nhập']});
 const base={build,collect,finishForm,edit,selections,renderCurrent,renderSettings,clickAction,rowsHTML,workbookHTML,renderWorkbookSources,filterBox,translate};
@@ -47,11 +49,18 @@ function refreshStatsFilter(f){
  if(f.id!=='stats-filter')return;
  syncFilters(f);if(current==='stats')renderCurrent();
 }
+function addReportEntryLot(lot={}){
+ const row=document.createElement('div');row.className='report-entry-lot grid';
+ row.innerHTML=`<label>${txt('date')}<input type="date" data-lot="date" required value="${esc(lot.date||'')}"></label><label>${txt('quantity')}<input type="number" data-lot="count" min="1" step="1" required value="${esc(lot.count??'')}"></label><label>${txt('entryMeanShort')}<input type="number" data-lot="mean_kg" min="0.001" step="any" value="${esc(lot.mean_kg??'')}"></label><button type="button" data-remove-lot>${txt('removeEntryLot')}</button>`;
+ row.querySelector('[data-remove-lot]').onclick=()=>row.remove();$('#report-entry-lots').append(row);
+}
 build=()=>{
  base.build();
  const daily=$('#page-daily');daily.prepend($('#movement-form').closest('.split'));
  const batch=$('#batch-form');batch.querySelector('details .grid').insertAdjacentHTML('beforeend',input('entryMean','entry_mean_kg','number','min="0.000001" step="any"')+input('entryMeanDate','entry_mean_date','date')+input('entryMeanSource','entry_mean_source')+input('entryMeanNote','entry_mean_note')+input('entryCountSource','entry_count_source'));
  batch.querySelector('.grid').insertAdjacentHTML('afterend',`<section id="entry-count-correction" hidden><p class="note" id="entry-count-impact" aria-live="polite"></p><p class="hint">${txt('entryCountHint')}</p>${input('entryCountReason','entry_count_reason','text','maxlength="2000"')}</section>`);
+ batch.querySelector('details').insertAdjacentHTML('beforeend',`<section class="report-entry-settings">${input('weeklyStartDate','weekly_start_date','date')}<h3>${txt('reportEntryLots')}</h3><p class="hint">${txt('reportEntryLotsHint')}</p><div id="report-entry-lots"></div><button type="button" id="add-report-entry-lot">${txt('addEntryLot')}</button>${input('entryLotsSource','report_entry_lots_source','text','maxlength="500"')}</section>`);
+ $('#add-report-entry-lot').onclick=()=>addReportEntryLot();
  batch.elements.entry_count.addEventListener('input',updateEntryCorrection);
  const settings=$('#page-settings');settings.insertAdjacentHTML('afterbegin',`<div class="card" id="password-card"><h2>${txt('passwordChange')}</h2><p id="password-required" class="note" hidden>${txt('passwordRequired')}</p><form id="password-form"><div class="grid">${input('currentPassword','current_password','password','required autocomplete="current-password"')}${input('newPassword','new_password','password','minlength="4" maxlength="8" pattern="[0-9]{4,8}" inputmode="numeric" required autocomplete="new-password"')}${input('confirmPassword','confirm_password','password','minlength="4" maxlength="8" pattern="[0-9]{4,8}" inputmode="numeric" required autocomplete="new-password"')}</div><p class="form-error" role="status"></p><button class="primary">${txt('saveSettings')}</button></form></div>`);
  $('#password-form').onsubmit=changeOwnPassword;
@@ -71,6 +80,7 @@ build=()=>{
 collect=f=>{
  const d=base.collect(f);
  if(f.id==='batch-form'){d.entry_mean_kg=val(f,'entry_mean_kg')===''?null:Number(val(f,'entry_mean_kg'));d.entry_mean_date=val(f,'entry_mean_date')||null;}
+ if(f.id==='batch-form'){d.weekly_start_date=val(f,'weekly_start_date');d.report_entry_lots_source=val(f,'report_entry_lots_source');d.report_entry_lots=$$('#report-entry-lots .report-entry-lot').map(row=>({date:row.querySelector('[data-lot=date]').value,count:Number(row.querySelector('[data-lot=count]').value),mean_kg:row.querySelector('[data-lot=mean_kg]').value===''?null:Number(row.querySelector('[data-lot=mean_kg]').value)}));}
  return d;
 };
 function updateEntryCorrection(){
@@ -80,8 +90,8 @@ function updateEntryCorrection(){
  if(single){const next=val(f,'entry_count')===''?null:Number(val(f,'entry_count'));$('#entry-count-impact').textContent=`${t('entryCountOriginal')}：${fmt(r.legacy_entry_original??r.entry_count,0)} · ${t('entryCountSaved')}：${fmt(r.entry_count,0)} · ${t('entryCountChange')}：${next==null?'—':fmt(next-r.entry_count,0)}`;}
 }
 translate=()=>{base.translate();updateEntryCorrection();};
-finishForm=f=>{base.finishForm(f);if(f.id==='batch-form'){for(const name of ['entry_mean_kg','entry_mean_date','entry_mean_source','entry_mean_note','entry_count_source','entry_count_reason'])f.elements[name].value='';updateEntryCorrection();}};
-edit=(kind,id)=>{base.edit(kind,id);if(kind==='batches'){const r=data.batches.find(b=>b.id===id),f=$('#batch-form');if(r.legacy_source){f.elements.entry_count.readOnly=false;f.elements.entry_count.required=r.legacy_group?.expected_members===1;}for(const name of ['entry_mean_kg','entry_mean_date','entry_mean_source','entry_mean_note','entry_count_source'])f.elements[name].value=r[name]??'';f.elements.entry_count_reason.value='';updateEntryCorrection();}};
+finishForm=f=>{base.finishForm(f);if(f.id==='batch-form'){for(const name of ['entry_mean_kg','entry_mean_date','entry_mean_source','entry_mean_note','entry_count_source','entry_count_reason','weekly_start_date','report_entry_lots_source'])f.elements[name].value='';$('#report-entry-lots').replaceChildren();updateEntryCorrection();}};
+edit=(kind,id)=>{base.edit(kind,id);if(kind==='batches'){const r=data.batches.find(b=>b.id===id),f=$('#batch-form');if(r.legacy_source){f.elements.entry_count.readOnly=false;f.elements.entry_count.required=r.legacy_group?.expected_members===1;}for(const name of ['entry_mean_kg','entry_mean_date','entry_mean_source','entry_mean_note','entry_count_source','weekly_start_date','report_entry_lots_source'])f.elements[name].value=r[name]??'';$('#report-entry-lots').replaceChildren();(r.report_entry_lots||[]).forEach(addReportEntryLot);f.elements.entry_count_reason.value='';updateEntryCorrection();}};
 function normalizeStatsCohort(f,key=val(f,'cohort')){
  if(f.id!=='stats-filter'||!key||filterCohorts(f).some(c=>c.key===key))return;
  for(const name of ['from','to','cohort','group','barn_id','batch_id'])f.elements[name].value='';
