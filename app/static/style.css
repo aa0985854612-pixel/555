@@ -395,22 +395,26 @@ body [hidden] { display: none !important; }
 .cohort-total dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin: 12px 0; }
 .cohort-total dt { font-size: .88rem; color: var(--muted); }
 .cohort-total dd { font-size: 1.1rem; font-weight: 700; margin: 4px 0; }
-.overview-columns, .barn-card.overview-barn { display: grid; grid-template-columns: 1.1fr .85fr .85fr 1.1fr; gap: 6px; align-items: center; text-align: right; }
+.overview-columns, .barn-card.overview-barn { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, .95fr) minmax(0, .7fr) minmax(0, .95fr) minmax(0, 1.15fr); gap: 6px; align-items: center; text-align: right; }
 .overview-columns { background: #f5f7fa; padding: 7px 12px; font-size: .85rem; color: var(--muted); }
 .overview-columns > :first-child { text-align: left; }
 .barn-card.overview-barn { border: 0; border-top: 1px solid #e7ebf0; border-radius: 0; padding: 6px 12px; position: relative; }
 .overview-barn .overview-barn-link { width: auto; padding: 4px 0; margin: 0; background: transparent; border: 0; text-align: left; display: grid; gap: 1px; min-height: 48px; }
 .overview-barn-link > strong { font-size: 1.08rem; }
 .overview-barn-link > small { font-size: .85rem; font-weight: 500; line-height: 1.35; }
-.overview-heads { font-size: 1.25rem; font-variant-numeric: tabular-nums; }
-.overview-dead { font-size: 1.15rem; color: var(--red); font-variant-numeric: tabular-nums; }
+.overview-heads { font-size: 1.1rem; font-variant-numeric: tabular-nums; }
+.overview-dead { font-size: 1rem; color: var(--red); font-variant-numeric: tabular-nums; }
+.overview-sold { font-size: 1.05rem; color: var(--navy); font-variant-numeric: tabular-nums; }
+.overview-columns > *, .overview-barn > * { min-width: 0; }
+.overview-columns > span { overflow-wrap: anywhere; }
 .overview-barn .barn-survival { padding: 0; display: block; }
 .overview-barn .barn-survival > strong { font-size: 1rem; white-space: nowrap; }
 .overview-barn .barn-survival details { margin: 0; padding: 0; }
 .overview-barn .barn-survival summary { padding: 10px 0; min-height: 44px; font-size: 1rem; list-style: none; }
 .overview-barn .barn-survival details p { position: relative; background: #f1f4f8; padding: 10px; margin: 0; font-size: .88rem; text-align: left; }
-.overview-barn:has(.barn-survival details[open]) { grid-template-columns: 1.1fr .85fr .85fr 1.1fr; }
+.overview-barn:has(.barn-survival details[open]) { grid-template-columns: minmax(0, 1.05fr) minmax(0, .95fr) minmax(0, .7fr) minmax(0, .95fr) minmax(0, 1.15fr); }
 .overview-barn .barn-survival:has(details[open]) { grid-column: 1 / -1; }
+
 .recent-fold { margin-top: 18px; }
 @media (max-width: 1150px) { #barns.compact-barns { grid-template-columns: 1fr; } }
 @media (max-width: 700px) {
@@ -447,6 +451,12 @@ body [hidden] { display: none !important; }
   .batch-tools { grid-template-columns: 1fr; }
   .batch-editor .grid { grid-template-columns: 1fr; }
   html[data-text-size="large"] .compact-filter { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 360px) {
+  .overview-columns, .barn-card.overview-barn, .overview-barn:has(.barn-survival details[open]) { grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr) minmax(0, .65fr) minmax(0, 1fr) minmax(0, 1.2fr); gap: 4px; padding-left: 8px; padding-right: 8px; }
+  .overview-heads, .overview-dead, .overview-sold { font-size: .95rem; }
+  .overview-barn .barn-survival > strong { font-size: .85rem; }
 }
 
 /* Period deaths: a single compact list, including zero-death cohorts. */
