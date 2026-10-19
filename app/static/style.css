@@ -764,3 +764,9 @@ body [hidden] { display: none !important; }
  .calendar-day h3 { padding: 14px 8px; }
  .calendar-day > div { padding: 10px; }
 }
+
+.calendar-image-gallery { margin-top: 16px; }
+.calendar-image-gallery figure { margin: 12px 0 20px; }
+.calendar-image-gallery img { display: block; width: 100%; height: auto; border: 1px solid var(--line); -webkit-touch-callout: default; }
+.calendar-image-gallery figcaption { padding-top: 8px; }
+.calendar-image-gallery .actions a { display: inline-flex; align-items: center; min-height: 46px; border: 1px solid var(--line); border-radius: 10px; padding: 10px 15px; font-weight: 650; background: #fff; }
