@@ -32,6 +32,27 @@ with tempfile.TemporaryDirectory() as tmp:
    page.route('**/api/work_tasks',lost);f.locator('[name=mode]').select_option('once');f.locator('[name=date]').fill('2026-10-21');f.locator('[name=title]').fill('不確定儲存測試');f.locator('button.primary').click();page.wait_for_function('()=>pending&&!retryPending.busy');assert len(store.snapshot()['work_tasks'])==3;page.unroute('**/api/work_tasks',lost);page.reload();page.wait_for_function('()=>me&&data&&pending&&!retryPending.busy');assert f.locator('[name=title]').input_value()=='不確定儲存測試';assert f.locator('[name=mode]').input_value()=='once';page.locator('#retry').click();page.wait_for_function('()=>!pending&&data.work_tasks.length===3');assert len(store.snapshot()['work_tasks'])==3;passed('lost save response survives reload; original retry commits exactly once and restores temporary-task form')
    compact=page.evaluate("async()=>{const blob=await workCalendarPDF({title:'每週工作',range:'2026-10-19 → 2026-10-25',headers:['星期','固定','臨時'],weekdays:['一','二','三','四','五','六','日'],days:Array.from({length:7},(_,i)=>({date:'2026-10-'+(19+i),tasks:i===0?Array.from({length:4},(_,j)=>({title:'固定工作'+j,mode:'weekly',note:''})):[]}))});return blob.previewPages.length;}")
    assert compact==1;passed('four regular Monday jobs fit one A4; an empty trailing spacer never creates a continuation page')
+   large=page.evaluate("""async()=>{
+    const calls=[],old=CanvasRenderingContext2D.prototype.fillText;CanvasRenderingContext2D.prototype.fillText=function(text,...args){calls.push({text,font:this.font});return old.call(this,text,...args)};
+    try{
+     const days=Array.from({length:7},(_,i)=>({date:'2026-10-'+(19+i),tasks:[{mode:'weekly',title:'巡查',time:'08:00'},{mode:'weekly',title:'巡查',time:'16:00'},{mode:'weekly',title:'查看污水'},{mode:'weekly',title:'抄水錶'}]}));
+     const add=(day,title,mode='weekly',note='')=>days[day].tasks.push({title,mode,note});
+     add(0,'填寫紀錄表');add(0,'敲料桶、叫料');add(3,'敲料桶、叫料');add(2,'全場消毒');add(6,'全場消毒');add(1,'例行開會','weekly','下午');
+     for(const [day,title] of [[0,'南投出豬80頭'],[1,'新北出豬90頭'],[1,'驗水'],[3,'1、18棟打疫苗'],[4,'嘉義出豬80頭'],[4,'南投出豬80頭'],[4,'8、14棟秤重'],[5,'南投出豬80頭']])add(day,title,'once');
+     const model={title:'每週工作',range:'2026-10-19 → 2026-10-25',headers:['星期','固定','臨時'],weekdays:['一','二','三','四','五','六','日'],dailyTitle:'每日固定工作',days},blob=await workCalendarPDF(model);
+     return {pages:blob.previewPages.length,calls,unchanged:days.every(d=>d.tasks.filter(t=>t.mode==='weekly'&&t.title==='巡查').length===2)};
+    }finally{CanvasRenderingContext2D.prototype.fillText=old;}
+   }""")
+   texts=[c['text'] for c in large['calls']];assert large['pages']==1 and large['unchanged'];assert all(texts.count(t)==1 for t in ['08:00 · 巡查','16:00 · 巡查','查看污水','抄水錶']);assert texts.count('南投出豬80頭')==3 and texts.count('敲料桶、叫料')==2 and texts.count('全場消毒')==2;assert all(t in texts for t in ['驗水','1、18棟打疫苗','8、14棟秤重','嘉義出豬80頭','新北出豬90頭','下午']);assert all(float(re.search(r'(\d+(?:\.\d+)?)px',c['font'])[1])>=14 for c in large['calls'] if not c['text'].endswith('1 / 1'));passed('42-task week fits one large-print A4, daily routines grouped once, dated work complete and readable text at least 14pt')
+   grouping=page.evaluate("""async()=>{
+    const result=[];
+    for(const count of [6,7]){
+     const calls=[],old=CanvasRenderingContext2D.prototype.fillText;CanvasRenderingContext2D.prototype.fillText=function(s,...args){calls.push(s);return old.call(this,s,...args)};
+     try{await workCalendarPDF({title:'分組測試',range:'本週',headers:['星期','固定','臨時'],weekdays:['一','二','三','四','五','六','日'],days:Array.from({length:7},(_,i)=>({date:'2026-10-'+(19+i),tasks:i<count?[{title:'每天兩件相同工作',mode:'weekly'},{title:'每天兩件相同工作',mode:'weekly'}]:[]}))});result.push(calls.filter(s=>s==='每天兩件相同工作').length);}finally{CanvasRenderingContext2D.prototype.fillText=old;}
+    }
+    return result;
+   }""")
+   assert grouping==[12,2];passed('daily grouping needs all seven dates, preserves duplicate occurrence counts and never mutates the weekly model')
    # Dense content must stay complete, including continuations within the same week.
    dense=page.evaluate("async()=>{const calls=[];const original=CanvasRenderingContext2D.prototype.fillText;CanvasRenderingContext2D.prototype.fillText=function(s,...args){calls.push(s);return original.call(this,s,...args)};try{const tasks=Array.from({length:18},(_,i)=>({title:'任務'+i,mode:'weekly',note:'詳細備註'+i}));const blob=await workCalendarPDF({title:'測試',range:'2026-10-19 → 2026-10-25',headers:['星期','固定','臨時'],weekdays:['一','二','三','四','五','六','日'],days:Array.from({length:7},(_,i)=>({date:'2026-10-'+(19+i),tasks:i===0?tasks:[]}))});return {pages:blob.previewPages.length,calls};}finally{CanvasRenderingContext2D.prototype.fillText=original;}}")
    assert dense['pages']>1 and all('任務'+str(i) in dense['calls'] and '詳細備註'+str(i) in dense['calls'] for i in range(18));passed('dense schedule retains every task and note on clearly numbered same-week continuation pages')
