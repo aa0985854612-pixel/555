@@ -19,7 +19,7 @@ with tempfile.TemporaryDirectory() as tmp:
     page.locator('#calendar-form button.primary').click();page.wait_for_function('(n)=>!pending&&data.work_tasks.length===n',arg=count);page.wait_for_selector('.calendar-day')
    login();f=page.locator('#calendar-form');f.locator('[name=title]').fill('清洗水塔');f.locator('[name=weekday]').select_option('0');f.locator('[name=start_date]').fill('2026-10-01');f.locator('[name=time]').fill('09:00');f.locator('[name=note]').fill('1、2棟\n清洗後確認飲水');submit(1)
    f.locator('[name=mode]').select_option('once');f.locator('[name=date]').fill('2026-10-25');f.locator('[name=title]').fill('臨時維修料桶');f.locator('[name=note]').fill('15-1料桶');submit(2)
-   assert '清洗水塔' in page.locator('.calendar-day').nth(0).inner_text();assert '臨時維修料桶' in page.locator('.calendar-day').nth(6).inner_text();assert '2026-10-25' in page.locator('.calendar-day').nth(6).inner_text();passed('new tab records weekly and temporary tasks, normalized Monday–Sunday; Sunday included')
+   assert '清洗水塔' in page.locator('.calendar-day').nth(0).inner_text();assert '臨時維修料桶' in page.locator('.calendar-day').nth(6).inner_text();assert '10/25' in page.locator('.calendar-day').nth(6).inner_text();passed('new tab records weekly and temporary tasks, normalized Monday–Sunday; Sunday included')
    response=page.request.post(url+'/api/work_tasks',data={'title':'forged','mode':'once','date':'2026-10-22'});assert response.status==403;passed('calendar reads require login and writes require CSRF')
    page.evaluate("()=>{window.calendarDrawn=[];const draw=CanvasRenderingContext2D.prototype.fillText;CanvasRenderingContext2D.prototype.fillText=function(...args){calendarDrawn.push(args[0]);return draw.apply(this,args)}}")
    page.locator('#calendar-week').dispatch_event('change');page.wait_for_function("()=>!document.querySelector('#calendar-image').disabled")
@@ -44,7 +44,7 @@ with tempfile.TemporaryDirectory() as tmp:
      return {pages:blob.previewPages.length,calls,unchanged:days.every(d=>d.tasks.filter(t=>t.mode==='weekly'&&t.title==='巡查').length===2)};
     }finally{CanvasRenderingContext2D.prototype.fillText=old;}
    }""")
-   texts=[c['text'] for c in large['calls']];assert large['pages']==1 and large['unchanged'];assert all(texts.count(t)==1 for t in ['08:00 · 巡查','16:00 · 巡查','查看污水','抄水錶']);assert texts.count('南投出豬80頭')==3 and texts.count('敲料桶、叫料')==2 and texts.count('全場消毒')==2;assert all(t in texts for t in ['驗水','1、18棟打疫苗','8、14棟秤重','嘉義出豬80頭','新北出豬90頭','下午']);assert all(float(re.search(r'(\d+(?:\.\d+)?)px',c['font'])[1])>=14 for c in large['calls'] if not c['text'].endswith('1 / 1'));passed('42-task week fits one large-print A4, daily routines grouped once, dated work complete and readable text at least 14pt')
+   texts=[c['text'] for c in large['calls']];assert large['pages']==1 and large['unchanged'];assert all(texts.count(t)==1 for t in ['上午 8:00','下午 4:00','檢查污水','抄水錶']);assert texts.count('出豬：南投 80 頭')==3 and texts.count('敲料桶、叫料')==2 and texts.count('全場消毒')==2;assert all(t in texts for t in ['水質檢驗','施打疫苗（1、18棟）','豬隻秤重（8、14棟）','出豬：嘉義 80 頭','出豬：新北 90 頭','下午｜例行開會']);assert all(float(re.search(r'(\d+(?:\.\d+)?)px',c['font'])[1])>=14 for c in large['calls'] if not c['text'].endswith('1 / 1'));passed('42-task week fits one large-print A4, daily routines grouped once, dated work complete and readable text at least 14pt')
    grouping=page.evaluate("""async()=>{
     const result=[];
     for(const count of [6,7]){

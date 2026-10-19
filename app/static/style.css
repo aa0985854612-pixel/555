@@ -770,3 +770,29 @@ body [hidden] { display: none !important; }
 .calendar-image-gallery img { display: block; width: 100%; height: auto; border: 1px solid var(--line); -webkit-touch-callout: default; }
 .calendar-image-gallery figcaption { padding-top: 8px; }
 .calendar-image-gallery .actions a { display: inline-flex; align-items: center; min-height: 46px; border: 1px solid var(--line); border-radius: 10px; padding: 10px 15px; font-weight: 650; background: #fff; }
+
+/* Clear weekly work sheet: time cards first, then each date's two work lists. */
+.calendar-controls { border-top: 4px solid #284d68; }
+.calendar-controls > .hint { margin-top: 8px; }
+.calendar-controls #calendar-range { font-size: 1.2rem; font-variant-numeric: tabular-nums; }
+.calendar-routine { background: #f8fafc; }
+.calendar-routine-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 16px; }
+.calendar-routine-heading h2 { margin: 0; }
+#calendar-routine-list { display: grid; grid-template-columns: repeat(auto-fit,minmax(180px,1fr)); gap: 12px; }
+.calendar-routine-card { min-width: 0; border: 1px solid #d9e2eb; border-left: 4px solid #355c79; background: #f1f6fa; border-radius: 10px; padding: 14px 16px; }
+.calendar-routine-card:nth-child(even) { border-left-color: #947044; background: #f8f5ef; }
+.calendar-routine-card h3 { font-size: 1.2rem; margin: 0 0 10px; color: #18374b; }
+.calendar-routine-card .calendar-task { padding: 5px 0; border: 0; }
+.calendar-routine-card .calendar-task strong::before { content: '•'; margin-right: 8px; color: #3b6470; }
+.calendar-day h3 > strong { display: block; font-size: 1.45rem; font-variant-numeric: tabular-nums; }
+.calendar-day-content { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 16px; }
+.calendar-day-group { min-width: 0; }
+.calendar-day-group h4 { color: #284d68; font-weight: 700; border-bottom: 2px solid #dbe5ed; padding-bottom: 7px; margin-bottom: 2px; }
+.calendar-day-group:nth-child(2) h4 { color: #705934; border-bottom-color: #e9e1d4; }
+.calendar-task-time { display: inline-block; margin: 0 8px 5px 0; padding: 2px 7px; font-size: .85rem; font-weight: 650; color: #284d68; background: #edf2f7; border-radius: 5px; white-space: nowrap; }
+#calendar-manage { scroll-margin-top: 90px; }
+@media (max-width: 700px) {
+ .calendar-day { grid-template-columns: 80px minmax(0,1fr); }
+ .calendar-day-content { grid-template-columns: minmax(0,1fr); gap: 12px; }
+ .calendar-day h3 > strong { font-size: 1.25rem; }
+}

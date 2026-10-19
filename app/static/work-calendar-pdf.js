@@ -1,58 +1,52 @@
 'use strict';
-/* Shared daily work is listed once; dated work uses measured, large-print rows. */
+/* A readable weekly work sheet; images and PDF use exactly the same drawing. */
 window.workCalendarPDF=async function(model){
- const PW=595.28,PH=841.89,SCALE=3,M=24,W=PW-M*2,images=[];
+ const PW=595.28,PH=841.89,SCALE=3,M=24,W=PW-M*2,images=[],language=model.language||'zh',presentation=window.calendarPresentation;
  await document.fonts.ready;
  const canvas=document.createElement('canvas');canvas.width=Math.ceil(PW*SCALE);canvas.height=Math.ceil(PH*SCALE);
  const c=canvas.getContext('2d');c.scale(SCALE,SCALE);
  const family='-apple-system, BlinkMacSystemFont, "Noto Sans CJK TC", "Noto Sans TC", sans-serif';
- const labelW=78,widths=[labelW,(W-labelW)*.46,(W-labelW)*.54];
+ const labelW=72,widths=[labelW,(W-labelW)*.46,(W-labelW)*.54],navy='#18374b',muted='#516372',lineColor='#cbd5df';
  function font(n,bold=false){c.font=`${bold?'600':'400'} ${n}px ${family}`;}
- function wrap(value,width,size){font(size);const out=[];for(const row of String(value).split('\n')){let line='';for(const ch of row){if(line&&c.measureText(line+ch).width>width){out.push(line);line='';}line+=ch;}out.push(line);}return out;}
- function taskLines(task,width,size){return [...wrap((task.time?task.time+' · ':'')+task.title,width,size),...(task.note?wrap(task.note,width,size):[])];}
- const signature=t=>JSON.stringify([t.title,t.time||'',t.note||'']);
- // Match occurrence counts, not just titles: genuine duplicate jobs stay visible.
- const remaining=model.days.map(d=>d.tasks.slice()),daily=[];
- for(const task of model.days[0].tasks){
-  if(task.mode!=='weekly'||daily.length>=6||taskLines(task,W/2-18,15.5).length>2)continue;
-  const key=signature(task),indices=remaining.map(tasks=>tasks.findIndex(t=>t.mode==='weekly'&&signature(t)===key));
-  if(indices.every(i=>i>=0)){daily.push(task);indices.forEach((index,i)=>remaining[i].splice(index,1));}
- }
- function entries(tasks,width,size){return tasks.flatMap((t,i)=>taskLines(t,width,size).map((text,j)=>({text,gap:i&&j===0?4:0})));}
- function height(lines,lh){return lines.reduce((n,line,i)=>n+lh+(i?line.gap:0),0);}
- function plan(size){
-  const lh=size*1.3,dailyRows=[];
-  for(let i=0;i<daily.length;i+=2){const pair=daily.slice(i,i+2).map(t=>taskLines(t,W/2-18,size));dailyRows.push({pair,height:Math.max(...pair.map(lines=>lines.length))*lh+5});}
-  const dailyHeight=daily.length?27+dailyRows.reduce((n,r)=>n+r.height,0)+6:0,headTop=76+dailyHeight+(daily.length?12:0),bodyTop=headTop+29,available=PH-46-bodyTop;
-  const days=remaining.map(tasks=>['weekly','once'].map((mode,i)=>entries(tasks.filter(t=>t.mode===mode),widths[i+1]-16,size)));
-  const heights=days.map(cols=>Math.max(64,...cols.map(lines=>height(lines,lh)+18))),total=heights.reduce((a,b)=>a+b,0),fits=total<=available;
-  if(fits){const extra=(available-total)/7;return {size,lh,dailyRows,dailyHeight,headTop,bodyTop,days,heights:heights.map(h=>h+extra),pages:1,chunks:days.map(cols=>cols.map(lines=>[lines]))};}
-  const rowH=available/7,capacity=rowH-18;
-  function chunks(lines){const pages=[[]];let used=0;for(const line of lines){let gap=pages.at(-1).length?line.gap:0;if(used+gap+lh>capacity&&pages.at(-1).length){pages.push([]);used=0;gap=0;}pages.at(-1).push({...line,gap});used+=gap+lh;}return pages;}
-  const split=days.map(cols=>cols.map(chunks));return {size,lh,dailyRows,dailyHeight,headTop,bodyTop,days,heights:Array(7).fill(rowH),pages:Math.max(1,...split.flatMap(cols=>cols.map(p=>p.length))),chunks:split};
- }
- let layout=plan(15.5);for(const size of [15,14.5,14]){if(layout.pages===1)break;layout=plan(size);}
- function text(value,x,y,size=layout.size,bold=false){font(size,bold);c.fillStyle='#111';c.textBaseline='top';c.textAlign='left';c.fillText(String(value),x,y);}
- function cell(x,y,w,h,shade=false){if(shade){c.fillStyle='#f1f3f6';c.fillRect(x,y,w,h);}c.strokeStyle='#444';c.lineWidth=.7;c.strokeRect(x,y,w,h);}
- for(let page=0;page<layout.pages;page++){
-  c.fillStyle='#fff';c.fillRect(0,0,PW,PH);text(model.title,M,20,23,true);text(model.range,M,51,14);
-  if(daily.length){
-   cell(M,76,W,layout.dailyHeight);text(model.dailyTitle||'每日固定工作',M+8,82,14,true);let y=102;
-   for(const row of layout.dailyRows){row.pair.forEach((lines,col)=>lines.forEach((line,i)=>text(line,M+8+col*W/2,y+i*layout.lh,layout.size,true)));y+=row.height;}
+ function wrap(value,width,size){font(size);const out=[];for(const row of String(value).split('\n')){let part='';for(const ch of row){if(part&&c.measureText(part+ch).width>width){out.push(part);part='';}part+=ch;}out.push(part);}return out;}
+ function taskLines(row,width,size,withTime=true){const t=presentation.task(row,language);return [...wrap((withTime&&t.timeLabel?t.timeLabel+'｜':'')+t.title,width,size),...(t.note?wrap(t.note,width,size):[])];}
+ function routineRows(rows,size){
+  const groups=presentation.groups(rows,language),result=[],columns=Math.max(1,Math.min(3,groups.length)),cw=(W-10*(columns-1))/columns,lh=size*1.3;
+  for(let i=0;i<groups.length;i+=columns){const cards=groups.slice(i,i+columns).map(group=>({...group,lines:group.tasks.flatMap((row,index)=>taskLines(row,cw-30,size,false).map((text,j)=>({text,first:j===0,gap:index&&j===0?5:0})))}));
+   result.push({cards,height:Math.max(...cards.map(card=>40+card.lines.reduce((n,item,i)=>n+lh+(i?item.gap:0),0)+10))});
   }
-  let x=M;for(let i=0;i<3;i++){cell(x,layout.headTop,widths[i],29,true);text(model.headers[i],x+7,layout.headTop+7,14,true);x+=widths[i];}
+  return {rows:result,columns,height:result.length?24+result.reduce((n,row)=>n+row.height,0)+(result.length-1)*8:0};
+ }
+ const {daily,remaining}=presentation.sharedDaily(model.days,rows=>routineRows(rows,17).height<=150);
+ function entries(rows,width,size){return rows.flatMap((row,index)=>taskLines(row,width-11,size).map((text,j)=>({text,first:j===0,gap:index&&j===0?7:0})));}
+ function height(lines,lh){return lines.reduce((n,item,i)=>n+lh+(i?item.gap:0),0);}
+ function plan(size){
+  const lh=size*1.32,routines=routineRows(daily,size),headTop=78+routines.height+(daily.length?14:0),bodyTop=headTop+30,available=PH-46-bodyTop;
+  const days=remaining.map(rows=>['weekly','once'].map((mode,i)=>entries(rows.filter(row=>row.mode===mode),widths[i+1]-18,size)));
+  const heights=days.map(cols=>Math.max(59,...cols.map(lines=>height(lines,lh)+20))),total=heights.reduce((a,b)=>a+b,0);
+  if(total<=available){const extra=(available-total)/7;return {size,lh,routines,headTop,bodyTop,heights:heights.map(h=>h+extra),pages:1,chunks:days.map(cols=>cols.map(lines=>[lines]))};}
+  const rowH=available/7,capacity=rowH-20;
+  function chunks(lines){const result=[[]];let used=0;for(const item of lines){let gap=result.at(-1).length?item.gap:0;if(used+gap+lh>capacity&&result.at(-1).length){result.push([]);used=0;gap=0;}result.at(-1).push({...item,gap});used+=gap+lh;}return result;}
+  const split=days.map(cols=>cols.map(chunks));return {size,lh,routines,headTop,bodyTop,heights:Array(7).fill(rowH),pages:Math.max(1,...split.flatMap(cols=>cols.map(p=>p.length))),chunks:split};
+ }
+ let layout=plan(17);for(const size of [16.5,16,15,14.5,14]){if(layout.pages===1)break;layout=plan(size);}
+ function text(value,x,y,size=layout.size,bold=false,color='#18242d'){font(size,bold);c.fillStyle=color;c.textBaseline='top';c.textAlign='left';c.fillText(String(value),x,y);}
+ function rect(x,y,w,h,fill='#fff',stroke=true){c.fillStyle=fill;c.fillRect(x,y,w,h);if(stroke){c.strokeStyle=lineColor;c.lineWidth=.55;c.strokeRect(x,y,w,h);}}
+ function dot(x,y){c.beginPath();c.arc(x,y,1.8,0,Math.PI*2);c.fillStyle='#3b6470';c.fill();}
+ for(let page=0;page<layout.pages;page++){
+  rect(0,0,PW,PH,'#fff',false);text(model.title,M,20,23,true,navy);text(model.range,M,53,14,false,muted);
+  if(daily.length){
+   text(model.dailyTitle||(language==='zh'?'每天都要做':'Việc mỗi ngày'),M,80,14.5,true,navy);let y=102;
+   for(const row of layout.routines.rows){row.cards.forEach((card,index)=>{const w=(W-10*(layout.routines.columns-1))/layout.routines.columns,x=M+index*(w+10);rect(x,y,w,row.height,index?'#f8f5ef':'#f1f6fa');rect(x,y,3,row.height,index?'#947044':'#355c79',false);text(card.time||(language==='zh'?'每天完成':'Mỗi ngày'),x+13,y+10,16,true,navy);let on=y+37;for(const [i,item] of card.lines.entries()){if(i)on+=item.gap;if(item.first)dot(x+15,on+layout.size*.55);text(item.text,x+24,on);on+=layout.lh;}});y+=row.height+8;}
+  }
+  let x=M;for(let i=0;i<3;i++){rect(x,layout.headTop,widths[i],30,navy,false);text(model.headers[i],x+9,layout.headTop+8,14.5,true,'#fff');x+=widths[i];}
   let y=layout.bodyTop;
   for(let i=0;i<7;i++){
-   const day=model.days[i],h=layout.heights[i];cell(M,y,labelW,h,true);text(model.weekdays[i],M+7,y+10,15,true);text(day.date.slice(5).replace('-','/'),M+7,y+32,14);
-   let x=M+labelW;
-   for(let col=0;col<2;col++){
-    cell(x,y,widths[col+1],h);let on=y+9;for(const [index,line] of (layout.chunks[i][col][page]||[]).entries()){if(index)on+=line.gap;text(line.text,x+8,on);on+=layout.lh;}x+=widths[col+1];
-   }
-   y+=h;
+   const day=model.days[i],h=layout.heights[i];rect(M,y,labelW,h,i>4?'#f8f5ef':'#f1f5f9');text(day.date.slice(5).replace('-','/'),M+9,y+10,17,true,navy);text(model.weekdays[i],M+9,y+34,14,false,muted);let x=M+labelW;
+   for(let col=0;col<2;col++){rect(x,y,widths[col+1],h);let on=y+10;for(const [index,item] of (layout.chunks[i][col][page]||[]).entries()){if(index)on+=item.gap;if(item.first)dot(x+10,on+layout.size*.55);text(item.text,x+18,on);on+=layout.lh;}x+=widths[col+1];}y+=h;
   }
-  text(`${model.range}    ${page+1} / ${layout.pages}`,M,PH-29,10);
-  const blob=await new Promise((resolve,reject)=>canvas.toBlob(b=>b?resolve(b):reject(new Error('calendar_image_failed')),'image/jpeg',.96));
-  images.push({bytes:new Uint8Array(await blob.arrayBuffer()),width:canvas.width,height:canvas.height});
+  text(`${model.range}    ${page+1} / ${layout.pages}`,M,PH-29,10,false,muted);
+  const blob=await new Promise((resolve,reject)=>canvas.toBlob(b=>b?resolve(b):reject(new Error('calendar_image_failed')),'image/jpeg',.96));images.push({bytes:new Uint8Array(await blob.arrayBuffer()),width:canvas.width,height:canvas.height});
  }
  canvas.width=canvas.height=1;
  const enc=new TextEncoder(),parts=[],offsets=[0];let length=0;
