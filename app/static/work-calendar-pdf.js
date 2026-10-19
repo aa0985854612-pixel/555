@@ -9,7 +9,7 @@ window.workCalendarPDF=async function(model){
  const labelW=68,cw=(W-labelW)/2,rowH=98,top=96;
  function font(n,bold=false){c.font=`${bold?'600':'400'} ${n}px ${family}`;}
  function wrap(value,width,size){font(size);const out=[];for(const row of String(value).split('\n')){let line='';for(const ch of row){if(line&&c.measureText(line+ch).width>width){out.push(line);line='';}line+=ch;}out.push(line);}return out;}
- function plan(size){const lh=size*1.35,max=Math.floor((rowH-12)/lh),days=model.days.map(day=>['weekly','once'].map(mode=>day.tasks.filter(t=>t.mode===mode).flatMap(task=>[...wrap((task.time?task.time+' · ':'')+task.title,cw-22,size),...(task.note?wrap(task.note,cw-22,size):[]),''])));return {size,lh,max,days,pages:Math.max(1,...days.flatMap(day=>day.map(lines=>Math.ceil(lines.length/max))))};}
+ function plan(size){const lh=size*1.35,max=Math.floor((rowH-12)/lh),days=model.days.map(day=>['weekly','once'].map(mode=>{const lines=day.tasks.filter(t=>t.mode===mode).flatMap(task=>[...wrap((task.time?task.time+' · ':'')+task.title,cw-22,size),...(task.note?wrap(task.note,cw-22,size):[]),'']);if(lines.at(-1)==='')lines.pop();return lines;}));return {size,lh,max,days,pages:Math.max(1,...days.flatMap(day=>day.map(lines=>Math.ceil(lines.length/max))))};}
  let layout=plan(11);for(const size of [10,9,8]){if(layout.pages===1)break;layout=plan(size);}
  function text(value,x,y,size=10,bold=false){font(size,bold);c.fillStyle='#111';c.textBaseline='top';c.textAlign='left';c.fillText(String(value),x,y);}
  function cell(x,y,w,h,shade=false){if(shade){c.fillStyle='#f1f3f6';c.fillRect(x,y,w,h);}c.strokeStyle='#555';c.lineWidth=.6;c.strokeRect(x,y,w,h);}
