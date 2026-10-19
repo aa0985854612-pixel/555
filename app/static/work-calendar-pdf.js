@@ -42,8 +42,8 @@ window.workCalendarPDF=async function(model){
   let x=M;for(let i=0;i<3;i++){rect(x,layout.headTop,widths[i],30,navy,false);text(model.headers[i],x+9,layout.headTop+8,14.5,true,'#fff');x+=widths[i];}
   let y=layout.bodyTop;
   for(let i=0;i<7;i++){
-   const day=model.days[i],h=layout.heights[i];rect(M,y,labelW,h,i>4?'#f8f5ef':'#f1f5f9');text(day.date.slice(5).replace('-','/'),M+9,y+10,17,true,navy);text(model.weekdays[i],M+9,y+34,14,false,muted);let x=M+labelW;
-   for(let col=0;col<2;col++){rect(x,y,widths[col+1],h);let on=y+10;for(const [index,item] of (layout.chunks[i][col][page]||[]).entries()){if(index)on+=item.gap;if(item.first)dot(x+10,on+layout.size*.55);text(item.text,x+18,on);on+=layout.lh;}x+=widths[col+1];}y+=h;
+   const day=model.days[i],h=layout.heights[i],weekend=(day.weekday??i)>=5;rect(M,y,labelW,h,weekend?'#fde8e8':'#f1f5f9');text(day.date.slice(5).replace('-','/'),M+9,y+10,17,true,weekend?'#a63d47':navy);text(model.weekdays[i],M+9,y+34,14,false,weekend?'#a63d47':muted);let x=M+labelW;
+   for(let col=0;col<2;col++){rect(x,y,widths[col+1],h,weekend?'#fff7f7':'#fff');let on=y+10;for(const [index,item] of (layout.chunks[i][col][page]||[]).entries()){if(index)on+=item.gap;if(item.first)dot(x+10,on+layout.size*.55);text(item.text,x+18,on);on+=layout.lh;}x+=widths[col+1];}y+=h;
   }
   text(`${model.range}    ${page+1} / ${layout.pages}`,M,PH-29,10,false,muted);
   const blob=await new Promise((resolve,reject)=>canvas.toBlob(b=>b?resolve(b):reject(new Error('calendar_image_failed')),'image/jpeg',.96));images.push({bytes:new Uint8Array(await blob.arrayBuffer()),width:canvas.width,height:canvas.height});

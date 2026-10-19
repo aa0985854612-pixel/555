@@ -745,6 +745,8 @@ body [hidden] { display: none !important; }
 .calendar-week-tools { margin: 14px 0; }
 .calendar-day { display: grid; grid-template-columns: 125px minmax(0,1fr); border: 1px solid var(--line); background: #fff; border-radius: 12px; margin-bottom: 12px; overflow: hidden; }
 .calendar-day h3 { margin: 0; padding: 18px 14px; background: #edf1f7; font-size: 1.1rem; }
+.calendar-day.calendar-weekend { background: #fff7f7; }
+.calendar-day.calendar-weekend h3 { background: #fde8e8; color: #a63d47; }
 .calendar-day h3 small { display: block; margin-top: 8px; font-size: .8rem; font-weight: 400; }
 .calendar-day > div { padding: 12px 18px; min-width: 0; }
 .calendar-day h4 { font-size: .9rem; color: var(--muted); margin: 4px 0; }
