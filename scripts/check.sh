@@ -26,3 +26,5 @@ node --check app/static/work-calendar.js
 node --check app/static/work-calendar-pdf.js
 
 node --check app/static/calendar-presentation.js
+
+node --check app/static/outgoing-preview.js
