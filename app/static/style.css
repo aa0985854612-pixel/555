@@ -880,3 +880,5 @@ body [hidden] { display: none !important; }
  #weekly-print-root .weekly-print-pdf-page{display:block;width:210mm;height:296.9mm;object-fit:contain;break-inside:avoid;break-after:page;margin:0}
  #weekly-print-root .weekly-print-pdf-page:last-child{break-after:auto}
 }
+
+.overview-columns>span:nth-child(n+3):nth-child(-n+5){white-space:nowrap;overflow-wrap:normal}
