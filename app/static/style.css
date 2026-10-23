@@ -865,3 +865,10 @@ body [hidden] { display: none !important; }
  .overview-sold, .overview-culled, .overview-dead { font-size: .94rem; white-space: nowrap; }
  .overview-barn .barn-survival > strong, .overview-barn .barn-survival summary { font-size: .86rem; }
 }
+
+/* Keep the date column blank on subsequent feed lines of the same day. */
+.weekly-feed-entry,.weekly-preentry-lines>span{font-family:monospace;white-space:pre}
+@media print{#weekly-print-root .weekly-feed-entry{white-space:pre}}
+
+.weekly-preentry-lines{display:block}
+.weekly-preentry-lines>span{display:block}

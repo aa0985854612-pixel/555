@@ -8,17 +8,18 @@ window.weeklyPdf = async function(model) {
  for(let page=0;page<model.pages.length;page++){
   const canvas=document.createElement('canvas');canvas.width=Math.ceil(PW*SCALE);canvas.height=Math.ceil(PH*SCALE);
   const c=canvas.getContext('2d');c.scale(SCALE,SCALE);c.fillStyle='#fff';c.fillRect(0,0,PW,PH);c.strokeStyle='#444';c.lineWidth=.55;
-  const font=(size,bold=false)=>c.font=`${bold?'600':'400'} ${size}px ${family}`;
+  const font=(size,bold=false,monospace=false)=>c.font=`${bold?'600':'400'} ${size}px ${monospace?'monospace':family}`;
   function lines(text,width,size,bold=false){font(size,bold);const out=[];for(const line of String(text??'').split('\n')){let part='';for(const ch of line){if(part&&c.measureText(part+ch).width>width){out.push(part);part='';}part+=ch;}out.push(part);}return out;}
-  function text(value,x,y,width,size=9,bold=false,align='left',height=100,singleLine=false){
+  function text(value,x,y,width,size=9,bold=false,align='left',height=100,singleLine=false,monospace=false){
    const lh=size*1.25,all=singleLine?String(value??'').split('\n'):lines(value,width,size,bold),limit=Math.max(1,Math.floor(height/lh)),shown=all.slice(0,limit);
    if(all.length>limit)shown[shown.length-1]='… CSV';
-   c.fillStyle='#111';c.textBaseline='top';c.textAlign=align;font(size,bold);
-   for(let j=0;j<shown.length;j++){const ax=x+(align==='center'?width/2:0);if(singleLine)c.fillText(shown[j],ax,y+j*lh,width);else c.fillText(shown[j],ax,y+j*lh);}
+   c.fillStyle='#111';c.textBaseline='top';c.textAlign=align;font(size,bold,monospace);
+   const feedScale=monospace&&singleLine?Math.min(1,width/Math.max(1,...all.filter(line=>!line.includes(' · ')).map(line=>c.measureText(line).width))):null;
+   for(let j=0;j<shown.length;j++){const ax=x+(align==='center'?width/2:0);if(singleLine)c.fillText(shown[j],ax,y+j*lh,feedScale===null?width:Math.min(width,Math.max(1,c.measureText(shown[j]).width)*feedScale));else c.fillText(shown[j],ax,y+j*lh);}
    return all.length>limit;
   }
-  function cell(value,x,y,w,h,{size=9,bold=false,shade=false,align='center',singleLine=false}={}){
-   if(shade){c.fillStyle='#f0f0f0';c.fillRect(x,y,w,h);}c.strokeRect(x,y,w,h);const pad=singleLine?1.5:3;text(value,x+pad,y+4,w-2*pad,size,bold,align,h-7,singleLine);
+  function cell(value,x,y,w,h,{size=9,bold=false,shade=false,align='center',singleLine=false,monospace=false}={}){
+   if(shade){c.fillStyle='#f0f0f0';c.fillRect(x,y,w,h);}c.strokeRect(x,y,w,h);const pad=singleLine?1.5:3;text(value,x+pad,y+4,w-2*pad,size,bold,align,h-7,singleLine,monospace);
   }
   text(model.title,M,22,W,18,true,'center',26);let y=50;
   for(let i=0;i<model.basics.length;i+=3){for(let j=0;j<3;j++){const pair=model.basics[i+j]||['',''],x=M+j*W/3;cell('',x,y,W/3,31);text(pair[0],x+5,y+3,W/3-10,8,false,'left',11);text(pair[1],x+5,y+14,W/3-10,10,true,'left',14);}y+=31;}
@@ -27,9 +28,9 @@ window.weeklyPdf = async function(model) {
   y+=6;text(model.period+(model.pages.length>1?` (${page+1}/${model.pages.length})`:''),M,y,W,8,false,'left',14);y+=17;
   const pre=model.preentry;
   if(pre){
-   const shown=pre.entries.slice(0,6),rows=Math.ceil(shown.length/3),h=18+rows*12+(pre.entries.length>shown.length?12:0)+4;
+   const shown=pre.entries.slice(0,6),rows=shown.length,h=18+rows*12+(pre.entries.length>shown.length?12:0)+4;
    cell('',M,y,W,h);text(pre.title+' · '+pre.summary,M+4,y+3,W-8,9,true,'left',13,true);
-   shown.forEach((entry,i)=>text(entry,M+4+(i%3)*W/3,y+18+Math.floor(i/3)*12,W/3-8,8.5,false,'left',12,true));
+   shown.forEach((entry,i)=>text(entry,M+4,y+18+i*12,W-8,8.5,false,'left',12,true,true));
    if(pre.entries.length>shown.length)text(pre.more.replace('{n}',pre.entries.length-shown.length),M+4,y+h-12,W-8,8,false,'left',11,true);
    y+=h+5;
   }
@@ -39,7 +40,7 @@ window.weeklyPdf = async function(model) {
   for(const band of bands){
    const n=band.headers.length,labelW=58,cw=(W-labelW)/n,size=n>16?7:8;
    const rows=[{label:model.cycle,cells:band.headers,height:19,shade:true,bold:true},...band.rows];
-   for(const originalRow of rows){const row=originalRow.left?{...originalRow,height:Math.max(30,originalRow.height-shrink)}:originalRow;cell(row.label,M,y,labelW,row.height,{size:8.5,bold:true,shade:row.shade});for(let j=0;j<n;j++)cell(row.cells[j]||'',M+labelW+j*cw,y,cw,row.height,{size:row.bold?size+.5:size,bold:row.bold,shade:row.shade,align:row.left?'left':'center',singleLine:row.singleLine});y+=row.height;}
+   for(const originalRow of rows){const row=originalRow.left?{...originalRow,height:Math.max(30,originalRow.height-shrink)}:originalRow;cell(row.label,M,y,labelW,row.height,{size:8.5,bold:true,shade:row.shade});for(let j=0;j<n;j++)cell(row.cells[j]||'',M+labelW+j*cw,y,cw,row.height,{size:row.bold?size+.5:size,bold:row.bold,shade:row.shade,align:row.left?'left':'center',singleLine:row.singleLine,monospace:row.monospace});y+=row.height;}
    y+=8;
   }
   // Measure complete notes against the space left by the actual tables and footer.

@@ -37,8 +37,8 @@ with tempfile.TemporaryDirectory() as tmp:
    assert tables.nth(0).locator('thead th').all_text_contents()[1:]==['第'+str(i)+'週' for i in range(11,23)]
    assert tables.nth(1).locator('thead th').all_text_contents()[1:7]==['第'+str(i)+'週' for i in range(23,29)]
    assert tables.nth(1).locator('thead th').all_text_contents()[7:11]==['第29週','第30週','第31週','第32週'];assert tables.nth(1).locator('thead th').all_text_contents()[11:]==['']*2
-   assert set(sheet.locator('.weekly-feed-entry').all_text_contents())=={'10/13+4（24）','10/13+2（12）','10/15+2（24）'}
-   assert sheet.locator('.weekly-feed-entry').evaluate_all('(xs)=>xs.every(e=>e.scrollWidth<=e.clientWidth+1&&getComputedStyle(e).whiteSpace==="nowrap")');assert all(v not in ('0','0.000','—') for v in sheet.locator('.weekly-table td').all_text_contents())
+   assert set(sheet.locator('.weekly-feed-entry').all_text_contents())=={'10/13+4(24)','     +2(12)','10/15+2(24)'}
+   assert sheet.locator('.weekly-feed-entry').evaluate_all('(xs)=>xs.every(e=>e.scrollWidth<=e.clientWidth+1&&getComputedStyle(e).whiteSpace==="pre")');assert all(v not in ('0','0.000','—') for v in sheet.locator('.weekly-table td').all_text_contents())
    assert sheet.locator('.weekly-death td').all_text_contents()[0]=='' and sheet.locator('.weekly-death td').all_text_contents()[1]=='3'
    assert sheet.locator('.weekly-death td').all_text_contents()[5]=='2'
    assert sheet.locator('.weekly-death-barn h3').all_text_contents()==['第12棟','第24棟']
@@ -53,14 +53,14 @@ with tempfile.TemporaryDirectory() as tmp:
    output=root/'artifacts/weekly-two-bands-a4.pdf';dl.value.save_as(output);pdf_info(output);model=page.evaluate('lastPdfModel')
    assert all(pair[0] in ('批次','棟舍','進場頭數','棟舍預設廠商','本期間登記料別','週期') for pair in model['basics']);assert len(model['pages'])==1 and len(model['pages'][0])==2
    assert all(len(b['headers'])==12 for b in model['pages'][0]);assert model['pages'][0][1]['headers'][6:10]==['29週','30週','31週','32週'];assert model['pages'][0][1]['rows'][0]['cells'][6:10]==['10/23','10/30','11/6','11/13'];assert all(all(cell=='' for cell in row['cells'][6:10]) for row in model['pages'][0][1]['rows'][1:]);assert '週期預排至32週' in model['legend']
-   assert '… CSV' not in page.evaluate('pdfAllTextCalls');calls=page.evaluate('feedDrawCalls');assert {c[0] for c in calls}=={'10/13+4（24）','10/13+2（12）','10/15+2（24）'};assert len(calls)==3 and all(len(c)==4 and c[3]>0 for c in calls);assert model['shipping_notes']==['10/16 嘉義80'];assert sheet.locator('.weekly-outgoing-row').count()==0;assert '10/16 嘉義80' in sheet.locator('.weekly-shipping-notes').text_content();assert all(r['singleLine'] for p in model['pages'] for b in p for r in b['rows'] if r.get('left'))
+   assert '… CSV' not in page.evaluate('pdfAllTextCalls');calls=page.evaluate('feedDrawCalls');assert {c[0] for c in calls}=={'10/13+4(24)','     +2(12)','10/15+2(24)'};assert len(calls)==3 and all(len(c)==4 and c[3]>0 for c in calls);assert model['shipping_notes']==['10/16 嘉義80'];assert sheet.locator('.weekly-outgoing-row').count()==0;assert '10/16 嘉義80' in sheet.locator('.weekly-shipping-notes').text_content();assert all(r['singleLine'] for p in model['pages'] for b in p for r in b['rows'] if r.get('left'))
    assert len(model['death_notes'])==9 and {'7/24 12棟 死亡1隻','7/24 24棟 死亡1隻'} <= set(model['death_notes'])
    assert [g['title'] for g in model['death_groups']]==['第12棟','第24棟']
    assert all('棟' not in n for g in model['death_groups'] for n in g['notes'])
    note_calls=page.evaluate('pdfNoteCalls');deaths=[c for c in note_calls if re.match(r'^\d+/\d+ 死亡',c[0])];assert all(c[1]<297.64 for c in deaths);assert all(c[1]>=297.64 for c in note_calls if '嘉義' in c[0]);assert len(deaths)==9
    for index,g in enumerate(model['death_groups']):assert all(24+index*136.82<=c[1]<24+(index+1)*136.82 for c in deaths if c[0] in g['notes'] and c[0]!='7/24 死亡1隻')
    assert dict(model['totals'])=={'淘汰數（隻）':'5','死亡數（隻）':'16','叫料登記量（噸）':'8','正常出豬（隻）':'83'}
-   assert model['pages'][0][1]['rows'][3]['cells'][4]=='10/13+4（24）\n10/13+2（12）\n10/15+2（24）'
+   assert model['pages'][0][1]['rows'][3]['cells'][4]=='10/13+4(24)\n     +2(12)\n10/15+2(24)'
    assert all(x not in ('0','0.000','—') for b in model['pages'][0] for row in b['rows'] for x in row['cells'])
    passed('single A4: three complete feed entries each drawn once on one line, separate shipment field and original totals')
    with page.expect_download() as dl:page.locator('#weekly-csv').click()
@@ -78,7 +78,7 @@ with tempfile.TemporaryDirectory() as tmp:
    passed('PDF and CSV generation preserve draft and all farm/account data')
    page.locator('#logout').click();page.wait_for_selector('#login-view:not([hidden])');login('reader','83000012');page.locator('nav [href="#stats"]').click();page.locator('#open-weekly-report').click();page.locator('#weekly-cohort').select_option('SYNTHETIC-18-WEEKS|2026-06-19');page.locator('#weekly-to').fill('2026-10-17');generate()
    # Stress only the rendering input: oversized notes must be marked and not paginate Safari's PDF.
-   page.evaluate('()=>{window.stressText=[];const draw=CanvasRenderingContext2D.prototype.fillText;CanvasRenderingContext2D.prototype.fillText=function(...args){stressText.push(args[0]);return draw.apply(this,args)};const original=window.weeklyPdf;window.realWeeklyPdf=original;window.weeklyPdf=(model)=>{model.death_notes=Array.from({length:30},(_,i)=>"10/9 24棟 死亡1隻");model.death_groups=[{barn:"12棟",title:"第12棟",notes:Array(30).fill("10/9 死亡1隻")},{barn:"24棟",title:"第24棟",notes:[]}];window.stressNotes=model.death_notes.length;for(const p of model.pages)for(const b of p)for(const row of b.rows)if(row.left)row.cells=row.cells.map(()=>Array(40).fill("10/13+2（12）").join("\\n"));return original(model)}}')
+   page.evaluate('()=>{window.stressText=[];const draw=CanvasRenderingContext2D.prototype.fillText;CanvasRenderingContext2D.prototype.fillText=function(...args){stressText.push(args[0]);return draw.apply(this,args)};const original=window.weeklyPdf;window.realWeeklyPdf=original;window.weeklyPdf=(model)=>{model.death_notes=Array.from({length:30},(_,i)=>"10/9 24棟 死亡1隻");model.death_groups=[{barn:"12棟",title:"第12棟",notes:Array(30).fill("10/9 死亡1隻")},{barn:"24棟",title:"第24棟",notes:[]}];window.stressNotes=model.death_notes.length;for(const p of model.pages)for(const b of p)for(const row of b.rows)if(row.left)row.cells=row.cells.map(()=>Array(40).fill("     +2(12)").join("\\n"));return original(model)}}')
    generate();page.wait_for_selector('#weekly-a4-preview img')
    with page.expect_download() as dl:page.locator('#weekly-print').click()
    stress=root/'artifacts/weekly-two-bands-dense-a4.pdf';dl.value.save_as(stress);pdf_info(stress);assert store.snapshot()==before;assert page.evaluate('stressNotes')==30;stress_draws=page.evaluate('stressText');shown=stress_draws.count('10/9 死亡1隻');omitted=sum(int(re.fullmatch(r'另(\d+)筆，詳CSV',s)[1]) for s in stress_draws if re.fullmatch(r'另(\d+)筆，詳CSV',s));assert shown>6 and shown+omitted==30;assert not errors,errors;passed('viewer can download; oversized feed cells and 30 death notes stay on one A4 with all available note space used and an accurate overflow count under its barn')
