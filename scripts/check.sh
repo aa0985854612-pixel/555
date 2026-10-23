@@ -28,3 +28,9 @@ node --check app/static/work-calendar-pdf.js
 node --check app/static/calendar-presentation.js
 
 node --check app/static/outgoing-preview.js
+
+node --check app/static/growth.js
+
+node --check app/static/order-fcr.js
+
+node --check app/static/notifications.js
