@@ -872,3 +872,11 @@ body [hidden] { display: none !important; }
 
 .weekly-preentry-lines{display:block}
 .weekly-preentry-lines>span{display:block}
+
+@media print{
+ @page weekly-rendered-sheet{size:A4 portrait;margin:0}
+ html:has(#weekly-print-root.weekly-rendered-pages:not(:empty)){page:weekly-rendered-sheet}
+ body>#weekly-print-root.weekly-rendered-pages:not(:empty){width:210mm!important;page:weekly-rendered-sheet}
+ #weekly-print-root .weekly-print-pdf-page{display:block;width:210mm;height:296.9mm;object-fit:contain;break-inside:avoid;break-after:page;margin:0}
+ #weekly-print-root .weekly-print-pdf-page:last-child{break-after:auto}
+}

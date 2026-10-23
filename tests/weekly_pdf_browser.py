@@ -9,9 +9,9 @@ from app.server import Server
 from playwright.sync_api import sync_playwright
 root=Path(__file__).resolve().parents[1];checks=[]
 def passed(s):checks.append(s);print('PASS',s,flush=True)
-def pdf_info(path):
+def pdf_info(path,one_page=True):
  info=subprocess.check_output(['pdfinfo',str(path)],text=True)
- assert re.search(r'Pages:\s+1\b',info),info
+ assert re.search(r'Pages:\s+1\b',info) if one_page else int(re.search(r'Pages:\s+(\d+)',info)[1])>1,info
  size=re.search(r'Page size:\s+([\d.]+) x ([\d.]+)',info)
  assert abs(float(size[1])-595.28)<1 and abs(float(size[2])-841.89)<1,info
  assert path.stat().st_size<4_000_000
@@ -81,7 +81,7 @@ with tempfile.TemporaryDirectory() as tmp:
    page.evaluate('()=>{window.stressText=[];const draw=CanvasRenderingContext2D.prototype.fillText;CanvasRenderingContext2D.prototype.fillText=function(...args){stressText.push(args[0]);return draw.apply(this,args)};const original=window.weeklyPdf;window.realWeeklyPdf=original;window.weeklyPdf=(model)=>{model.death_notes=Array.from({length:30},(_,i)=>"10/9 24棟 死亡1隻");model.death_groups=[{barn:"12棟",title:"第12棟",notes:Array(30).fill("10/9 死亡1隻")},{barn:"24棟",title:"第24棟",notes:[]}];window.stressNotes=model.death_notes.length;for(const p of model.pages)for(const b of p)for(const row of b.rows)if(row.left)row.cells=row.cells.map(()=>Array(40).fill("     +2(12)").join("\\n"));return original(model)}}')
    generate();page.wait_for_selector('#weekly-a4-preview img')
    with page.expect_download() as dl:page.locator('#weekly-print').click()
-   stress=root/'artifacts/weekly-two-bands-dense-a4.pdf';dl.value.save_as(stress);pdf_info(stress);assert store.snapshot()==before;assert page.evaluate('stressNotes')==30;stress_draws=page.evaluate('stressText');shown=stress_draws.count('10/9 死亡1隻');omitted=sum(int(re.fullmatch(r'另(\d+)筆，詳CSV',s)[1]) for s in stress_draws if re.fullmatch(r'另(\d+)筆，詳CSV',s));assert shown>6 and shown+omitted==30;assert not errors,errors;passed('viewer can download; oversized feed cells and 30 death notes stay on one A4 with all available note space used and an accurate overflow count under its barn')
+   stress=root/'artifacts/weekly-two-bands-dense-a4.pdf';dl.value.save_as(stress);pdf_info(stress,one_page=False);assert store.snapshot()==before;assert page.evaluate('stressNotes')==30;stress_draws=page.evaluate('stressText');shown=stress_draws.count('10/9 死亡1隻');omitted=sum(int(re.fullmatch(r'另(\d+)筆，詳CSV',s)[1]) for s in stress_draws if re.fullmatch(r'另(\d+)筆，詳CSV',s));assert shown>6 and shown+omitted==30;assert not errors,errors;assert stress_draws.count('     +2(12)')==960;passed('viewer can download every one of 960 feed lines across A4 continuations; death notes retain an accurate shown/omitted count under their barn')
    page.evaluate('()=>{window.weeklyPdf=window.realWeeklyPdf;}');page.locator('#weekly-cohort').select_option('BARN-COLUMNS|2026-09-01');page.locator('#weekly-barn').select_option('');page.locator('#weekly-to').fill('2026-09-20');generate()
    assert sheet.locator('.weekly-death-barn h3').all_text_contents()==['第5棟','第6棟','第7棟']
    assert sheet.locator('.weekly-death-barn[data-barn="5棟"] .weekly-death-entry').all_text_contents()==['9/15 死亡1隻']
