@@ -2,7 +2,7 @@
 
 **[開啟正式網站：555-rho-nine.vercel.app](https://555-rho-nine.vercel.app/)**。沿用你目前的帳號、密碼、Vercel專案及Turso資料庫。
 
-- [完整原始碼／Docker／Vercel程式包 v2.0.44](https://github.com/aa0985854612-pixel/555/raw/refs/heads/main/release/pigledger-2.0.45.zip)
+- [完整原始碼／Docker／Vercel程式包 v2.0.44](https://github.com/aa0985854612-pixel/555/raw/refs/heads/main/release/pigledger-2.0.46.zip)
 - [簡短操作說明](docs/USER_GUIDE.md)／[部署說明](docs/VERCEL.md)
 - [2.0.0測試報告與驗收限制](docs/TEST_REPORT_2.0.0.md)
 
@@ -91,3 +91,5 @@ python3 scripts/package_windows.py
 PSF NuGet Python3.14.8 原包以官方catalog SHA-512核對，保留原包、signature及逐檔SHA-256。cloudflared2026.10.0 以官方release SHA-256核對，與winget manifest相符，啟動前再驗證；二進位不修改、不停用TLS、不自動升級connector，Apache授權隨包保存。
 
 Linux開發可用 python3 -m app.desktop --data-dir /tmp/isolated-farm。手機啟動器額外指定已驗證的Linux connector。測試使用隔離資料，不更改正式農場。歷史版本程式包與報告保留。
+
+批次與棟舍自助管理：在設定選整批編輯進場資料，或登記盤點存欄；核對前後變化後一次儲存，保留草稿與修改紀錄。操作見[使用說明](docs/USER_GUIDE.md)。

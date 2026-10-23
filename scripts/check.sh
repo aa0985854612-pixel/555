@@ -34,3 +34,5 @@ node --check app/static/growth.js
 node --check app/static/order-fcr.js
 
 node --check app/static/notifications.js
+
+node --check app/static/batch-manager.js

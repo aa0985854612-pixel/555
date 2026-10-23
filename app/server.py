@@ -390,6 +390,13 @@ class Handler(BaseHTTPRequestHandler):
             if path=='/api/feed-order-preview' and method=='POST':
                 from .feed_review import preview_feed_order
                 return self.send(preview_feed_order(store,user,self.body()))
+            if path in ('/api/batch-settings/preview','/api/batch-settings/apply') and method=='POST':
+                from .batch_settings import preview,save
+                if path.endswith('/preview'):return self.send(preview(store,user,self.body()))
+                result=save(store,user,self.body(),self.headers.get('Idempotency-Key'))
+                if '_snapshot' in result:
+                    snapshot=result.pop('_snapshot');seq=result.pop('_sequence');result['sync']=client_snapshot(snapshot,self.server.instance+':'+str(seq))
+                return self.send(result,201)
             if path=='/api/feed-order-apply' and method=='POST':
                 from .feed_review import save_reviewed_feed
                 result=save_reviewed_feed(store,user,self.body(),self.headers.get('Idempotency-Key'))

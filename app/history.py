@@ -121,7 +121,7 @@ def source_history(data,kind='movements',include_voided=False,include_matched=Fa
                 allocations=event['allocations'] or ([{'barn':row['barns'][0],'quantity':event['quantity']}] if len(row['barns'])==1 else [{'barn':None,'quantity':event['quantity']}])
                 for allocation in allocations:
                     batch=next((b for b in members if b['legacy_barn']==allocation['barn']),None)
-                    barn=next((b for b in data['barns'] if str(b.get('name','')).replace('第','').replace('棟','').strip()==str(allocation['barn'])),None)
+                    barn=next((b for b in data['barns'] if b['id']==batch['barn_id']),None) if batch else next((b for b in data['barns'] if str(b.get('name','')).replace('第','').replace('棟','').strip()==str(allocation['barn'])),None)
                     output.append(common|{'id':str(uuid.uuid5(uuid.NAMESPACE_URL,source['base']['id']+eid+str(allocation['barn']))),
                         'date':event.get('date'),'type':event['type'],'quantity':allocation['quantity'],
                         'batch_id':batch['id'] if batch else None,'barn_id':barn['id'] if barn else None,'barn_number':allocation['barn'],
@@ -131,7 +131,7 @@ def source_history(data,kind='movements',include_voided=False,include_matched=Fa
                 if cell.get('unresolved_quantity',cell['quantity'])<=0:continue
                 output.append(common|{'id':str(uuid.uuid5(uuid.NAMESPACE_URL,source['base']['id']+row.get('sheet','')+cell['cell']+':undated')),
                     'date':None,'type':cell.get('type','unknown'),'quantity':cell.get('unresolved_quantity',cell['quantity']),
-                    'batch_id':members[0]['id'] if len(members)==1 else None,'barn_id':next((b['id'] for b in data['barns'] if str(b['name']).replace('第','').replace('棟','').strip()==str(row['barns'][0])),None) if len(row['barns'])==1 else None,'barn_number':row['barns'][0] if len(row['barns'])==1 else None,
+                    'batch_id':members[0]['id'] if len(members)==1 else None,'barn_id':members[0]['barn_id'] if len(members)==1 else next((b['id'] for b in data['barns'] if str(b['name']).replace('第','').replace('棟','').strip()==str(row['barns'][0])),None) if len(row['barns'])==1 else None,'barn_number':row['barns'][0] if len(row['barns'])==1 else None,
                     'source_cell':row.get('sheet',source['book']['report']['sheet'])+'!'+cell['cell'],'note':cell.get('comment',''),'unresolved':True})
         elif kind=='weights':
             for weight in row.get('weights',[]):

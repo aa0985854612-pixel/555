@@ -1,0 +1,33 @@
+#batch-management .actions { margin-top: 14px; }
+#batch-management > label { max-width: 780px; }
+#batch-settings summary > [data-manage-batch] { justify-self: start; margin-top: 6px; }
+.overview-cohort-heading > [data-manage-batch] { padding: 7px 12px; min-height: 40px; font-size: .9rem; }
+#batch-manager-dialog { width: min(900px, calc(100vw - 24px)); max-width: 900px; max-height: 92dvh; padding: 24px; }
+#batch-manager-dialog > .section-row { align-items: flex-start; }
+#batch-manager-dialog h2 { font-size: 1.35rem; overflow-wrap: anywhere; }
+#batch-manager-form > label, #manager-entry-options > label, #manager-stock-options > label { margin: 14px 0; }
+#manager-total { font-size: 1.15rem; font-weight: 700; color: var(--navy); }
+.manager-barn { border: 1px solid var(--line); border-radius: 12px; padding: 16px; margin: 16px 0; background: #fff; }
+.manager-barn h3 { color: var(--navy); margin-top: 0; }
+.manager-barn details { margin-top: 14px; }
+.manager-barn details > .grid { margin: 14px 0; }
+.manager-lot { display: grid; grid-template-columns: 1.5fr 1fr 1fr; gap: 10px; border-bottom: 1px solid var(--line); padding: 12px 0; }
+.manager-lot input { min-width: 0; }
+.manager-lot > button { grid-column: 1 / -1; justify-self: start; }
+.manager-impact-totals { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.manager-impact-totals > div { background: #edf1f7; padding: 14px; border-radius: 10px; }
+.manager-impact-totals strong { display: block; font-size: 1.4rem; margin-top: 8px; }
+#manager-impact > article { padding: 12px 0; border-bottom: 1px solid var(--line); }
+#manager-impact dl > div { display: grid; grid-template-columns: 1fr 2fr; gap: 12px; padding: 6px 0; }
+#manager-impact dd { margin: 0; overflow-wrap: anywhere; }
+#manager-impact dt { color: var(--muted); }
+#batch-manager-dialog > .actions { margin-top: 20px; }
+@media (max-width: 600px) {
+ #batch-manager-dialog { padding: 16px; }
+ .manager-barn { padding: 12px; }
+ .manager-barn .grid, .manager-impact-totals { grid-template-columns: 1fr; }
+ .manager-lot { grid-template-columns: 1fr 1fr; }
+ .manager-lot > label:first-child { grid-column: 1 / -1; }
+ #manager-impact dl > div { grid-template-columns: 1fr; gap: 3px; }
+ #batch-manager-dialog .actions > button { width: 100%; }
+}

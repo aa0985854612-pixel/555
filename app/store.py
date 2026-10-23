@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from .domain import Invalid, day, number, herd, consumption, age
 from .notification_schema import PUSH_SCHEMA
 
-VERSION='2.0.45'
+VERSION='2.0.46'
 SCHEMA_VERSION=4
 KINDS=('barns','batches','movements','feed_orders','deliveries','usages','weights','workbooks','source_voids','daily_checks','feed_bins','work_tasks')
 SCHEMA='''
@@ -667,7 +667,9 @@ class Store:
                 for row in ([] if cleaned.get('base_book_id') else cleaned['report']['rows']):
                     plan=next(p for p in cleaned['plan']['rows'] if p['key']==row['key']);cohort_id=None
                     for barn_number in row['barns']:
-                        barn=next((b for b in data['barns'] if re_barn_number(b['name'])==barn_number),None)
+                        linked={b['barn_id'] for b in data['batches'] if b.get('legacy_barn')==barn_number}
+                        barn=next((b for b in data['barns'] if b['id'] in linked),None) if len(linked)==1 else None
+                        barn=barn or next((b for b in data['barns'] if re_barn_number(b['name'])==barn_number),None)
                         if not barn:
                             barn=insert('barns',{'name':str(barn_number)+'棟','group':''});barns_added+=1
                         if any(b['barn_id']==barn['id'] and b['name']==row['name'] for b in data['batches']):raise Problem('legacy_source_conflict',409)
