@@ -404,7 +404,7 @@ body [hidden] { display: none !important; }
 .cohort-total dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin: 12px 0; }
 .cohort-total dt { font-size: .88rem; color: var(--muted); }
 .cohort-total dd { font-size: 1.1rem; font-weight: 700; margin: 4px 0; }
-.overview-columns, .barn-card.overview-barn { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, .95fr) minmax(0, .7fr) minmax(0, .95fr) minmax(0, 1.15fr); gap: 6px; align-items: center; text-align: right; }
+.overview-columns, .barn-card.overview-barn { display: grid; grid-template-columns: var(--overview-grid, minmax(0, 1.1fr) minmax(0, .95fr) minmax(0, .65fr) minmax(0, .85fr) minmax(0, .8fr) minmax(0, 1.15fr)); gap: 6px; align-items: center; text-align: right; }
 .overview-columns { background: #f5f7fa; padding: 7px 12px; font-size: .85rem; color: var(--muted); }
 .overview-columns > :first-child { text-align: left; }
 .barn-card.overview-barn { border: 0; border-top: 1px solid #e7ebf0; border-radius: 0; padding: 6px 12px; position: relative; }
@@ -414,6 +414,7 @@ body [hidden] { display: none !important; }
 .overview-heads { font-size: 1.1rem; font-variant-numeric: tabular-nums; }
 .overview-dead { font-size: 1rem; color: var(--red); font-variant-numeric: tabular-nums; }
 .overview-sold { font-size: 1.05rem; color: var(--navy); font-variant-numeric: tabular-nums; }
+.overview-culled { font-size: 1rem; color: var(--navy); font-variant-numeric: tabular-nums; }
 .overview-columns > *, .overview-barn > * { min-width: 0; }
 .overview-columns > span { overflow-wrap: anywhere; }
 .overview-barn .barn-survival { padding: 0; display: block; }
@@ -421,7 +422,7 @@ body [hidden] { display: none !important; }
 .overview-barn .barn-survival details { margin: 0; padding: 0; }
 .overview-barn .barn-survival summary { padding: 10px 0; min-height: 44px; font-size: 1rem; list-style: none; }
 .overview-barn .barn-survival details p { position: relative; background: #f1f4f8; padding: 10px; margin: 0; font-size: .88rem; text-align: left; }
-.overview-barn:has(.barn-survival details[open]) { grid-template-columns: minmax(0, 1.05fr) minmax(0, .95fr) minmax(0, .7fr) minmax(0, .95fr) minmax(0, 1.15fr); }
+.overview-barn:has(.barn-survival details[open]) { grid-template-columns: var(--overview-grid, minmax(0, 1.1fr) minmax(0, .95fr) minmax(0, .65fr) minmax(0, .85fr) minmax(0, .8fr) minmax(0, 1.15fr)); }
 .overview-barn .barn-survival:has(details[open]) { grid-column: 1 / -1; }
 
 .recent-fold { margin-top: 18px; }
@@ -853,3 +854,14 @@ body [hidden] { display: none !important; }
 #notification-card .check { align-items: flex-start; }
 #notification-card .check input { flex-shrink: 0; }
 #notification-card .check span { min-width: 0; overflow-wrap: anywhere; }
+
+@media (max-width: 480px) {
+ .overview-cohort { --overview-grid: minmax(0, .9fr) minmax(0, 1.05fr) minmax(0, .55fr) minmax(0, .7fr) minmax(0, .65fr) minmax(0, 1.25fr); }
+ .overview-columns, .barn-card.overview-barn { gap: 4px; padding-left: 9px; padding-right: 9px; }
+ .overview-columns { font-size: .76rem; }
+ .overview-barn-link > strong { font-size: 1rem; }
+ .overview-barn-link > small { font-size: .75rem; }
+ .overview-heads { font-size: 1rem; white-space: nowrap; }
+ .overview-sold, .overview-culled, .overview-dead { font-size: .94rem; white-space: nowrap; }
+ .overview-barn .barn-survival > strong, .overview-barn .barn-survival summary { font-size: .86rem; }
+}
