@@ -384,20 +384,22 @@ body [hidden] { display: none !important; }
 #page-daily #home-metrics .feature .value { font-size: 2.15rem; }
 #barns.compact-barns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; gap: 14px; }
 .overview-cohort { border: 1px solid var(--line); background: #fff; border-radius: 12px; overflow: hidden; min-width: 0; }
-.overview-cohort-heading { padding: 13px 14px; display: flex; gap: 8px 12px; justify-content: space-between; flex-wrap: wrap; align-items: baseline; border-bottom: 1px solid var(--line); }
-.overview-cohort-heading h3 { font-size: 1.12rem; color: var(--navy); margin: 0; }
-.overview-cohort-heading > span { font-size: .85rem; color: var(--muted); white-space: nowrap; }
-.cohort-total { padding: 0 14px; background: #edf1f7; }
-.cohort-total-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; list-style: none; }
+.overview-cohort-heading { padding: 5px 14px; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; min-height: 48px; border-bottom: 1px solid var(--line); }
+.overview-cohort-heading:has(> [data-manage-batch]) { grid-template-columns: minmax(0, 1fr) auto auto; }
+.overview-cohort-heading h3 { font-size: 1rem; color: var(--navy); margin: 0; overflow-wrap: anywhere; }
+.overview-cohort-heading > span { font-size: .75rem; color: var(--muted); white-space: nowrap; }
+.cohort-total { padding: 0 14px; background: #f7f8fa; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 12px; }
+.cohort-total-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 2px 6px; list-style: none; }
 .cohort-total-head::-webkit-details-marker { display: none; }
-.cohort-total-head > span { color: var(--navy); font-size: .94rem; font-weight: 650; }
-.cohort-total-head > strong { color: var(--navy); font-size: 1.65rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.cohort-total-head > span { color: var(--muted); font-size: .78rem; font-weight: 500; }
+.cohort-total-head > strong { color: var(--navy); font-size: .98rem; font-weight: 650; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .cohort-total > details { border: 0; margin: 0; padding: 0; }
-.cohort-total > details > summary { min-height: 52px; padding: 8px 0; }
-.cohort-total-head strong > small { font-size: .88rem; font-weight: 500; }
-.cohort-remaining { min-height: 60px; padding: 10px 0; border-bottom: 1px solid var(--line); }
+.cohort-total > details > summary { min-height: 44px; padding: 6px 0; }
+.cohort-total > details[open] { grid-column: 1 / -1; }
+.cohort-total-head strong > small { font-size: .72rem; font-weight: 400; }
+.cohort-remaining { min-height: 44px; padding: 6px 0; }
 .cohort-remaining > span { min-width: 0; }
-.cohort-remaining > strong { flex-shrink: 0; font-size: 1.9rem; }
+.cohort-remaining > strong { flex-shrink: 0; }
 .cohort-total p { font-size: .9rem; line-height: 1.6; margin: 8px 0; }
 .cohort-total dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin: 12px 0; }
 .cohort-total dt { font-size: .88rem; color: var(--muted); }

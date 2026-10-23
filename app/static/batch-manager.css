@@ -1,7 +1,7 @@
 #batch-management .actions { margin-top: 14px; }
 #batch-management > label { max-width: 780px; }
 #batch-settings summary > [data-manage-batch] { justify-self: start; margin-top: 6px; }
-.overview-cohort-heading > [data-manage-batch] { padding: 7px 12px; min-height: 40px; font-size: .9rem; }
+.overview-cohort-heading > [data-manage-batch] { padding: 0; min-width: 44px; min-height: 44px; margin: 0; border: 0; background: transparent; color: var(--muted); font-size: .78rem; font-weight: 500; text-decoration: underline; text-underline-offset: 3px; }
 #batch-manager-dialog { width: min(900px, calc(100vw - 24px)); max-width: 900px; max-height: 92dvh; padding: 24px; }
 #batch-manager-dialog > .section-row { align-items: flex-start; }
 #batch-manager-dialog h2 { font-size: 1.35rem; overflow-wrap: anywhere; }

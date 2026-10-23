@@ -7,7 +7,7 @@ Object.assign(words,{
 Object.assign(errorWords,{
  invalid_batch_settings:['管理資料不完整，請重新開啟這一批。','Dữ liệu thiếu; mở lại lứa.'],batch_settings_reason_required:['請填修改原因或資料依據。','Nhập lý do / căn cứ.'],batch_settings_members_changed:['批次成員已變更，請重載已存資料後重新核對。','Thành viên lứa đã đổi; tải lại và đối chiếu.'],batch_settings_total_mismatch:['整批進場合計不同，請調整其他棟的分配，或取消保持總數。','Tổng nhập khác; điều chỉnh chuồng khác hoặc bỏ giữ tổng.'],batch_settings_source_pending:['原始出豬／死亡尚未完成分棟核對，不能直接重分進場數；若要登記數到的存欄，請改用盤點頭數。','Chưa đối chiếu xuất/chết từng chuồng; không phân bổ lại nhập. Muốn ghi tồn đã đếm: dùng kiểm kê.'],batch_settings_future_stock:['盤點日期不能晚於今天。','Ngày kiểm kê không được sau hôm nay.'],batch_settings_no_changes:['沒有修改內容；請先修改資料或填入不同的盤點頭數。','Chưa thay đổi; sửa dữ liệu hoặc nhập số kiểm kê khác.'],batch_settings_legacy_date:['匯入資料的進場日不可早於原始日期；報表另有「肉豬紀錄表起始日」可調整。','Ngày nhập dữ liệu Excel không được trước nguồn gốc; có thể chỉnh ngày bắt đầu phiếu tuần.'],legacy_period_locked:['此日期屬於匯入歷史期間，請使用目前日期盤點；歷史出豬或死亡請到歷史紀錄更正。','Ngày thuộc kỳ Excel; kiểm kê ngày hiện tại. Sửa xuất/chết cũ trong lịch sử.'],invalid_text:['請填有效名稱或文字。','Nhập tên / nội dung hợp lệ.']
 });
-Object.assign(words,{manageClose:['關閉，保留草稿','Đóng, giữ bản nháp'],manageLoading:['正在載入…','Đang tải…']});
+Object.assign(words,{manageBatchShort:['管理','Quản lý'],manageClose:['關閉，保留草稿','Đóng, giữ bản nháp'],manageLoading:['正在載入…','Đang tải…']});
 const base={build,renderSettings,renderHome,translate,persistPending,restorePending,finishForm,hasUnsavedWork,enter};
 let model=null,review=null,serial=0,stockSerial=0,previewBusy=false,dirty=false,loading=false;
 const dialog=()=>$('#batch-manager-dialog'),form=()=>$('#batch-manager-form');
@@ -96,7 +96,7 @@ function options(){
 function decorate(){
  if(!data||me?.role!=='admin')return;
  $$('#batch-settings .cohort-setting').forEach(card=>{if(card.querySelector('[data-manage-batch]'))return;const member=data.batches.find(b=>key(b)===card.dataset.cohortKey);if(member)card.querySelector('summary').insertAdjacentHTML('beforeend',`<button type="button" data-manage-batch="${esc(member.id)}">${txt('manageBatch')}</button>`);});
- $$('#barns .overview-cohort').forEach(card=>{if(card.querySelector('[data-manage-batch]'))return;const group=card.querySelector('[data-cohort-total]')?.dataset.cohortTotal,member=data.batches.find(b=>key(b)===group);if(member)card.querySelector('.overview-cohort-heading').insertAdjacentHTML('beforeend',`<button type="button" data-manage-batch="${esc(member.id)}">${txt('manageBatch')}</button>`);});
+ $$('#barns .overview-cohort').forEach(card=>{if(card.querySelector('[data-manage-batch]'))return;const group=card.querySelector('[data-cohort-total]')?.dataset.cohortTotal,member=data.batches.find(b=>key(b)===group);if(member)card.querySelector('.overview-cohort-heading').insertAdjacentHTML('beforeend',`<button type="button" data-manage-batch="${esc(member.id)}" aria-label="${esc(t('manageBatch'))}">${txt('manageBatchShort')}</button>`);});
 }
 function fieldValue(value){if(value==null||value==='')return '—';if(Array.isArray(value))return value.map(l=>`${l.date} · ${l.count} ${t('heads')} · ${l.mean_kg??'—'} kg`).join('；');return typeof value==='number'?fmt(value):esc(['active','ended'].includes(value)?t(value):value);}
 function renderImpact(p){
