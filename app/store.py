@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from .domain import Invalid, day, number, herd, consumption, age
 from .notification_schema import PUSH_SCHEMA
 
-VERSION='2.0.48'
+VERSION='2.0.49'
 SCHEMA_VERSION=4
 KINDS=('barns','batches','movements','feed_orders','deliveries','usages','weights','workbooks','source_voids','daily_checks','feed_bins','work_tasks')
 SCHEMA='''
@@ -227,7 +227,7 @@ class Store:
             'barns':{'name','group','feed_vendor'},
             'work_tasks':{'title','mode','weekday','date','start_date','end_date','time','note','active'},
             'batches':{'barn_id','name','group','entry_date','entry_date_override','entry_count','entry_age_days','age_date','status','cohort_id','same_batch_as','legacy_source','legacy_row','legacy_barn','note','entry_mean_kg','entry_mean_date','entry_mean_source','entry_mean_note','entry_count_source','entry_count_reason','source_assignments','stock_basis','quality_review','weekly_start_date','report_entry_lots','report_entry_lots_source'},
-            'movements':{'date','batch_id','type','quantity','note','target_batch_id','total_weight_kg','outgoing_destination'},
+            'movements':{'date','batch_id','type','quantity','note','target_batch_id','total_weight_kg','outgoing_destination','outgoing_trip'},
             'feed_orders':{'date','kg','display_unit','vendor','item','note','allocations','feed_bin_id','feed_bin_snapshot','target_batch_ids','bin_allocations'},
             'feed_bins':{'name','barn_ids','vendor','active','note'},
             'deliveries':{'date','kg','display_unit','vendor','item','note','allocations'},
@@ -352,6 +352,13 @@ class Store:
                 if not isinstance(destination,str) or destination not in ('','新北','南投','嘉義'):raise Invalid('invalid_outgoing_destination')
                 if destination and k not in ('sale','cull'):raise Invalid('outgoing_destination_type')
                 if k not in ('sale','cull'):d.pop('outgoing_destination')
+            if 'outgoing_trip' in d:
+                trip=d['outgoing_trip']
+                if not isinstance(trip,str) or len(trip)>80 or any(ord(c)<32 or ord(c)==127 for c in trip):raise Invalid('invalid_outgoing_trip')
+                trip=trip.strip()
+                if trip and k not in ('sale','cull'):raise Invalid('outgoing_trip_type')
+                if k in ('sale','cull'):d['outgoing_trip']=trip
+                else:d.pop('outgoing_trip')
             qty('quantity',k!='adjustment',True)
             if not d['quantity']: raise Invalid('invalid_number')
             if k=='adjustment': self.require(user,True)
@@ -589,6 +596,8 @@ class Store:
                     payload={k:previous[k] for k in ('source_assignments','stock_basis','quality_review') if k not in payload and k in previous}|payload
                 if kind=='movements' and previous and 'outgoing_destination' not in payload and payload.get('type') in ('sale','cull') and 'outgoing_destination' in previous:
                     payload=payload|{'outgoing_destination':previous['outgoing_destination']}
+                if kind=='movements' and previous and 'outgoing_trip' not in payload and payload.get('type') in ('sale','cull') and 'outgoing_trip' in previous:
+                    payload=payload|{'outgoing_trip':previous['outgoing_trip']}
                 if kind=='batches' and previous and 'same_batch_as' not in payload:
                     payload=payload|{'same_batch_as':previous.get('same_batch_as')}
                 if kind=='batches' and previous:

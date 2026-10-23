@@ -35,13 +35,16 @@ def validate_edits(data):
             root=next((b for b in data['workbooks'] if b['id']==row['legacy_source']),None)
             if not root or (root.get('base_book_id') or root['id'])!=book['id']:raise Invalid('invalid_source_edit')
             c=edit['changes']
-            if not isinstance(c,dict) or set(c)!=set(FIELDS):raise Invalid('invalid_source_edit')
+            if not isinstance(c,dict) or set(c) not in (set(FIELDS),set(FIELDS)|{'outgoing_trip'}):raise Invalid('invalid_source_edit')
             day(c['date'])
             if type(c['quantity']) is not int or c['quantity']<=0 or c['quantity']>1000000:raise Invalid('invalid_source_edit')
             b=next((b for b in data['batches'] if b['id']==c['batch_id']),None)
             if c['batch_id'] is not None and (not b or b['id'] not in row['legacy_members']):raise Invalid('source_edit_cohort_locked')
             if c['date']<(b or row)['entry_date']:raise Invalid('before_entry')
             if not isinstance(c['note'],str) or len(c['note'])>2000 or c['outgoing_destination'] not in ('','新北','南投','嘉義') or (row['type']=='death' and c['outgoing_destination']):raise Invalid('invalid_source_edit')
+            if 'outgoing_trip' in c:
+                trip=c['outgoing_trip']
+                if not isinstance(trip,str) or len(trip)>80 or trip!=trip.strip() or any(ord(x)<32 or ord(x)==127 for x in trip) or (row['type']=='death' and trip):raise Invalid('invalid_outgoing_trip')
             if not isinstance(edit['reason'],str) or not 1<=len(edit['reason'].strip())<=500:raise Invalid('source_edit_reason_required')
 
 
@@ -92,6 +95,10 @@ def preview(store,user,payload,data=None):
     row=next((r for r in source_history(data) if r['id']==payload.get('id')),None)
     if not row:raise Problem('not_found',404)
     changes={k:payload.get(k,row.get(k,'' if k in ('note','outgoing_destination') else None)) for k in FIELDS}
+    if 'outgoing_trip' in payload or 'outgoing_trip' in row:
+        value=payload.get('outgoing_trip',row.get('outgoing_trip',''))
+        if not isinstance(value,str) or len(value)>80 or any(ord(x)<32 or ord(x)==127 for x in value):raise Invalid('invalid_outgoing_trip')
+        changes['outgoing_trip']=value.strip() if isinstance(value,str) else value
     edit={'source_row_id':row['id'],'changes':changes,'reason':payload.get('reason','')}
     after=copy.deepcopy(data);owner=next(b for b in after['workbooks'] if b['id']==row['legacy_source']);owner=next(b for b in after['workbooks'] if b['id']==(owner.get('base_book_id') or owner['id']))
     owner['source_movement_edits']=[e for e in owner.get('source_movement_edits',[]) if e['source_row_id']!=row['id']]+[edit]
