@@ -2,6 +2,7 @@
 /* Group the existing records for display; never merge IDs or infer missing counts. */
 (() => {
 Object.assign(words,{
+ openReportForm:['線上維修單','Phiếu sửa chữa trực tuyến'],
  groupedSetup:['按批次設定','Cài đặt theo lứa'],groupedHint:['同批各棟集中在一起；點批次展開，再選棟舍編輯。','Các chuồng cùng lứa nằm chung; mở lứa rồi chọn chuồng để sửa.'],findBatch:['找批次／棟舍','Tìm lứa / chuồng'],newBatch:['新增單棟批次','Thêm lứa tại chuồng'],batchDetailsShort:['其他批次資料','Thông tin lứa khác'],entryMeanShort:['入場均重（kg／隻）','TB nhập (kg/con)'],knownEntry:['已填進場','Số nhập đã ghi'],missingBarns:['棟待補','chuồng cần bổ sung'],barnCount:['棟','chuồng'],editHere:['正在編輯','Đang sửa'],saveBeforeSwitch:['請先儲存或取消目前修改，再切換棟舍。','Lưu hoặc hủy thay đổi hiện tại trước khi chuyển chuồng.'],otherSettings:['其他設定','Cài đặt khác'],dailyOverview:['全場總覽','Tổng quan trại'],dailyEntry:['登記異動','Ghi biến động'],currentHeadsShort:['存欄','Tồn đàn'],cumulativeDeadShort:['累計死','Chết lũy kế'],cumulativeSoldShort:['累計出豬','Xuất bán lũy kế'],survivalShort:['育成率','Tỷ lệ sống'],overviewHint:['每列一棟；點棟舍即可登記。死亡與出豬為該批進場至今日累計；出豬只計正常出豬。未知資料顯示 —。','Mỗi dòng một chuồng; chạm tên để ghi. Chết và xuất bán lũy kế từ ngày nhập lứa đến hôm nay; xuất chỉ tính bán bình thường. Chưa rõ hiển thị —.'],noMatchingBatch:['沒有符合的批次，可改選全部或搜尋其他棟舍。','Không có lứa phù hợp; chọn tất cả hoặc tìm chuồng khác.'],createBarnShort:['新增／編輯棟舍','Thêm / sửa chuồng'],batchSavedHint:['每棟分別儲存；不會連帶更改同批其他棟。','Lưu riêng từng chuồng; không thay đổi các chuồng khác cùng lứa.'],queryConditions:['查詢條件','Điều kiện lọc']
 });
 Object.assign(words,{
@@ -11,6 +12,8 @@ const base={build,renderHome,edit,finishForm,clickAction,enter,restorePending};
 const keyOf=b=>b._cohort_key||b.name+'|'+b.entry_date;
 const barnOf=b=>data.barns.find(x=>x.id===b.barn_id)?.name||t('unassigned');
 const compareBarn=(a,b)=>barnOf(a).localeCompare(barnOf(b),'zh-Hant',{numeric:true});
+const entryMeans=b=>b.report_entry_lots?.length?b.report_entry_lots.map(lot=>lot.mean_kg):[b.entry_mean_kg];
+const entryMeanText=values=>[...new Set(values)].map(value=>value==null?'—':fmt(value)).join('／');
 let dailyView='entry';
 function groups(){
  const grouped=new Map();for(const b of data.batches){const key=keyOf(b);if(!grouped.has(key))grouped.set(key,{key,name:b.name,date:b.entry_date,members:[]});grouped.get(key).members.push(b);}
@@ -30,7 +33,7 @@ function editorFields(record){
  const f=$('#batch-form'),grid=f.querySelector(':scope > .grid'),extra=f.querySelector(':scope > details .grid');
  for(const name of ['barn_id','name'])(record?extra:grid).append(f.elements[name].closest('label'));
  for(const name of ['entry_count','entry_mean_kg','entry_date'])grid.append(f.elements[name].closest('label'));
- f.elements.entry_count_source.closest('label').hidden=!(record?.legacy_source&&record.legacy_group?.expected_members>1);
+ f.elements.entry_count_source.closest('label').hidden=true;
 }
 build=()=>{
  base.build();
@@ -66,6 +69,7 @@ build=()=>{
  const overview=document.createElement('section');overview.id='daily-overview';overview.hidden=true;
  for(const child of Array.from(daily.children)){if(child.id!=='daily-switch'&&child.id!=='daily-entry')overview.append(child);}
  daily.append(overview);
+ daily.insertAdjacentHTML('afterbegin',`<div class="home-report-shortcut"><a href="https://docs.google.com/forms/d/e/1FAIpQLSezmKVeQHdtyOB4mSTq0LgRAq2Pf_on9ZVsc6Kpl3HjU-1fUQ/viewform" target="_blank" rel="noopener noreferrer">${txt('openReportForm')}<span aria-hidden="true">↗</span></a></div>`);
  $$('.filters').forEach(f=>f.classList.add('compact-filter'));
 };
 function canSwitch(id){
@@ -93,9 +97,9 @@ renderSettings=()=>{
  if(!editing){
   $('#batch-workspace').append(editor);
   preserveBox('batch-settings',groups().map(g=>{
-   const known=g.members.filter(b=>b.entry_count!=null),missing=g.members.length-known.length,means=[...new Set(g.members.map(b=>b.entry_mean_kg))];
-   const mean=means.length===1&&means[0]!=null?fmt(means[0])+' kg':'—';
-   return `<details class="cohort-setting" data-cohort-key="${esc(g.key)}" data-key="setup-${esc(g.key)}"><summary><span class="cohort-title">${esc(g.name)}<span class="cohort-date">${g.date}</span></span><span class="cohort-barns">${g.members.map(b=>esc(barnOf(b))).join('、')}</span><span class="cohort-meta">${t('knownEntry')} ${fmt(known.reduce((n,b)=>n+b.entry_count,0),0)} ${t('heads')}${missing?' · '+missing+' '+t('missingBarns'):''} · ${t('entryMeanShort')} ${mean}</span></summary><div class="cohort-members">${g.members.map(b=>`<article class="member-row" data-member="${b.id}"><div class="member-name"><strong>${esc(barnOf(b))}</strong><span class="pill">${t(b.status)}</span></div><div><span class="compact-label">${t('entry')}</span><strong>${fmt(b.entry_count,0)}</strong></div><div><span class="compact-label">${t('entryMeanShort')}</span><strong>${fmt(b.entry_mean_kg)} <small>kg</small></strong></div><div class="member-actions">${recordActions('batches',b)}</div></article>`).join('')}</div></details>`;
+   const known=g.members.filter(b=>b.entry_count!=null),missing=g.members.length-known.length,means=[...new Set(g.members.flatMap(entryMeans))];
+   const mean=entryMeanText(means)+' kg';
+   return `<details class="cohort-setting" data-cohort-key="${esc(g.key)}" data-key="setup-${esc(g.key)}"><summary><span class="cohort-title">${esc(g.name)}<span class="cohort-date">${g.date}</span></span><span class="cohort-barns">${g.members.map(b=>esc(barnOf(b))).join('、')}</span><span class="cohort-meta">${t('knownEntry')} ${fmt(known.reduce((n,b)=>n+b.entry_count,0),0)} ${t('heads')}${missing?' · '+missing+' '+t('missingBarns'):''} · ${t('entryMeanShort')} ${mean}</span></summary><div class="cohort-members">${g.members.map(b=>`<article class="member-row" data-member="${b.id}"><div class="member-name"><strong>${esc(barnOf(b))}</strong><span class="pill">${t(b.status)}</span></div><div><span class="compact-label">${t('entry')}</span><strong>${fmt(b.entry_count,0)}</strong></div><div><span class="compact-label">${t('entryMeanShort')}</span><strong>${entryMeanText(entryMeans(b))} <small>kg</small></strong></div><div class="member-actions">${recordActions('batches',b)}</div></article>`).join('')}</div></details>`;
   }).join('')+`<p id="batch-no-match" class="hint" hidden>${t('noMatchingBatch')}</p>`);
   filterGroups();attachEditor();
  }

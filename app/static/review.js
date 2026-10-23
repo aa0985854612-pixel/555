@@ -21,7 +21,7 @@ persistPending=()=>{base.persistPending();pendingButtons();};
 build=()=>{
  base.build();
  $('#daily-entry').insertAdjacentHTML('afterend',`<section class="card daily-review" id="daily-review"><div class="review-heading"><h2>${txt('dailyReview')}</h2><label><span class="sr-only">${txt('date')}</span><input type="date" id="review-date" value="${today()}" aria-label="${esc(t('date'))}"></label></div><div id="review-body" aria-live="polite"></div></section>`);
- $('#page-settings').insertAdjacentHTML('afterbegin',`<details class="card quality-panel" id="quality-panel" data-key="quality-panel"><summary><span>${txt('qualityTitle')}</span> <span id="quality-count" class="pill"></span></summary><p class="hint">${txt('qualityHint')}</p><div id="quality-body"></div></details>`);
+
  document.body.insertAdjacentHTML('beforeend',`<dialog id="check-dialog"><h2 id="check-heading"></h2><p id="check-scope"></p><p id="check-instruction"></p><div id="check-bulk-scope"></div><label id="check-reason-label" hidden>${txt('cancelCheckReason')}<input id="check-reason" maxlength="500" autocomplete="off"></label><p class="hint">${txt('checkNote')}</p><div class="actions"><button type="button" id="check-close">${txt('cancel')}</button><button type="button" class="primary" id="check-save">${txt('confirmNoDeaths')}</button></div></dialog>`);
  $('#review-date').onchange=()=>{if(!$('#review-date').value)return;renderDaily();};
  $('#movement-form [name=date]').addEventListener('change',()=>{$('#review-date').value=val($('#movement-form'),'date');renderDaily();});
@@ -57,12 +57,7 @@ build=()=>{
   $('#check-heading').textContent=t(cancel?'checkCancelHeading':'checkConfirm');$('#check-scope').textContent=`${checkDraft.date} · ${row.barn} · ${row.batch}`;
   $('#check-instruction').textContent=cancel?'':t('confirmCheckLabel');$('#check-reason-label').hidden=!cancel;$('#check-reason').required=!!cancel;$('#check-reason').value='';$('#check-save').textContent=t(cancel?'cancelCheck':'confirmNoDeaths');$('#check-dialog').showModal();
  });
- $('#quality-body').addEventListener('click',e=>{
-  const b=e.target.closest('[data-quality-edit]');if(b){edit('batches',b.dataset.qualityEdit);$('#batch-form details').open=true;return;}
-  const h=e.target.closest('[data-quality-source]');if(!h)return;
-  const kind=h.dataset.qualitySource;if(kind==='feed_orders'){location.hash='feed';return;}if(kind==='workbooks'){const fold=$('#workbook-form').closest('details');if(fold)fold.open=true;fold?.scrollIntoView({block:'start'});return;}
-  const f=$('#history-filter');f.reset();f.elements.record_kind.value=kind;syncFilters(f);location.hash='history';renderCurrent();
- });
+
 };
 function recordLine(r){
  const batch=data.batches.find(b=>b.id===r.batch_id),barn=r.barn_number?String(r.barn_number)+t('barn'):data.barns.find(b=>b.id===batch?.barn_id)?.name||t('unassigned');
@@ -79,16 +74,8 @@ async function renderDaily(){
   pendingButtons();
  }catch(e){if(ticket===requestNo){preserveBox('review-body',`<p class="form-error">${esc(messageError(e))}</p>`);renderDaily.latest=null;}}
 }
-function renderQuality(){
- if(!data?.data_quality)return;const q=data.data_quality;$('#quality-count').textContent=q.count;
- const group=(items,key)=>`<details data-key="quality-${key}" ${key==='active'?'open':''}><summary>${t(key==='active'?'qualityActive':'qualitySources')} · ${items.length}</summary>${items.map(i=>`<article class="quality-item"><div><strong>${esc(i.barn||i.source_cell||i.date||t('unassigned'))}</strong><span>${esc(i.name||'')}${i.entry_date?' · '+esc(i.entry_date):''}</span></div><p>${i.fields.map(k=>esc(t(k))).join('；')}</p>${i.fields.includes('stock_exceeds_entry')?`<p>${t('remaining')} ${fmt(i.remaining,0)} · ${t('denominator')} ${fmt(i.denominator,0)}</p>`:''}${i.note?`<details data-key="quality-note-${esc(i.id)}"><summary>${t('note')}</summary><p>${esc(i.note)}</p></details>`:''}${i.kind==='batches'?(me?.role==='admin'?`<button type="button" data-quality-edit="${i.batch_id}">${t('qualityGoEdit')}</button>`:''):`<button type="button" data-quality-source="${i.kind}">${t('qualityGoHistory')}</button>`}</article>`).join('')}</details>`;
- const first=!$('#quality-body').hasChildNodes();
- const active=q.items.filter(i=>i.kind==='batches'),sources=q.items.filter(i=>i.kind!=='batches');
- preserveBox('quality-body',q.count?(active.length?group(active,'active'):'')+(sources.length?group(sources,'source'):''):`<p>${t('qualityNoGaps')}</p>`);
- if(first&&$('#quality-body [data-key=quality-active]'))$('#quality-body [data-key=quality-active]').open=true;
-}
 renderHome=async()=>{const result=await base.renderHome();await renderDaily();return result;};
-renderSettings=()=>{base.renderSettings();renderQuality();};
+renderSettings=()=>{base.renderSettings();};
 statHTML=s=>{
  const html=base.statHTML(s),c=s.death_check_coverage;if(!c)return html;
  const coverage=`<div class="coverage-card"><h3>${t('coverageTitle')}</h3><p><strong>${t('noDeathsChecked')} ${c.confirmed_zero_batch_days}</strong> · ${t('deathRecorded')} ${c.death_recorded_batch_days} · ${t('notReported')} ${c.awaiting_batch_days} ${t('batchDays')}</p><details data-key="coverage-basis"><summary>${t('qualityReason')}</summary><p>${t('coverageHint')}</p></details><p class="hint">${t('coverageDisclaimer')}</p></div>`;

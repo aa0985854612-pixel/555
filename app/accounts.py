@@ -21,6 +21,8 @@ def change_password(store,user,current,new):
         db.execute('UPDATE users SET hash=?,revision=revision+1 WHERE id=?',(password_hash(new),user['id']))
         db.execute('INSERT INTO account_security(user_id,must_change) VALUES(?,0) ON CONFLICT(user_id) DO UPDATE SET must_change=0,setup_hash=NULL,setup_expires=NULL',(user['id'],))
         db.execute('DELETE FROM sessions WHERE user_id=?',(user['id'],))
+        from .push import revoke_user_devices
+        revoke_user_devices(db,user['id'])
         store.audit(db,user['id'],'change-password','users',user['id'],{'revision':revision},{'revision':revision+1,'password_changed':True})
         db.commit();return {'ok':True,'login_required':True}
     finally:db.close()
@@ -41,6 +43,8 @@ def issue_setup(store,actor,user_id,before_revision):
         db.execute('INSERT INTO account_security VALUES(?,1,?,?) ON CONFLICT(user_id) DO UPDATE SET must_change=1,setup_hash=excluded.setup_hash,setup_expires=excluded.setup_expires',
             (user_id,hashlib.sha256(token.encode()).hexdigest(),expires))
         db.execute('DELETE FROM sessions WHERE user_id=?',(user_id,))
+        from .push import revoke_user_devices
+        revoke_user_devices(db,user_id)
         store.audit(db,actor['id'],'issue-account-setup','users',user_id,{'revision':user['revision']},
             {'revision':user['revision']+1,'must_change':True,'expires_at':expires})
         db.commit();return {'username':user['username'],'token':token,'expires_at':expires,'revision':user['revision']+1}
@@ -58,6 +62,8 @@ def activate(store,username,token,password):
         db.execute('UPDATE users SET hash=?,revision=revision+1 WHERE id=?',(password_hash(password),user['id']))
         db.execute('UPDATE account_security SET must_change=0,setup_hash=NULL,setup_expires=NULL WHERE user_id=?',(user['id'],))
         db.execute('DELETE FROM sessions WHERE user_id=?',(user['id'],))
+        from .push import revoke_user_devices
+        revoke_user_devices(db,user['id'])
         store.audit(db,user['id'],'activate-account','users',user['id'],None,{'password_changed':True,'revision':user['revision']+1})
         db.commit();return {'ok':True,'login_required':True}
     finally:db.close()

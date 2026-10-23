@@ -3,7 +3,7 @@
 (() => {
 Object.assign(words,{
  feedSub:['只需登記日期與叫料量，其他資料可選填。','Chỉ ghi ngày và lượng đặt; thông tin khác tùy chọn.'],
- feedRecordDetails:['用藥、來源與批次明細','Thuốc, nguồn và chi tiết lứa'],feed_orders:['叫料量','Lượng đặt thức ăn'],newFeedOrder:['登記叫料量','Ghi lượng đặt thức ăn'],orderAmount:['叫料量','Lượng đặt'],orderHistory:['叫料紀錄','Lịch sử đặt thức ăn'],orderTotal:['叫料合計','Tổng lượng đặt'],orderScope:['預設全場；指定棟舍時請選擇批次。','Mặc định toàn trại; chọn lứa nếu chỉ định chuồng.'],orderMeaning:['叫料量不代表實際耗料，不用於FCR計算。','Lượng đặt không phải lượng tiêu thụ, không dùng tính FCR.'],legacyFeed:['舊到料／用料紀錄','Lịch sử nhập / tiêu thụ'],legacyFeedHint:['保留原紀錄及計算依據；日常只使用上方叫料登記。','Giữ bản gốc và cơ sở tính; hằng ngày chỉ ghi lượng đặt phía trên.']
+ feedRecordDetails:['用藥、來源與批次明細','Thuốc, nguồn và chi tiết lứa'],feed_orders:['叫料量','Lượng đặt thức ăn'],newFeedOrder:['登記叫料量','Ghi lượng đặt thức ăn'],orderAmount:['叫料量','Lượng đặt'],orderHistory:['叫料紀錄','Lịch sử đặt thức ăn'],orderTotal:['叫料合計','Tổng lượng đặt'],orderScope:['預設全場；指定棟舍時請選擇批次。','Mặc định toàn trại; chọn lứa nếu chỉ định chuồng.'],orderMeaning:['叫料量可用於粗估料肉比；實際FCR仍使用實際耗料。','Lượng đặt dùng ước tính sơ bộ; FCR thực tế vẫn dùng tiêu thụ thực tế.'],legacyFeed:['舊到料／用料紀錄','Lịch sử nhập / tiêu thụ'],legacyFeedHint:['保留原紀錄及計算依據；日常只使用上方叫料登記。','Giữ bản gốc và cơ sở tính; hằng ngày chỉ ghi lượng đặt phía trên.']
 });
 const base={build,renderCurrent,rowsHTML,collect,edit,restorePending,finishForm,selections,enter};
 let feedUser=null;

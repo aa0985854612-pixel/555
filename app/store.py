@@ -2,8 +2,9 @@ import sqlite3, json, uuid, hashlib, secrets, hmac, os, re
 from pathlib import Path
 from datetime import datetime, timezone
 from .domain import Invalid, day, number, herd, consumption, age
+from .notification_schema import PUSH_SCHEMA
 
-VERSION='2.0.35'
+VERSION='2.0.43'
 SCHEMA_VERSION=4
 KINDS=('barns','batches','movements','feed_orders','deliveries','usages','weights','workbooks','source_voids','daily_checks','feed_bins','work_tasks')
 SCHEMA='''
@@ -14,7 +15,7 @@ CREATE TABLE IF NOT EXISTS sessions(token_hash TEXT PRIMARY KEY, user_id TEXT NO
 CREATE TABLE IF NOT EXISTS requests(user_id TEXT NOT NULL, key TEXT NOT NULL, fingerprint TEXT NOT NULL, result TEXT NOT NULL, PRIMARY KEY(user_id,key));
 CREATE TABLE IF NOT EXISTS audit(seq INTEGER PRIMARY KEY AUTOINCREMENT, timestamp TEXT NOT NULL, user_id TEXT NOT NULL, action TEXT NOT NULL, kind TEXT NOT NULL, record_id TEXT NOT NULL, before_value TEXT, after_value TEXT);
 CREATE TABLE IF NOT EXISTS account_security(user_id TEXT PRIMARY KEY REFERENCES users(id),must_change INTEGER NOT NULL DEFAULT 0,setup_hash TEXT,setup_expires REAL);
-'''
+'''+PUSH_SCHEMA
 
 class Problem(Exception):
     def __init__(self, code, status=400, details=None):
@@ -225,7 +226,7 @@ class Store:
         allowed={
             'barns':{'name','group','feed_vendor'},
             'work_tasks':{'title','mode','weekday','date','start_date','end_date','time','note','active'},
-            'batches':{'barn_id','name','group','entry_date','entry_count','entry_age_days','age_date','status','cohort_id','same_batch_as','legacy_source','legacy_row','legacy_barn','note','entry_mean_kg','entry_mean_date','entry_mean_source','entry_mean_note','entry_count_source','entry_count_reason','source_assignments','stock_basis','quality_review','weekly_start_date','report_entry_lots','report_entry_lots_source'},
+            'batches':{'barn_id','name','group','entry_date','entry_date_override','entry_count','entry_age_days','age_date','status','cohort_id','same_batch_as','legacy_source','legacy_row','legacy_barn','note','entry_mean_kg','entry_mean_date','entry_mean_source','entry_mean_note','entry_count_source','entry_count_reason','source_assignments','stock_basis','quality_review','weekly_start_date','report_entry_lots','report_entry_lots_source'},
             'movements':{'date','batch_id','type','quantity','note','target_batch_id','total_weight_kg','outgoing_destination'},
             'feed_orders':{'date','kg','display_unit','vendor','item','note','allocations','feed_bin_id','feed_bin_snapshot','target_batch_ids','bin_allocations'},
             'feed_bins':{'name','barn_ids','vendor','active','note'},
@@ -270,9 +271,15 @@ class Store:
                     qty('entry_count',False,True)
                     if d['entry_count']<0 or (len(source['barns'])>1 and d['entry_count']>source['totals']['entry']):raise Invalid('legacy_entry_unknown')
                     if len(source['barns'])>1 and not str(d.get('entry_count_source','')).strip():raise Invalid('entry_source_required')
-                if d['entry_date']!=source['entry_date']:raise Invalid('legacy_source_conflict')
+                override=d.get('entry_date_override')
+                if override is not None:
+                    if not isinstance(override,dict) or set(override)!={'original_date','date','reason'} or override['original_date']!=source['entry_date'] or override['date']!=d['entry_date'] or not isinstance(override['reason'],str) or not 1<=len(override['reason'].strip())<=500:raise Invalid('legacy_source_conflict')
+                    if day(override['date'])<day(override['original_date']):raise Invalid('legacy_source_conflict')
+                    if not previous or override!=previous.get('entry_date_override'):self.require(user,True)
+                if d['entry_date']!=source['entry_date'] and not override:raise Invalid('legacy_source_conflict')
                 text('note')
             else:
+                if d.get('entry_date_override') is not None:raise Invalid('legacy_source_conflict')
                 qty('entry_count',False,True)
                 if d['entry_count']<0: raise Invalid('invalid_number')
             if 'stock_basis' in d:
@@ -305,7 +312,7 @@ class Store:
                 for lot in lots:
                     if not isinstance(lot,dict) or set(lot)!={'date','count','mean_kg'}:raise Invalid('invalid_report_entry_lots')
                     day(lot['date'])
-                    if lot['date']<d['entry_date'] or lot['date'] in dates:raise Invalid('invalid_report_entry_lots')
+                    if lot['date']<d['entry_date'] or (lot['date'] in dates and not d.get('entry_date_override')):raise Invalid('invalid_report_entry_lots')
                     dates.add(lot['date']);lot['count']=number(lot['count'],True,True)
                     if lot['mean_kg'] is not None:lot['mean_kg']=number(lot['mean_kg'],True)
                 if lots and (sum(lot['count'] for lot in lots)!=d['entry_count'] or min(dates)!=d['entry_date']):raise Invalid('report_entry_total_mismatch')
@@ -585,9 +592,10 @@ class Store:
                 if kind=='batches' and previous and 'same_batch_as' not in payload:
                     payload=payload|{'same_batch_as':previous.get('same_batch_as')}
                 if kind=='batches' and previous:
-                    payload={k:previous[k] for k in ('weekly_start_date','report_entry_lots','report_entry_lots_source') if k in previous and k not in payload}|payload
+                    payload={k:previous[k] for k in ('weekly_start_date','report_entry_lots','report_entry_lots_source','entry_date_override') if k in previous and k not in payload}|payload
                 if kind=='batches' and previous and previous.get('legacy_source'):
-                    if any(payload.get(k)!=previous.get(k) for k in ('legacy_source','legacy_row','legacy_barn','barn_id','entry_date')):raise Problem('legacy_source_conflict')
+                    if any(payload.get(k)!=previous.get(k) for k in ('legacy_source','legacy_row','legacy_barn','barn_id')):raise Problem('legacy_source_conflict')
+                    if payload.get('entry_date')!=previous.get('entry_date') and not payload.get('entry_date_override'):raise Problem('legacy_source_conflict')
                 if kind=='feed_orders' and previous and 'feed_bin_id' not in payload:
                     payload={k:previous[k] for k in ('feed_bin_id','target_batch_ids') if k in previous}|payload
                 duplicate_confirmation=payload.get('duplicate_confirmation') if kind=='movements' else None
@@ -664,7 +672,7 @@ class Store:
                             barn=insert('barns',{'name':str(barn_number)+'棟','group':''});barns_added+=1
                         if any(b['barn_id']==barn['id'] and b['name']==row['name'] for b in data['batches']):raise Problem('legacy_source_conflict',409)
                         head=plan['current'].get(str(barn_number),plan['current'].get(barn_number))
-                        batch={'barn_id':barn['id'],'name':row['name'],'group':row['name'],'entry_date':row['entry_date'],'entry_count':row['totals']['entry'] if len(row['barns'])==1 else None,'entry_age_days':row['entry_age_days'],'age_date':row['entry_date'],'status':'ended' if head==0 else 'active','cohort_id':cohort_id,'legacy_source':book_id,'legacy_row':row['key'],'legacy_barn':barn_number,'note':'來源表合併名稱；分棟數為暫定核對分配。首次進場計齡，原始明細、公式與備註保存在 Excel 來源。'}
+                        batch={'barn_id':barn['id'],'name':row['name'],'group':row['name'],'entry_date':row['entry_date'],'entry_count':row['totals']['entry'] if len(row['barns'])==1 else None,'entry_age_days':row['entry_age_days'],'age_date':row['entry_date'],'status':'ended' if head==0 else 'active','cohort_id':cohort_id,'legacy_source':book_id,'legacy_row':row['key'],'legacy_barn':barn_number,'note':''}
                         measured=next((w for w in row['weights'] if w.get('date')==row['entry_date']),None)
                         if len(row['barns'])==1 and measured:
                             batch.update(entry_mean_kg=measured['mean_kg'],entry_mean_date=measured['date'],entry_mean_source=cleaned['filename']+' '+cleaned['report']['sheet']+'!'+measured['cell'])
@@ -681,7 +689,7 @@ class Store:
                     if 'entry_mean_kg' in original:continue
                     updated=original|{'entry_mean_kg':measured['mean_kg'],'entry_mean_date':measured['date'],
                         'entry_mean_source':cleaned['filename']+' '+cleaned['report']['sheet']+'!'+measured['cell'],
-                        'entry_mean_note':'來源提供均重，樣本頭數未知。','revision':original['revision']+1,'updated_at':now()}
+                        'entry_mean_note':'','revision':original['revision']+1,'updated_at':now()}
                     db.execute('UPDATE records SET data=?,revision=? WHERE id=?',(encode(updated),updated['revision'],updated['id']))
                     self.audit(db,user['id'],'fill-entry-mean','batches',updated['id'],original,updated);means_added+=1
                 self.validate_global(self.snapshot(db))

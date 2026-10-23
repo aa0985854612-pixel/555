@@ -129,6 +129,7 @@ def statistics(data,query):
     stats['usage_count']=len(uses);stats['excluded_usage_count']=len(excluded)
     stats['negative_usage']=any(v<0 for v in values)
     perfs=[]
+    from .order_fcr import order_fcr_estimate
     for b in data['batches']:
         if b['id'] not in chosen or b['entry_date']>until:continue
         source_weights=[w for w in source_history(data,'weights') if w.get('batch_id')==b['id'] and not w.get('archive')]
@@ -136,7 +137,8 @@ def statistics(data,query):
         if p.get('first') and any(r.get('date') and p['first']['date']<=r['date']<=p['last']['date'] and b['id'] in r.get('legacy_members',[]) for r in source_history(data)):
             p['composition_changed']=True
         perfs.append(p)
-        stats['batches'].append({'id':b['id'],'age_days':age(b,until),'herd':herd(data['batches'],data['movements'],until,[b['id']]),'performance':p})
+        stats['batches'].append({'id':b['id'],'age_days':age(b,until),'herd':herd(data['batches'],data['movements'],until,[b['id']]),'performance':p,
+            'order_estimate':order_fcr_estimate(data,b,p.get('first'),p.get('last'))})
     periods={(p['first']['date'],p['last']['date']) for p in perfs if p.get('first') and p.get('last')}
     comparison_period=next(iter(periods)) if len(periods)==1 else (start,until) if not periods and start else None
     empty_ids=set()
@@ -298,11 +300,25 @@ class Handler(BaseHTTPRequestHandler):
         except Exception as e:
             print('Unhandled error:',type(e).__name__,str(e),flush=True)
             self.send({'error':'server_error'},500)
+        finally:
+            # Only committed audit rows can become notifications; a provider
+            # failure must never turn a saved farm record into a failed write.
+            if method in ('POST','PUT') and urlparse(self.path).path not in ('/api/login','/api/logout','/api/activate','/api/password') and not urlparse(self.path).path.startswith('/api/notifications'):
+                try:
+                    from .push import dispatch_pending
+                    dispatch_pending(self.server.store)
+                except Exception:
+                    print('Notification delivery deferred',flush=True)
     def dispatch(self,method):
         url=urlparse(self.path);path=url.path;query=parse_qs(url.query,keep_blank_values=True)
         store=self.server.store
         if self.server.public_host and self.headers.get('Host')!=self.server.public_host:
             raise Problem('invalid_host',403)
+        if path=='/api/notifications/cron' and method=='GET':
+            secret=os.environ.get('CRON_SECRET','')
+            if not secret or not hmac_safe(self.headers.get('Authorization',''),'Bearer '+secret):raise Problem('forbidden',403)
+            from .push import dispatch_pending
+            return self.send(dispatch_pending(store,include_reminders=True))
         if path=='/api/health' and method=='GET':
             db=store.connect()
             try:db.execute('SELECT 1').fetchone()
@@ -349,6 +365,18 @@ class Handler(BaseHTTPRequestHandler):
             user=self.session()
             if user.get('must_change') and path not in ('/api/me','/api/logout','/api/password'):raise Problem('password_change_required',403)
             if method!='GET':self.protect(user)
+            if path=='/api/notifications' and method=='GET':
+                from .push import status
+                return self.send(status(store,user))
+            if path=='/api/notifications/subscribe' and method=='POST':
+                from .push import subscribe
+                return self.send(subscribe(store,user,self.body()))
+            if path=='/api/notifications/unsubscribe' and method=='POST':
+                from .push import unsubscribe
+                return self.send(unsubscribe(store,user,self.body().get('id','')))
+            if path=='/api/notifications/test' and method=='POST':
+                from .push import test_notification
+                return self.send(test_notification(store,user,self.body().get('id','')))
             if path=='/api/daily-checks/preview' and method=='GET':
                 from .review import bulk_check_preview, farm_today
                 store.require(user)
@@ -427,6 +455,9 @@ class Handler(BaseHTTPRequestHandler):
                 from .review import daily_review, farm_today
                 return self.send(daily_review(store.snapshot(include_source=False),query.get('date',[farm_today()])[0]))
             if path=='/api/statistics' and method=='GET':return self.send(statistics(store.snapshot(include_source=False),query))
+            if path=='/api/growth-estimates' and method=='GET':
+                from .growth import growth_estimates
+                return self.send(growth_estimates(store.snapshot(include_source=False)))
             if path=='/api/work-calendar' and method=='GET':
                 from .work_calendar import calendar_week
                 return self.send(calendar_week(store.snapshot(include_source=False),query.get('week',[''])[0]))
@@ -467,6 +498,8 @@ class Handler(BaseHTTPRequestHandler):
                     if db.execute('SELECT 1 FROM users WHERE username=? AND id<>?',(username.strip(),rid)).fetchone():raise Problem('username_exists',409)
                     db.execute('UPDATE users SET username=? WHERE id=?',(username.strip(),rid))
                     db.execute('UPDATE users SET role=?,active=?,revision=revision+1 WHERE id=?',(b['role'],b['active'],rid));db.execute('DELETE FROM sessions WHERE user_id=?',(rid,))
+                    from .push import revoke_user_devices
+                    revoke_user_devices(db,rid)
                     store.audit(db,user['id'],'update','users',rid,dict(old),{'username':username.strip(),'role':b['role'],'active':b['active'],'password_changed':bool(b.get('password'))});db.commit();return self.send({'ok':True})
                 finally:db.close()
             if path=='/api/backup' and method=='GET':
