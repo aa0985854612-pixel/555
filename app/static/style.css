@@ -882,3 +882,18 @@ body [hidden] { display: none !important; }
 }
 
 .overview-columns>span:nth-child(n+3):nth-child(-n+5){white-space:nowrap;overflow-wrap:normal}
+
+/* Pending photo transcriptions have their own explicit confirmation step. */
+#feed-draft-dialog{width:min(960px,96vw);max-width:96vw;max-height:92dvh;overflow:auto}
+#feed-draft-dialog .section-row{align-items:flex-start;gap:10px}
+.feed-draft-card{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 0;border-bottom:1px solid var(--line)}
+.feed-draft-card>div{min-width:0;overflow-wrap:anywhere}.feed-draft-card p{margin:6px 0}.feed-draft-card small{color:var(--muted)}
+.feed-draft-row{border:1px solid var(--line);border-radius:10px;padding:14px;margin:14px 0;min-width:0}
+.feed-draft-row h3{margin:0}.feed-draft-row textarea{white-space:pre-wrap}.feed-draft-row label{min-width:0}
+.feed-draft-badge{display:inline-block;background:#fff4d7;border-radius:7px;padding:5px 10px;font-size:.9rem}
+.feed-draft-comparison{border-top:1px solid var(--line);padding:12px 0;overflow-wrap:anywhere}.feed-draft-comparison p{margin:6px 0}
+.feed-draft-note{white-space:pre-wrap}.feed-draft-portions{margin:10px 0}#feed-draft-preview>.check{margin-block:16px}
+#feed-draft-cancel{margin-top:20px}#feed-draft-tabs{display:flex;flex-wrap:wrap}#feed-draft-tabs button{flex:1;min-width:90px}
+@media(max-width:600px){#feed-draft-dialog .grid.three{grid-template-columns:repeat(2,minmax(0,1fr))}.feed-draft-row{padding:10px}.feed-draft-card{align-items:flex-start}.feed-draft-card button{flex-shrink:0}#feed-draft-dialog .actions>*{flex:1}}
+
+@media(max-width:600px){#feed-draft-form>.actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}#feed-draft-prepare{grid-column:1/-1}#feed-draft-confirm{width:100%;min-height:48px}}

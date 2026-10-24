@@ -36,3 +36,5 @@ node --check app/static/order-fcr.js
 node --check app/static/notifications.js
 
 node --check app/static/batch-manager.js
+
+node --check app/static/feed-drafts.js

@@ -387,6 +387,17 @@ class Handler(BaseHTTPRequestHandler):
                 if '_snapshot' in result:
                     snapshot=result.pop('_snapshot');seq=result.pop('_sequence');result['sync']=client_snapshot(snapshot,self.server.instance+':'+str(seq))
                 return self.send(result,201)
+            if (path=='/api/feed-drafts' or path.startswith('/api/feed-drafts/')) and method in ('POST','PUT'):
+                from .feed_drafts import save_draft,preview_draft,finish_draft
+                parts=path.split('/');body=self.body();key=self.headers.get('Idempotency-Key')
+                if len(parts)==3 and method=='POST':result=save_draft(store,user,body,key)
+                elif len(parts)==4 and method=='PUT':result=save_draft(store,user,body,key,parts[3])
+                elif len(parts)==5 and parts[4]=='preview' and method=='POST':return self.send(preview_draft(store,user,parts[3],body))
+                elif len(parts)==5 and parts[4] in ('confirm','cancel') and method=='POST':result=finish_draft(store,user,parts[3],body,key,cancel=parts[4]=='cancel')
+                else:raise Problem('not_found',404)
+                if '_snapshot' in result:
+                    snapshot=result.pop('_snapshot');seq=result.pop('_sequence');result['sync']=client_snapshot(snapshot,self.server.instance+':'+str(seq))
+                return self.send(result,201)
             if path=='/api/feed-order-preview' and method=='POST':
                 from .feed_review import preview_feed_order
                 return self.send(preview_feed_order(store,user,self.body()))

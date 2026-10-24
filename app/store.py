@@ -4,9 +4,9 @@ from datetime import datetime, timezone
 from .domain import Invalid, day, number, herd, consumption, age
 from .notification_schema import PUSH_SCHEMA
 
-VERSION='2.0.52'
+VERSION='2.0.53'
 SCHEMA_VERSION=4
-KINDS=('barns','batches','movements','feed_orders','deliveries','usages','weights','workbooks','source_voids','daily_checks','feed_bins','work_tasks')
+KINDS=('barns','batches','movements','feed_orders','deliveries','usages','weights','workbooks','source_voids','daily_checks','feed_bins','work_tasks','feed_drafts')
 SCHEMA='''
 CREATE TABLE IF NOT EXISTS records(kind TEXT NOT NULL, id TEXT PRIMARY KEY, revision INTEGER NOT NULL, deleted INTEGER NOT NULL DEFAULT 0, data TEXT NOT NULL);
 CREATE INDEX IF NOT EXISTS records_kind ON records(kind,deleted);
@@ -225,6 +225,7 @@ class Store:
         d={k:v for k,v in d.items() if k not in ('id','revision','created_at','created_by','updated_at','deleted')}
         allowed={
             'barns':{'name','group','feed_vendor'},
+            'feed_drafts':{'title','source','sources','rows','status','confirmed_ids','confirmed_at','confirmed_by','cancelled_at','cancelled_by'},
             'work_tasks':{'title','mode','weekday','date','start_date','end_date','time','note','active'},
             'batches':{'barn_id','name','group','entry_date','entry_date_override','entry_count','entry_age_days','age_date','status','cohort_id','same_batch_as','legacy_source','legacy_row','legacy_barn','note','entry_mean_kg','entry_mean_date','entry_mean_source','entry_mean_note','entry_count_source','entry_count_reason','source_assignments','stock_basis','quality_review','weekly_start_date','report_entry_lots','report_entry_lots_source'},
             'movements':{'date','batch_id','type','quantity','note','target_batch_id','total_weight_kg','outgoing_destination','outgoing_trip'},
@@ -238,7 +239,10 @@ class Store:
             'workbooks':{'filename','base64','counts_text','counts_as_of','closed_barns','source_url','sha256','report','plan','review_decisions','source_date_reviews','source_movement_edits'},
         }[kind]
         d={k:v for k,v in d.items() if k in allowed}
-        if kind=='work_tasks':
+        if kind=='feed_drafts':
+            from .feed_drafts import validate_draft
+            d=validate_draft(d)
+        elif kind=='work_tasks':
             from .work_calendar import validate_task
             d=validate_task(d)
         elif kind=='barns':
@@ -563,6 +567,7 @@ class Store:
     def mutate(self, user, kind, payload, request_key, rid=None, delete=False, return_snapshot=False):
         self.require(user,admin=kind in ('barns','batches','workbooks','feed_bins') or delete)
         if kind not in KINDS:raise Problem('unknown_kind',404)
+        if kind=='feed_drafts':raise Problem('feed_draft_review_required',403)
         if kind in ('workbooks','source_voids'):raise Problem('legacy_source_readonly',403)
         if not isinstance(payload,dict) or not isinstance(request_key,str) or not 16<=len(request_key)<=128:raise Problem('idempotency_required')
         fingerprint=hashlib.sha256(encode([kind,rid,delete,payload]).encode()).hexdigest()
