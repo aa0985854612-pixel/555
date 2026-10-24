@@ -13,7 +13,7 @@ Object.assign(errorWords,{
 const base={build,enter,translate},box=()=>$('#line-feed-settings');
 let state=null,busy=false,owner=null,serial=0;
 function controls(){
- if(!box())return;box().hidden=me?.role!=='admin';
+ if(!box())return;box().hidden=me?.role!=='admin'||!(state?.ready||state?.bound);
  $('#line-feed-refresh').disabled=busy;$('#line-feed-pair').disabled=busy||!state?.ready;
  $('#line-feed-disconnect').disabled=busy||!state?.bound;
 }
@@ -47,6 +47,6 @@ build=()=>{
  box().addEventListener('toggle',()=>{if(box().open)load();});
  document.addEventListener('pigledger:logout',()=>{serial++;state=null;owner=null;busy=false;$('#line-feed-command').textContent='';$('#line-feed-code').hidden=true;$('#line-feed-keys').replaceChildren();$('#line-feed-recent').replaceChildren();box().open=false;box().hidden=true;});
 };
-enter=async user=>{if(owner!==user.id){serial++;owner=user.id;state=null;busy=false;}const result=await base.enter(user);controls();if(user.role==='admin'&&box().open)await load();return result;};
+enter=async user=>{if(owner!==user.id){serial++;owner=user.id;state=null;busy=false;}const result=await base.enter(user);controls();if(user.role==='admin')await load();return result;};
 translate=()=>{base.translate();render();};
 })();
