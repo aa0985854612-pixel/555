@@ -25,6 +25,14 @@ build=()=>{
  document.body.insertAdjacentHTML('beforeend',`<dialog id="check-dialog"><h2 id="check-heading"></h2><p id="check-scope"></p><p id="check-instruction"></p><div id="check-bulk-scope"></div><label id="check-reason-label" hidden>${txt('cancelCheckReason')}<input id="check-reason" maxlength="500" autocomplete="off"></label><p class="hint">${txt('checkNote')}</p><div class="actions"><button type="button" id="check-close">${txt('cancel')}</button><button type="button" class="primary" id="check-save">${txt('confirmNoDeaths')}</button></div></dialog>`);
  $('#review-date').onchange=()=>{if(!$('#review-date').value)return;renderDaily();};
  $('#movement-form [name=date]').addEventListener('change',()=>{$('#review-date').value=val($('#movement-form'),'date');renderDaily();});
+ document.addEventListener('pigledger:quick-saved',e=>{
+  const result=e.detail;
+  if(!me||result?.kind!=='movements'||!result.record?.date)return;
+  // Quick entry has its own date, independent of the manual movement form.
+  // Show the affected day after creates, corrections, deletes and saved retries.
+  $('#review-date').value=result.record.date;
+  renderDaily({reveal:true});
+ });
  document.addEventListener('pigledger:logout',()=>{$('#check-dialog').close();checkDraft=null;renderDaily.latest=null;++requestNo;});
  $('#check-close').onclick=()=>$('#check-dialog').close();
  $('#check-save').onclick=()=>{
@@ -63,7 +71,7 @@ function recordLine(r){
  const batch=data.batches.find(b=>b.id===r.batch_id),barn=r.barn_number?String(r.barn_number)+t('barn'):data.barns.find(b=>b.id===batch?.barn_id)?.name||t('unassigned');
  return `<article class="review-event"><div><strong>${esc(barn)}</strong><span>${esc(batch?.name||r.legacy_batch||t('unassigned'))}</span>${movementNote(r)?`<small>${esc(movementNote(r))}</small>`:''}</div><strong class="${r.type==='death'?'warning-text':''}">${esc(t(r.type))} ${fmt(r.quantity,0)}</strong><div class="review-actions">${recordActions('movements',r)}</div></article>`;
 }
-async function renderDaily(){
+async function renderDaily({reveal=false}={}){
  const on=$('#review-date')?.value||today(),ticket=++requestNo;if(!data)return;
  try{
   if(on!==data.daily_review?.date){renderDaily.latest=null;preserveBox('review-body',`<p>${t('weeklyLoading')}</p>`);}
@@ -71,6 +79,7 @@ async function renderDaily(){
   renderDaily.latest=report;
   const counts=report.counts,events=report.events;
   preserveBox('review-body',`<div class="review-totals">${['death','sale','cull'].map(k=>`<div><span>${t(k)}</span><strong>${fmt(report.totals[k],0)}</strong></div>`).join('')}</div><p class="hint">${t('reviewHint')}</p><div class="bulk-patrol-action">${me?.role!=='viewer'?`<button type="button" class="primary" data-bulk-check ${report.rows.some(r=>r.can_confirm&&(!r.check||editable(r.check)))?'':'disabled'}>${t('bulkNoDeaths')}</button>`:''}<p class="hint">${t('noDeathsChecked')} ${counts.no_deaths} · ${t('notReported')} ${counts.not_reported}</p></div><details data-key="daily-events"><summary>${t('recordedToday')} · ${events.length}</summary>${events.map(recordLine).join('')||`<p>${t('noDailyRecords')}</p>`}</details><details data-key="patrol-list"><summary>${t('patrolReview')}</summary><div class="patrol-list">${report.rows.map(r=>`<article class="patrol-row"><div><strong>${esc(r.barn)}</strong><span>${esc(r.batch)}</span><small class="patrol-status ${r.status==='death_recorded'?'warning-text':''}">${t(statusWord(r.status))}${r.status==='death_recorded'?' '+fmt(r.deaths,0)+' '+t('heads'):''}</small>${r.check_superseded?`<small>${t('checkSuperseded')}</small>`:''}</div><div>${r.check?.status==='no_deaths'&&editable(r.check)?`<button type="button" data-cancel-check="${r.batch_id}">${t('cancelCheck')}</button>`:''}</div></article>`).join('')}</div></details>`);
+  if(reveal)$('#review-body [data-key=daily-events]').open=true;
   pendingButtons();
  }catch(e){if(ticket===requestNo){preserveBox('review-body',`<p class="form-error">${esc(messageError(e))}</p>`);renderDaily.latest=null;}}
 }

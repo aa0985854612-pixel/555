@@ -1,10 +1,12 @@
-# 肉豬紀錄管理 App — PigLedger 2.0.55
+# 肉豬紀錄管理 App — PigLedger 2.0.56
 
 **[開啟正式網站：555-rho-nine.vercel.app](https://555-rho-nine.vercel.app/)**。沿用你目前的帳號、密碼、Vercel專案及Turso資料庫。
 
-- [完整原始碼／Docker／Vercel設定 v2.0.55](https://github.com/aa0985854612-pixel/555/tree/main)
+- [完整原始碼／Docker／Vercel設定 v2.0.56](https://github.com/aa0985854612-pixel/555/tree/main)
 - [簡短操作說明](docs/USER_GUIDE.md)／[部署說明](docs/VERCEL.md)
-- [2.0.55測試報告與驗收](docs/TEST_REPORT_2.0.55.md)
+- [2.0.56測試報告與驗收](docs/TEST_REPORT_2.0.56.md)
+
+快捷儲存豬隻異動後，下方「當日核對」自動切換至該筆日期、更新死亡／出豬／淘汰數字並展開明細。歷史更正、刪除與斷線重試也會顯示受影響日期；飼料仍在原飼料頁面。
 
 首頁新增「智慧快捷紀錄」：輸入一句話，辨識日期、棟舍、數量與類型，核對後寫入原到料／叫料／豬隻異動。支援中越語、手機、快捷歷史修改刪除、容量警告及原資料同步；料桶庫存由管理員設定實際盤點基準，不猜舊剩料。完整操作與資料欄位見[智慧快捷紀錄說明](docs/SMART_QUICK_RECORD.md)。
 

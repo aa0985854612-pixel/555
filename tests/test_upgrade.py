@@ -160,7 +160,9 @@ class WorkbookUpdateTests(unittest.TestCase):
         b=self.second();self.store.mutate(self.admin,'movements',{'batch_id':b['id'],'date':'2026-10-15','type':'death','quantity':1},str(uuid.uuid4()))
         result=self.store.import_workbook(self.admin,self.payload,str(uuid.uuid4()));self.assertEqual(len(result['update_summary']['pending_cohorts']),1)
         d=self.store.snapshot();self.assertEqual(herd(d['batches'],d['movements'],'2026-10-15')['remaining'],89)
-        self.assertEqual(base64.b64decode(d['workbooks'][-1]['base64']),advanced_workbook())
+        # Compare the exact submitted archive; generating another XLSX embeds
+        # a new ZIP timestamp and can fail across a two-second boundary.
+        self.assertEqual(base64.b64decode(d['workbooks'][-1]['base64']),base64.b64decode(self.payload['base64']))
     def test_unmatched_known_barn_event_updates_stock_once(self):
         self.store.import_workbook(self.admin,self.payload,str(uuid.uuid4()));d=self.store.snapshot()
         self.assertEqual(len(d['movements']),1);self.assertTrue(d['movements'][0]['_source_derived'])
