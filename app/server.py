@@ -303,7 +303,7 @@ class Handler(BaseHTTPRequestHandler):
         finally:
             # Only committed audit rows can become notifications; a provider
             # failure must never turn a saved farm record into a failed write.
-            if method in ('POST','PUT') and urlparse(self.path).path not in ('/api/login','/api/logout','/api/activate','/api/password') and not urlparse(self.path).path.startswith('/api/notifications'):
+            if method in ('POST','PUT') and urlparse(self.path).path not in ('/api/login','/api/logout','/api/activate','/api/password','/api/line/webhook') and not urlparse(self.path).path.startswith('/api/notifications'):
                 try:
                     from .push import dispatch_pending
                     dispatch_pending(self.server.store)
@@ -314,6 +314,12 @@ class Handler(BaseHTTPRequestHandler):
         store=self.server.store
         if self.server.public_host and self.headers.get('Host')!=self.server.public_host:
             raise Problem('invalid_host',403)
+        if path=='/api/line/webhook' and method=='POST':
+            from .line_feed import webhook
+            try:size=int(self.headers.get('Content-Length','0'))
+            except ValueError:raise Problem('invalid_request')
+            if not 0<size<=1024*1024:raise Problem('payload_too_large',413)
+            return self.send(webhook(store,self.rfile.read(size),self.headers.get('X-Line-Signature','')))
         if path=='/api/notifications/cron' and method=='GET':
             secret=os.environ.get('CRON_SECRET','')
             if not secret or not hmac_safe(self.headers.get('Authorization',''),'Bearer '+secret):raise Problem('forbidden',403)
@@ -365,6 +371,12 @@ class Handler(BaseHTTPRequestHandler):
             user=self.session()
             if user.get('must_change') and path not in ('/api/me','/api/logout','/api/password'):raise Problem('password_change_required',403)
             if method!='GET':self.protect(user)
+            if path=='/api/line/status' and method=='GET':
+                from .line_feed import status
+                return self.send(status(store,user))
+            if path=='/api/line/configure' and method=='POST':
+                from .line_feed import configure
+                return self.send(configure(store,user,self.body()))
             if path=='/api/notifications' and method=='GET':
                 from .push import status
                 return self.send(status(store,user))

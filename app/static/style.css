@@ -897,3 +897,8 @@ body [hidden] { display: none !important; }
 @media(max-width:600px){#feed-draft-dialog .grid.three{grid-template-columns:repeat(2,minmax(0,1fr))}.feed-draft-row{padding:10px}.feed-draft-card{align-items:flex-start}.feed-draft-card button{flex-shrink:0}#feed-draft-dialog .actions>*{flex:1}}
 
 @media(max-width:600px){#feed-draft-form>.actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}#feed-draft-prepare{grid-column:1/-1}#feed-draft-confirm{width:100%;min-height:48px}}
+#line-feed-settings{margin-top:1rem;border-top:1px solid var(--line,#dce3ec);padding-top:.75rem;font-size:.9rem}
+#line-feed-settings code{overflow-wrap:anywhere;user-select:all}
+#line-feed-settings li{margin:.5rem 0;overflow-wrap:anywhere}
+#line-feed-settings .actions{flex-wrap:wrap}
+#line-feed-code{padding:.75rem;background:var(--soft,#f5f7fa);border-radius:.5rem}

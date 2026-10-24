@@ -38,3 +38,5 @@ node --check app/static/notifications.js
 node --check app/static/batch-manager.js
 
 node --check app/static/feed-drafts.js
+
+node --check app/static/line-feed.js

@@ -99,11 +99,12 @@ def _write(db,store,user,draft,previous,result,key,fp,data,action):
     return result|{'_snapshot':data,'_sequence':seq}
 
 
-def save_draft(store,user,body,key,rid=None):
+def save_draft(store,user,body,key,rid=None,*,guard=None):
     fp=_request(store,user,body,key,['save',rid]);db=store.connect()
     try:
         db.execute('BEGIN IMMEDIATE');prior=_prior(db,user,key,fp)
         if prior:return prior
+        if guard:guard(db)
         data=store.snapshot(db,include_source=False);previous=next((r for r in data.get('feed_drafts',[]) if r['id']==rid),None)
         if rid:
             _owned(store,user,previous)
