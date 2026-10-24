@@ -10,6 +10,11 @@ def bin_label(bin):
     return {'1、2':'1','3、4':'3','5、6':'5','16、17':'16'}.get(bin['name'],bin['name'])
 
 
+def order_bin_label(bin):
+    """User-facing order/report shorthand; physical bins remain distinct."""
+    return '14' if bin['name'] in ('14-1','14-2') else bin_label(bin)
+
+
 def validate_bin_allocations(rows,total,targets,barn_ids,batches):
     from .domain import Invalid,number
     if not isinstance(rows,list) or len(rows)>len(barn_ids):raise Invalid('invalid_allocations')
@@ -72,7 +77,7 @@ def order_scope(order, data, selected=None):
 def order_detail(order, data, batch_id=None):
     batches={b['id']:b for b in data['batches']};barns={b['id']:b['name'] for b in data['barns']}
     if order.get('feed_bin_id'):
-        snap=order['feed_bin_snapshot'];label=bin_label(snap);assigned=order.get('bin_allocations',[])
+        snap=order['feed_bin_snapshot'];label=order_bin_label(snap);assigned=order.get('bin_allocations',[])
         return {'id':order['id'],'date':order['date'],'batch_id':assigned[0]['batch_id'] if len(assigned)==1 else None,'barn':'、'.join(barns[batches[a['batch_id']]['barn_id']] for a in assigned) if assigned else '、'.join(snap['barn_names']),
             'bin':label,'bin_label':label,'kg':order['kg'],'vendor':order['vendor'],'item':order['item'],'target_batch_ids':order['target_batch_ids'],'bin_total_kg':order.get('bin_total_kg',order['kg'])}
     a=next(a for a in order['allocations'] if a['batch_id']==batch_id)
@@ -88,9 +93,13 @@ def report_feed_setup(data, members, orders):
         if barn.get('feed_vendor'):suppliers.add(barn['feed_vendor'])
         else:suppliers.update(b['vendor'] for b in bins if barn['id'] in b['barn_ids'])
     suppliers=sorted(suppliers)
+    labels={}
+    for b in bins:
+        label=order_bin_label(b);names=[x['name'] for x in data['barns'] if x['id'] in b['barn_ids']]
+        labels.setdefault((label,b['vendor'],tuple(names)),{'name':label,'vendor':b['vendor'],'barns':names})
     return {'configured_vendors':suppliers,'recorded_vendors':sorted({o['vendor'] for o in orders if o.get('vendor')}),
         'recorded_types':sorted({o['item'] for o in orders if o.get('item')}),
-        'bins':[{'name':bin_label(b),'vendor':b['vendor'],'barns':[x['name'] for x in data['barns'] if x['id'] in b['barn_ids']]} for b in bins]}
+        'bins':list(labels.values())}
 
 
 def preentry_order(order,data,selected):
