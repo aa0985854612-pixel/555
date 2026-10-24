@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from .domain import Invalid, day, number, herd, consumption, age
 from .notification_schema import PUSH_SCHEMA
 
-VERSION='2.0.54'
+VERSION='2.0.55'
 SCHEMA_VERSION=4
 KINDS=('barns','batches','movements','feed_orders','deliveries','usages','weights','workbooks','source_voids','daily_checks','feed_bins','work_tasks','feed_drafts')
 SCHEMA='''
@@ -201,7 +201,7 @@ class Store:
         if not user: raise Problem('login_required',401)
         if user['role']=='viewer' or (admin and user['role']!='admin'): raise Problem('forbidden',403)
 
-    def validate(self, kind, d, data, user, previous=None):
+    def validate(self, kind, d, data, user, previous=None, *, quick=False):
         def text(key, required=False):
             v=d.get(key,'')
             if not isinstance(v,str) or len(v)>2000 or (required and not v.strip()): raise Invalid('invalid_text')
@@ -228,17 +228,32 @@ class Store:
             'feed_drafts':{'title','source','sources','rows','status','confirmed_ids','confirmed_at','confirmed_by','cancelled_at','cancelled_by'},
             'work_tasks':{'title','mode','weekday','date','start_date','end_date','time','note','active'},
             'batches':{'barn_id','name','group','entry_date','entry_date_override','entry_count','entry_age_days','age_date','status','cohort_id','same_batch_as','legacy_source','legacy_row','legacy_barn','note','entry_mean_kg','entry_mean_date','entry_mean_source','entry_mean_note','entry_count_source','entry_count_reason','source_assignments','stock_basis','quality_review','weekly_start_date','report_entry_lots','report_entry_lots_source'},
-            'movements':{'date','batch_id','type','quantity','note','target_batch_id','total_weight_kg','outgoing_destination','outgoing_trip'},
-            'feed_orders':{'date','kg','display_unit','vendor','item','note','allocations','feed_bin_id','feed_bin_snapshot','target_batch_ids','bin_allocations'},
-            'feed_bins':{'name','barn_ids','vendor','active','note'},
-            'deliveries':{'date','kg','display_unit','vendor','item','note','allocations'},
-            'usages':{'start','end','batch_id','method','kg','opening','closing','transfer_in','transfer_out','loss','note','active','vendor','item'},
+            'movements':{'date','batch_id','type','quantity','note','target_batch_id','total_weight_kg','outgoing_destination','outgoing_trip','quick_source'},
+            'feed_orders':{'date','kg','display_unit','vendor','item','note','allocations','feed_bin_id','feed_bin_snapshot','target_batch_ids','bin_allocations','requested_barn_id','quick_source'},
+            'feed_bins':{'name','barn_ids','vendor','active','note','capacity_kg','safe_fill_percent','inventory_enabled','inventory_date','inventory_opening_kg'},
+            'deliveries':{'date','kg','display_unit','vendor','item','note','allocations','feed_bin_id','feed_bin_snapshot','target_batch_ids','requested_barn_id','quick_source'},
+            'usages':{'start','end','batch_id','method','kg','opening','closing','transfer_in','transfer_out','loss','note','active','vendor','item','feed_bin_id'},
             'weights':{'date','batch_id','age_days','pen','count','total_kg','individual_kg','sampling','note','representative','section','session_id','session_number','session_fingerprint'},
             'daily_checks':{'date','batch_id','status','note'},
             'source_voids':{'target_kind','source_row_id','source_record','reason'},
             'workbooks':{'filename','base64','counts_text','counts_as_of','closed_barns','source_url','sha256','report','plan','review_decisions','source_date_reviews','source_movement_edits'},
         }[kind]
         d={k:v for k,v in d.items() if k in allowed}
+        if kind in ('deliveries','feed_orders','movements'):
+            source=d.get('quick_source') or (previous or {}).get('quick_source')
+            if source:
+                if not quick and (not previous or source!=previous.get('quick_source')):raise Problem('invalid_quick_source')
+                from .quick_record import validate_source
+                source=validate_source(source)
+                if not quick and previous:
+                    if kind=='movements':source['barn_id']=lookup('batches',d.get('batch_id'))['barn_id']
+                    elif kind=='feed_orders' and d.get('feed_bin_id'):
+                        bin=lookup('feed_bins',d['feed_bin_id']);requested=d.get('requested_barn_id') or previous.get('requested_barn_id') or source['barn_id']
+                        if requested not in bin['barn_ids']:
+                            if len(bin['barn_ids'])!=1:raise Problem('quick_review_required',409)
+                            requested=bin['barn_ids'][0]
+                        source['barn_id']=requested;d['requested_barn_id']=requested
+                d['quick_source']=source
         if kind=='feed_drafts':
             from .feed_drafts import validate_draft
             d=validate_draft(d)
@@ -255,9 +270,25 @@ class Store:
             ids=d.get('barn_ids')
             if not isinstance(ids,list) or not ids or len(ids)>100 or any(not isinstance(x,str) for x in ids) or len(ids)!=len(set(ids)):raise Invalid('invalid_feed_bin')
             for rid in ids:lookup('barns',rid)
+            if previous and previous['barn_ids']!=ids and any(u.get('feed_bin_id')==previous['id'] or not u.get('feed_bin_id') and lookup('batches',u['batch_id'])['barn_id'] in previous['barn_ids'] for u in data.get('usages',[])):raise Invalid('feed_bin_members_locked')
             if not isinstance(d.get('active',True),bool):raise Invalid('invalid_status')
             d['active']=d.get('active',True)
             if any(b['name']==d['name'] for b in data.get('feed_bins',[])):raise Invalid('duplicate_feed_bin')
+            for field in ('capacity_kg','safe_fill_percent','inventory_enabled','inventory_date','inventory_opening_kg'):
+                if field not in d and previous and field in previous:d[field]=previous[field]
+            if 'capacity_kg' in d:
+                d['capacity_kg']=None if d['capacity_kg'] in ('',None) else number(d['capacity_kg'],True)
+            if 'safe_fill_percent' in d:
+                qty('safe_fill_percent',True)
+                if d['safe_fill_percent']>100:raise Invalid('invalid_bin_inventory')
+            if 'inventory_enabled' in d and type(d['inventory_enabled']) is not bool:raise Invalid('invalid_bin_inventory')
+            if d.get('inventory_enabled'):
+                day(d.get('inventory_date'));qty('inventory_opening_kg')
+                if not d.get('capacity_kg') or d['inventory_opening_kg']<0:raise Invalid('invalid_bin_inventory')
+            elif 'inventory_date' in d and d['inventory_date']:day(d['inventory_date'])
+            if 'inventory_opening_kg' in d and d['inventory_opening_kg'] is not None:
+                qty('inventory_opening_kg')
+                if d['inventory_opening_kg']<0:raise Invalid('invalid_bin_inventory')
         elif kind=='batches':
             lookup('barns',d.get('barn_id'));text('name',True);text('group')
             day(d.get('entry_date'))
@@ -376,6 +407,29 @@ class Store:
         elif kind in ('deliveries','feed_orders'):
             day(d.get('date'));qty('kg',True);text('item');text('note')
             if d.get('display_unit') not in ('kg','ton'):raise Invalid('invalid_unit')
+            if kind=='deliveries' and not d.get('feed_bin_id') and previous and previous.get('feed_bin_id'):
+                for field in ('feed_bin_id','feed_bin_snapshot','target_batch_ids','requested_barn_id'):
+                    if field not in d and field in previous:d[field]=previous[field]
+            if kind=='deliveries' and d.get('feed_bin_id'):
+                bin=lookup('feed_bins',d['feed_bin_id'])
+                if not bin['active'] and not (previous and previous.get('feed_bin_id')==bin['id']):raise Invalid('feed_bin_inactive')
+                d['feed_bin_snapshot']=({'id':bin['id'],'name':bin['name'],'barn_ids':list(bin['barn_ids']),'barn_names':[lookup('barns',rid)['name'] for rid in bin['barn_ids']]})
+                if previous and previous.get('feed_bin_id')==bin['id']:d['feed_bin_snapshot']=previous['feed_bin_snapshot']
+                snap=d['feed_bin_snapshot']
+                if not isinstance(snap,dict) or set(snap)!={'id','name','barn_ids','barn_names'} or snap['id']!=bin['id'] or snap['barn_ids']!=bin['barn_ids'] or not isinstance(snap['name'],str) or not snap['name'].strip() or len(snap['name'])>2000 or not isinstance(snap['barn_names'],list) or len(snap['barn_names'])!=len(bin['barn_ids']) or any(not isinstance(x,str) or len(x)>2000 for x in snap['barn_names']):raise Invalid('invalid_feed_bin')
+                targets=d.get('target_batch_ids',[])
+                if not isinstance(targets,list) or len(targets)!=len(set(targets)):raise Invalid('invalid_allocations')
+                target_barns=set()
+                for rid in targets:
+                    b=lookup('batches',rid)
+                    if b['barn_id'] not in bin['barn_ids'] or b['entry_date']>d['date'] or b['barn_id'] in target_barns:raise Invalid('invalid_allocations')
+                    target_barns.add(b['barn_id'])
+                d['target_batch_ids']=targets
+                for a in d.get('allocations',[]):
+                    if not isinstance(a,dict) or lookup('batches',a.get('batch_id'))['barn_id'] not in bin['barn_ids']:raise Invalid('invalid_allocations')
+            if kind in ('feed_orders','deliveries') and d.get('requested_barn_id'):
+                lookup('barns',d['requested_barn_id'])
+                if not d.get('feed_bin_id') or d['requested_barn_id'] not in lookup('feed_bins',d['feed_bin_id'])['barn_ids']:raise Invalid('invalid_feed_bin')
             if kind=='feed_orders' and d.get('feed_bin_id'):
                 from .feed import FEED_TYPES
                 bin=lookup('feed_bins',d['feed_bin_id'])
@@ -425,6 +479,10 @@ class Store:
             if d['end']<=d['start']:raise Invalid('invalid_period')
             if not isinstance(d.get('active',True),bool):raise Invalid('invalid_status')
             d['active']=d.get('active',True)
+            if not d.get('feed_bin_id') and previous and previous.get('feed_bin_id'):d['feed_bin_id']=previous['feed_bin_id']
+            if d.get('feed_bin_id'):
+                bin=lookup('feed_bins',d['feed_bin_id']);b=lookup('batches',d['batch_id'])
+                if b['barn_id'] not in bin['barn_ids']:raise Invalid('invalid_feed_bin')
             if d.get('method')=='direct':
                 if qty('kg')<0:raise Invalid('invalid_number')
             elif d.get('method')=='inventory':
@@ -507,10 +565,17 @@ class Store:
                 for a in d['allocations']:
                     if a['batch_id'] not in bid:raise Invalid('referenced_record')
                     if kind=='deliveries' and d['date']<bid[a['batch_id']]['entry_date']:raise Invalid('before_entry')
+        for kind in ('deliveries','feed_orders','movements'):
+            for record in data[kind]:
+                source=record.get('quick_source')
+                if not source:continue
+                if source['barn_id'] not in barns:raise Invalid('referenced_record')
+                if kind=='movements' and bid[record['batch_id']]['barn_id']!=source['barn_id']:raise Invalid('invalid_quick_source')
+                if record.get('feed_bin_snapshot') and source['barn_id'] not in record['feed_bin_snapshot']['barn_ids']:raise Invalid('invalid_quick_source')
         bins={b['id']:b for b in data.get('feed_bins',[])}
         for bin in bins.values():
             if not set(bin['barn_ids'])<=barns:raise Invalid('referenced_record')
-        for o in data.get('feed_orders',[]):
+        for o in data.get('feed_orders',[])+data.get('deliveries',[]):
             if not o.get('feed_bin_id'):continue
             bin=bins.get(o['feed_bin_id'])
             if not bin:raise Invalid('referenced_record')
@@ -520,6 +585,9 @@ class Store:
             if any(bid[x]['barn_id'] not in snap['barn_ids'] for x in o.get('target_batch_ids',[])):raise Invalid('referenced_record')
             from .feed import validate_bin_allocations
             validate_bin_allocations(o.get('bin_allocations',[]),o['kg'],o.get('target_batch_ids',[]),snap['barn_ids'],bid)
+            if o.get('requested_barn_id') and o['requested_barn_id'] not in snap['barn_ids']:raise Invalid('referenced_record')
+        for u in data.get('usages',[]):
+            if u.get('feed_bin_id') and (u['feed_bin_id'] not in bins or bid[u['batch_id']]['barn_id'] not in bins[u['feed_bin_id']]['barn_ids']):raise Invalid('referenced_record')
         # Daily deltas allow retroactive validation in O(records log records),
         # rather than rescanning the entire farm for each batch and date.
         deltas={b['id']:{(b['legacy_group']['as_of'] if b.get('legacy_group') else b['entry_date']):(b['legacy_heads'][b['legacy_group']['as_of']] if b.get('legacy_group') else b['entry_count'])} for b in data['batches']}
@@ -568,6 +636,7 @@ class Store:
         self.require(user,admin=kind in ('barns','batches','workbooks','feed_bins') or delete)
         if kind not in KINDS:raise Problem('unknown_kind',404)
         if kind=='feed_drafts':raise Problem('feed_draft_review_required',403)
+        if kind=='deliveries' and isinstance(payload,dict) and payload.get('feed_bin_id'):raise Problem('quick_review_required',409)
         if kind in ('workbooks','source_voids'):raise Problem('legacy_source_readonly',403)
         if not isinstance(payload,dict) or not isinstance(request_key,str) or not 16<=len(request_key)<=128:raise Problem('idempotency_required')
         fingerprint=hashlib.sha256(encode([kind,rid,delete,payload]).encode()).hexdigest()
@@ -585,6 +654,7 @@ class Store:
                 if not previous:raise Problem('not_found',404)
                 if kind in ('movements','weights') and (previous.get('legacy_source') or previous.get('_source_derived')):raise Problem('legacy_source_readonly',403)
                 if user['role']=='staff' and previous.get('created_by')!=user['id']:raise Problem('forbidden',403)
+                if kind=='deliveries' and previous.get('quick_source'):raise Problem('quick_review_required',409)
                 if payload.get('revision')!=previous['revision']:raise Problem('revision_conflict',409,previous)
                 data[kind]=[r for r in data[kind] if r['id']!=rid]
             if kind=='daily_checks' and previous and any(payload.get(k)!=previous[k] for k in ('date','batch_id')):raise Problem('daily_check_identity_locked')
@@ -759,7 +829,7 @@ class Store:
                         if not subset(history_report(r['report']),history_report(checked)):raise Problem('invalid_backup')
                         continue
                     others={k:[x for x in rows if not (k==kind and x['id']==r['id'])] for k,rows in data.items()}
-                    cleaned=self.validate(kind,r,others,user,r if kind in ('feed_orders','batches') else None)
+                    cleaned=self.validate(kind,r,others,user,r if kind in ('feed_orders','deliveries','movements','batches') else None)
                     if any((r.get(k, '') if k in ('vendor','item','entry_mean_source','entry_mean_note','entry_count_source','section') else r.get(k))!=v for k,v in cleaned.items()):raise Problem('invalid_backup')
             self.validate_global(data)
             for u in document.get('users',[]):

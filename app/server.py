@@ -29,12 +29,13 @@ def filter_rows(kind,data,query):
         if get('to') and rd>get('to'):continue
         if kind=='movements' and get('type') and r.get('type')!=get('type'):continue
         if get('cohort') and r.get('cohort') and r['cohort']!=get('cohort'):continue
-        if kind=='feed_orders' and get('feed_bin_id') and r.get('feed_bin_id')!=get('feed_bin_id'):continue
+        if kind in ('feed_orders','deliveries','usages') and get('feed_bin_id') and r.get('feed_bin_id')!=get('feed_bin_id'):continue
         if get('vendor') and r.get('vendor')!=get('vendor'):continue
         if get('item') and get('item').lower() not in r.get('item','').lower():continue
-        if kind=='feed_orders' and r.get('feed_bin_id'):
+        if kind in ('feed_orders','deliveries') and r.get('feed_bin_id'):
             from .feed import order_scope
-            attribution=order_scope(r,data,ids if scoped else None)
+            from .bin_stock import delivery_scope
+            attribution=(order_scope if kind=='feed_orders' else delivery_scope)(r,data,ids if scoped else None)
             if scoped and not attribution['related']:continue
             r=r|{'scope_attribution':attribution}
         elif kind in ('deliveries','feed_orders'):
@@ -115,7 +116,12 @@ def statistics(data,query):
             stats['interval']={key:(None if key in missing or (not scoped and supported and until<min(supported)) else value) for key,value in delta.items()}
     scoped=any(get(k) for k in ('batch_id','barn_id','group','cohort'))
     deliveries=[d for d in data['deliveries'] if d['date']<=until and (not start or d['date']>=start)]
-    stats['delivery_kg']=sum(sum(a['kg'] for a in d['allocations'] if a['batch_id'] in chosen) if scoped else d['kg'] for d in deliveries)
+    from .bin_stock import delivery_scope
+    arrival_values=[delivery_scope(d,data,chosen if scoped else None) for d in deliveries]
+    arrival_values=[v for v in arrival_values if v['related']]
+    stats['delivery_known_kg']=sum(v['kg'] or 0 for v in arrival_values)
+    stats['delivery_kg']=None if any(v['kg'] is None for v in arrival_values) else stats['delivery_known_kg']
+    stats['shared_delivery_kg']=sum(d['kg'] for d in deliveries if d.get('feed_bin_id') and delivery_scope(d,data,chosen if scoped else None)['related'] and delivery_scope(d,data,chosen if scoped else None)['kg'] is None)
     from .feed import order_scope
     order_values=[order_scope(o,data,chosen if scoped else None) for o in data.get('feed_orders',[]) if o['date']<=until and (not start or o['date']>=start)]
     order_values=[v for v in order_values if v['related']]
@@ -125,9 +131,9 @@ def statistics(data,query):
     uses=[u for u in data['usages'] if u['active'] and u['batch_id'] in chosen and u['end']<=next_day(until) and (not start or u['start']>=start)]
     excluded=[u for u in data['usages'] if u['active'] and u['batch_id'] in chosen and u['start']<=until and u['end']>(start or '0001-01-01') and u not in uses]
     values=[consumption(u,data['deliveries']) for u in uses]
-    stats['consumption_kg']=sum(values) if values and all(v>=0 for v in values) else None
+    stats['consumption_kg']=sum(values) if values and all(v is not None and v>=0 for v in values) else None
     stats['usage_count']=len(uses);stats['excluded_usage_count']=len(excluded)
-    stats['negative_usage']=any(v<0 for v in values)
+    stats['negative_usage']=any(v is not None and v<0 for v in values)
     perfs=[]
     from .order_fcr import order_fcr_estimate
     for b in data['batches']:
@@ -371,6 +377,23 @@ class Handler(BaseHTTPRequestHandler):
             user=self.session()
             if user.get('must_change') and path not in ('/api/me','/api/logout','/api/password'):raise Problem('password_change_required',403)
             if method!='GET':self.protect(user)
+            if path=='/api/quick-records' and method=='GET':
+                from .quick_record import history
+                return self.send(history(store,user,query))
+            if path=='/api/quick-records/preview' and method=='POST':
+                from .quick_record import preview
+                return self.send(preview(store,user,self.body()))
+            if path=='/api/quick-records/save' and method=='POST':
+                from .quick_record import save
+                result=save(store,user,self.body(),self.headers.get('Idempotency-Key'))
+                if '_snapshot' in result:
+                    snapshot=result.pop('_snapshot');seq=result.pop('_sequence');result['sync']=client_snapshot(snapshot,self.server.instance+':'+str(seq))
+                return self.send(result,201)
+            if path=='/api/feed-bin-stock' and method=='GET':
+                from .bin_stock import stock
+                from .quick_record import today
+                data=store.snapshot(include_source=False);on=query.get('date',[today()])[0]
+                return self.send({'date':on,'bins':[stock(data,b,on) for b in data['feed_bins']]})
             if path=='/api/line/status' and method=='GET':
                 from .line_feed import status
                 return self.send(status(store,user))

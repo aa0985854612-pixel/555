@@ -56,10 +56,10 @@ renderCurrent=async()=>{
  if(current!=='feed')return base.renderCurrent();
  const ticket=++renderTicket,q=query($('#feed-filter')),archive=$('#legacy-feed');
  try{
-  const requests=[api('/api/feed_orders?'+q)];if(archive.open)requests.push(api('/api/deliveries?'+q),api('/api/usages?'+q));
+  const requests=[api('/api/feed_orders?'+q),api('/api/deliveries?'+q)];if(archive.open)requests.push(api('/api/usages?'+q));
   const [orders,deliveries,usages]=await Promise.all(requests);if(ticket!==renderTicket||current!=='feed')return;
   replaceRecords('feed-order-results',rowsHTML('feed_orders',orders));const partial=orders.filter(r=>r.scope_attribution?.kg===null),known=orders.reduce((n,r)=>n+(r.scope_attribution?r.scope_attribution.kg||0:r.kg),0);$('#feed-order-total').textContent=(partial.length?t('feedKnownTotal'):t('orderTotal'))+' '+fmtFeed(known)+' kg'+(partial.length?' · '+t('feedReferenceTotal')+' '+fmtFeed(partial.reduce((n,r)=>n+r.kg,0))+' kg':'');
-  if(deliveries){replaceRecords('delivery-results',rowsHTML('deliveries',deliveries));replaceRecords('usage-results',rowsHTML('usages',usages.map(u=>({...u,computed_kg:calcConsumption(u)}))));}
+  if(deliveries)replaceRecords('delivery-results',rowsHTML('deliveries',deliveries));if(usages)replaceRecords('usage-results',rowsHTML('usages',usages.map(u=>({...u,computed_kg:calcConsumption(u)}))));
  }catch(e){toast(messageError(e));}
 };
 selections=(force=false)=>{base.selections(force);if(data)$('#legacy-feed').hidden=!(data.deliveries.length||data.usages.length||pending&&['delivery-form','usage-form'].includes(pending.formId));};

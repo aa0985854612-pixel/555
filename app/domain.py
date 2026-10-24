@@ -128,6 +128,11 @@ def combined_weights(weights, batch_id=None):
 def consumption(usage, deliveries):
     if usage['method'] == 'direct':
         return usage['kg']
+    if any(d.get('feed_bin_id') and not d.get('allocations') and
+            (usage['batch_id'] in d.get('target_batch_ids',[]) or usage.get('feed_bin_id')==d['feed_bin_id']) and
+            usage['start']<=d['date']<usage['end'] and (not usage.get('vendor') or d['vendor']==usage['vendor']) and
+            (not usage.get('item') or d['item']==usage['item']) for d in deliveries):
+        return None
     delivered = sum(a['kg'] for d in deliveries if usage['start'] <= d['date'] < usage['end'] and (not usage.get('vendor') or d['vendor']==usage['vendor']) and (not usage.get('item') or d['item']==usage['item']) for a in d.get('allocations', []) if a['batch_id'] == usage['batch_id'])
     return usage['opening'] + delivered + usage['transfer_in'] - usage['closing'] - usage['transfer_out'] - usage['loss']
 
@@ -182,6 +187,10 @@ def performance(batch, batches, movements, weights, usages, deliveries, until, s
             result['reasons'].append('feed_period_mismatch')
             break
         value = consumption(u, deliveries)
+        if value is None:
+            result['reasons'].append('feed_shared_unallocated')
+            cursor=u['end']
+            continue
         if value < 0:
             result['reasons'].append('negative_feed')
         feed += value
