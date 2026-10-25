@@ -9,6 +9,11 @@ Object.assign(words,{
 });
 Object.assign(errorWords,{feed_receipt_use_order:words.feedReceiptReviewRequired,feed_receipt_review_required:words.feedReceiptReviewRequired});
 const policyWords={
+ weeklyFeed:['飼料到料（噸）','Cám nhận (tấn)'],weeklyPaperFeed:['飼料（噸）','Cám (t)'],
+ weeklyFeedBasis:['叫料即到料，列出本批全部已登記資料（含未來日期）；實際耗料另計。未確認的共用桶分配另外標示，不重複或平均加算。','Đặt cám là nhận cám; hiện mọi bản ghi của lứa kể cả ngày tương lai. Tiêu thụ tính riêng. Bồn chung chưa phân bổ được ghi riêng, không chia đều hay cộng trùng.'],
+ weeklyFeedShort:['叫料即到料；實際耗料另計。','Đặt cám là nhận cám; tiêu thụ tính riêng.'],
+ weeklyPDFLegend:['空白＝未登記或資料待補。叫料即到料，全部列出（含未來日期），資料多時自動續頁；實際耗料另計。','Trống = chưa ghi hoặc thiếu dữ liệu. Đặt cám là nhận cám; hiện tất cả kể cả ngày tương lai, tự sang trang khi nhiều. Tiêu thụ tính riêng.'],
+ weeklyPrintFeedHint:['飼料例：10/12+2(13)＝10月12日、2噸、13棟；叫料即到料，實際耗料另計。','Ví dụ cám: 10/12+2(13) = ngày 12/10, 2 tấn, chuồng 13; đặt là nhận cám, tiêu thụ tính riêng.'],
  newFeedOrder:['飼料登記','Ghi nhận cám'],orderHistory:['飼料到料紀錄','Lịch sử nhận cám'],orderAmount:['到料量','Lượng cám nhận'],orderTotal:['到料合計','Tổng cám nhận'],feed_orders:['到料量','Lượng nhận cám'],
  feedSub:['叫料就是到料，日期、料桶與數量只需登記一次。','Đặt cám là nhận cám; chỉ ghi ngày, bồn và lượng một lần.'],orderMeaning:words.feedReceiptHint,quickOrderHint:words.feedReceiptHint,quick_order:['飼料到料','Nhận cám'],
  binStockHint:['以盤點基準＋已登記到料－已登記實耗計算；叫料紀錄就是到料紀錄，不必重填。帳面庫存不等於現場實測剩料。','Tính từ kiểm kê + cám nhận − tiêu thụ đã ghi. Bản ghi đặt là bản ghi nhận, không ghi lại. Tồn sổ khác số đo thực tế.'],
