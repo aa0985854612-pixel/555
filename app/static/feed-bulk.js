@@ -42,7 +42,7 @@ function loadRow(index){
 }
 function renderReview(){
  if(!review)return;const p=review.preview,chosen=Array.from($('#feed-bulk-review-body').querySelectorAll('fieldset')).map(e=>e.querySelector('input:checked')?.value||'');
- $('#feed-bulk-review-body').innerHTML=`<p><strong>${esc(p.date)} · ${p.count} ${t('feedBulkCount')} · ${amount({kg:p.total_kg})}</strong></p>`+p.rows.map((r,i)=>{
+ $('#feed-bulk-review-body').innerHTML=`<p><strong>${esc(p.date)} · ${p.count} ${t('feedBulkCount')} · ${amount({kg:p.total_kg})}</strong></p>`+(p.receipt_warnings||[]).map(code=>`<p class="note">${esc(t(code))}</p>`).join('')+p.rows.map((r,i)=>{
   const choices=r.matches.map(m=>`<label class="feed-review-option"><input type="radio" name="bulk-choice-${i}" value="${esc(m.id)}" ${m.can_update?'':'disabled'}><span>${t('feedReviewUpdate')}：${amount(m)} → ${amount(r.record)}<small>${esc(m.vendor||'—')} · ${esc(m.item||'—')}</small>${parts(m)}</span></label>`).join('');
   return `<fieldset data-bulk-review-row="${i}"><legend>${i+1}. ${esc(summary(r.record))}</legend><div class="feed-bulk-portions">${parts(r.record)}</div>${r.queue_matches.length?`<p class="note">${esc(t('feedBulkRowsDuplicate').replace('{n}',r.queue_matches.map(j=>j+1).join('、')))}</p>`:''}${r.voided_matches.length?`<p>${t('feedReviewVoid')}</p>`:''}${choices}<label class="feed-review-option"><input type="radio" name="bulk-choice-${i}" value="create" ${chosen[i]==='create'||!chosen[i]&&!r.matches.length&&!r.voided_matches.length&&!r.queue_matches.length?'checked':''}><span>${t('feedReviewAdd')}</span></label></fieldset>`;
  }).join('');

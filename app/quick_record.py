@@ -4,6 +4,7 @@ from datetime import datetime,timedelta,timezone
 from .store import Problem,encode,now
 from .domain import Invalid,day,number,herd
 from .feed import barn_number,bin_label
+from .feed_receipts import receipts,orders_are_arrivals
 from .operations import token
 from .bin_stock import stock
 
@@ -123,6 +124,8 @@ def _prepare(store,user,body,db,data):
             resolved['errors']=[]
         if resolved['errors']:return {'can_confirm':False,'parsed':resolved,'errors':resolved['errors'],'notes':resolved['notes'],'warnings':[],'batch_choices':[],'bin_choices':[]}
         day(resolved['date']);type=resolved['type']
+        if orders_are_arrivals() and type in ('order','delivery') and (not previous or kind=='feed_orders'):
+            type='order';resolved['type']='order'
         if type not in TYPES or resolved['unit'] not in ('kg','ton','heads'):raise Problem('quick_type_required')
         feed=type in ('order','delivery')
         if (resolved['unit']=='heads')==feed:raise Problem('quick_unit_mismatch')
@@ -175,19 +178,19 @@ def _prepare(store,user,body,db,data):
     store.validate_global(after)
     warnings=[];notes=list(resolved['notes']);inventory=None;inventories=[]
     if kind=='feed_orders' and batch and resolved['date']<batch['entry_date']:warnings.append('quick_preentry_order')
-    if kind=='deliveries':
+    if kind=='deliveries' or kind=='feed_orders' and orders_are_arrivals():
         binids={r.get('feed_bin_id') for r in (record,previous) if r}
         for bid in binids:
             candidate=next((b for b in data['feed_bins'] if b['id']==bid),None)
             if not candidate:continue
-            current=stock(data,candidate,today());following=stock(after,candidate,today())
+            on=max(today(),resolved['date']);current=stock(data,candidate,on);following=stock(after,candidate,on)
             change={'before':current,'after':following};inventories.append(change)
             if inventory is None or bin and candidate['id']==bin['id']:inventory=change
             if candidate.get('inventory_enabled'):
                 if resolved['date']<candidate['inventory_date']:notes.append('quick_before_inventory_baseline')
                 if not following['known']:warnings.append('quick_stock_unknown')
                 elif following['kg']<0:warnings.append('quick_stock_negative')
-                checkpoints={today(),resolved['date']}|{d['date'] for d in after['deliveries'] if d.get('feed_bin_id')==bid and resolved['date']<=d['date']<=today()}
+                checkpoints={today(),resolved['date']}|{d['date'] for d in receipts(after) if d.get('feed_bin_id')==bid and resolved['date']<=d['date']<=today()}
                 if any((s:=stock(after,candidate,on))['kg'] is not None and s['safe_capacity_kg'] is not None and s['kg']>s['safe_capacity_kg']+1e-7 for on in checkpoints):warnings.append('quick_capacity_exceeded')
             else:
                 notes.append('quick_inventory_disabled')
@@ -197,7 +200,8 @@ def _prepare(store,user,body,db,data):
     if action!='delete':
         def identity(r):return [r.get(k) for k in (('date','batch_id','type','quantity') if kind=='movements' else ('date','feed_bin_id','kg'))]
         from .feed_review import _same_scope
-        duplicates=[r['id'] for r in data[kind] if r['id']!=rid and (identity(r)==identity(record) if kind=='movements' else r['date']==record['date'] and r['kg']==record['kg'] and _same_scope(r,record,data))]
+        candidates=receipts(data) if kind in ('feed_orders','deliveries') and orders_are_arrivals() else data[kind]
+        duplicates=[r['id'] for r in candidates if r['id']!=rid and (identity(r)==identity(record) if kind=='movements' else r['date']==record['date'] and r['kg']==record['kg'] and _same_scope(r,record,data))]
         if duplicates:warnings.append('quick_possible_duplicate')
     on=max(today(),resolved['date']);impact=None
     if kind=='movements':impact={'before':herd(data['batches'],data['movements'],on,[previous['batch_id'] if action=='delete' else record['batch_id']]),'after':herd(after['batches'],after['movements'],on,[previous['batch_id'] if action=='delete' else record['batch_id']])}

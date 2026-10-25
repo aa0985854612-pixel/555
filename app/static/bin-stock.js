@@ -15,7 +15,7 @@ function usageOptions(){
 function visibility(){
  if(!data)return;
  $('#bin-stock-panel').hidden=!data.feed_bins.some(b=>b.active&&b.inventory_enabled);
- $('#delivery-results').closest('.card').hidden=!data.deliveries.length;
+ $('#delivery-results').closest('.card').hidden=!!data.feed_orders_are_arrivals||!data.deliveries.length;
 }
 function renderStock(){
  if(!latest||!data)return;$('#bin-stock-list').innerHTML=latest.bins.filter(b=>b.enabled&&data.feed_bins.some(x=>x.id===b.feed_bin_id&&x.active)).map(b=>`<article class="bin-stock-row"><div><strong>${esc(feedBinLabel(data.feed_bins.find(x=>x.id===b.feed_bin_id)))} · ${!b.enabled?t('binInventoryOff'):b.kg==null?t('binStockUnknown'):fmtFeed(b.kg/1000)+' '+t('ton')}</strong>${b.enabled?`<small>${b.baseline_date} · ${t('binStockReceived')} ${fmtFeed(b.received_kg/1000)} ${t('ton')} · ${t('binStockUsed')} ${fmtFeed(b.consumed_kg/1000)} ${t('ton')}</small><small>${t('quickSafety')} ${b.safe_capacity_kg==null?'—':fmtFeed(b.safe_capacity_kg/1000)+' '+t('ton')} (${b.safe_fill_percent}%)</small>${b.reasons.map(code=>`<small>${esc(t(code))}</small>`).join('')}`:''}</div>${me?.role==='admin'?`<button type="button" data-stock-bin="${b.feed_bin_id}">${t('binStockManage')}</button>`:''}</article>`).join('')||empty();

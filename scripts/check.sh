@@ -43,3 +43,5 @@ node --check app/static/line-feed.js
 
 node --check app/static/quick-record.js
 node --check app/static/bin-stock.js
+
+node --check app/static/feed-receipts.js

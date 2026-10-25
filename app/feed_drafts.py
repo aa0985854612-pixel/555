@@ -169,8 +169,18 @@ def _prepare(store,user,draft,db,data):
                 if same_update or (a['decision']=='create' and b['decision']=='create' and not all(draft['rows'][n]['choice']=='create' for n in (i,j))):
                     for entry in (a,b):
                         if 'feed_draft_duplicate_row' not in entry['errors']:entry['errors'].append('feed_draft_duplicate_row')
-    proof=hashlib.sha256(encode([user['id'],draft,[(r['key'],r['preview']['preview_token'] if r.get('preview') else None,r['request'],r['errors']) for r in resolved]]).encode()).hexdigest()
-    return {'id':draft['id'],'revision':draft['revision'],'rows':resolved,'preview_token':proof,'can_confirm':all(not r['errors'] for r in resolved),'count':len(resolved),'total_kg':sum(r['record']['kg'] for r in resolved if r.get('record'))}
+    from .feed_receipts import orders_are_arrivals,stock_warnings
+    receipt_warnings=[]
+    if orders_are_arrivals():
+        after=copy.deepcopy(data);changes=[]
+        for i,row in enumerate(resolved):
+            if row.get('record') and not row['errors']:
+                old=next((r for r in data['feed_orders'] if r['id']==row['request'].get('existing_id')),None)
+                after['feed_orders']=[r for r in after['feed_orders'] if not old or r['id']!=old['id']]
+                after['feed_orders'].append(row['record']|{'id':'draft-receipt-preview-'+str(i)});changes.extend([row['record'],old])
+        receipt_warnings=stock_warnings(data,after,changes)
+    proof=hashlib.sha256(encode([user['id'],draft,receipt_warnings,[(r['key'],r['preview']['preview_token'] if r.get('preview') else None,r['request'],r['errors']) for r in resolved]]).encode()).hexdigest()
+    return {'receipt_warnings':receipt_warnings,'id':draft['id'],'revision':draft['revision'],'rows':resolved,'preview_token':proof,'can_confirm':all(not r['errors'] for r in resolved),'count':len(resolved),'total_kg':sum(r['record']['kg'] for r in resolved if r.get('record'))}
 
 
 def preview_draft(store,user,rid,body):

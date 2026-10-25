@@ -3,10 +3,11 @@ import copy,hashlib,json,uuid
 from datetime import datetime,timezone,timedelta
 from .store import Problem,encode,now
 from .domain import herd,performance,consumption,combined_weights
+from .feed_receipts import receipts,orders_are_arrivals
 
 
 def token(data):
-    return hashlib.sha256(encode([(k,[(r['id'],r.get('revision',1)) for r in rows if not r.get('_source_derived')]) for k,rows in data.items()]).encode()).hexdigest()
+    return hashlib.sha256(encode([orders_are_arrivals(),[(k,[(r['id'],r.get('revision',1)) for r in rows if not r.get('_source_derived')]) for k,rows in data.items()]]).encode()).hexdigest()
 
 
 def apply_source_voids(data):
@@ -58,12 +59,12 @@ def void_preview(store,user,data,kind,rid):
         impacts['weighed_after']=combined_weights(after['weights']+[r for r in source_history(after,'weights') if r.get('batch_id')==row.get('batch_id')],row.get('batch_id'))
     if kind=='deliveries':impacts['delivery_kg_removed']=row['kg']
     if kind=='feed_orders':impacts['feed_order_kg_removed']=row['kg']
-    if kind=='usages':impacts['usage_kg_removed']=consumption(row,data['deliveries'])
+    if kind=='usages':impacts['usage_kg_removed']=consumption(row,receipts(data))
     batch=next((b for b in data['batches'] if b['id']==row.get('batch_id')),None)
     if batch:
         for label,d in [('performance_before',data),('performance_after',after)]:
             b=next(b for b in d['batches'] if b['id']==batch['id'])
-            impacts[label]=performance(b,d['batches'],d['movements'],d['weights']+[w for w in source_history(d,'weights') if w.get('batch_id')==b['id']],d['usages'],d['deliveries'],on)
+            impacts[label]=performance(b,d['batches'],d['movements'],d['weights']+[w for w in source_history(d,'weights') if w.get('batch_id')==b['id']],d['usages'],receipts(d),on)
     return {'record':row,'source':source,'preview_token':token(data),'impact':impacts}
 
 

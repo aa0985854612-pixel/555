@@ -1,7 +1,8 @@
 """Order-based feed/gain proxy. Never substitutes for measured consumption FCR."""
 from datetime import timedelta
 from .domain import day, herd
-from .feed import order_scope, bin_label
+from .feed import order_scope, order_bin_label
+from .feed_receipts import receipts,orders_are_arrivals
 
 
 def period_headcount(data, batch, start, end):
@@ -62,7 +63,7 @@ def order_fcr_estimate(data, batch, first, last):
                   gain_per_pig=last['mean']-first['mean'])
     result.update(period_headcount(data, batch, start, end))
     # Half-open, like the actual FCR interval: start morning to end morning.
-    for order in sorted(data.get('feed_orders', []), key=lambda o:(o['date'], o['id'])):
+    for order in sorted((receipts(data) if orders_are_arrivals() else data.get('feed_orders', [])), key=lambda o:(o['date'], o['id'])):
         if not start <= order['date'] < end:
             continue
         scope = order_scope(order, data, {batch['id']})
@@ -70,7 +71,7 @@ def order_fcr_estimate(data, batch, first, last):
             continue
         result['orders'].append(dict(id=order['id'], date=order['date'], kg=scope['kg'],
             bin_total_kg=order['kg'], state=scope['state'], vendor=order.get('vendor',''),
-            bin=bin_label(order['feed_bin_snapshot']) if order.get('feed_bin_id') else ''))
+            bin=order_bin_label(order['feed_bin_snapshot']) if order.get('feed_bin_id') else ''))
     result['order_count'] = len(result['orders'])
     result['known_order_kg'] = sum(o['kg'] or 0 for o in result['orders'])
     if not result['orders']:

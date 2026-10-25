@@ -8,6 +8,7 @@ from datetime import date,datetime,timezone,timedelta
 from .store import Store, Problem, VERSION, KINDS, encode, verify_password, validate_password
 from .domain import herd, age, combined_weights, consumption, performance, day, Invalid
 from .history import source_history,source_rows,cohort_key
+from .feed_receipts import receipts,orders_are_arrivals
 
 STATIC=Path(__file__).parent/'static'
 
@@ -58,6 +59,8 @@ def legacy_history_rows(data):
 
 
 def statistics(data,query):
+    from .feed_receipts import receipts
+    received=receipts(data)
     get=lambda k:query.get(k,[''])[0]
     until=get('to') or datetime.now(timezone(timedelta(hours=8))).date().isoformat();start=get('from')
     ids=selected_ids(data,query)
@@ -115,7 +118,7 @@ def statistics(data,query):
             stats['known_interval']=dict(delta)
             stats['interval']={key:(None if key in missing or (not scoped and supported and until<min(supported)) else value) for key,value in delta.items()}
     scoped=any(get(k) for k in ('batch_id','barn_id','group','cohort'))
-    deliveries=[d for d in data['deliveries'] if d['date']<=until and (not start or d['date']>=start)]
+    deliveries=[d for d in received if d['date']<=until and (not start or d['date']>=start)]
     from .bin_stock import delivery_scope
     arrival_values=[delivery_scope(d,data,chosen if scoped else None) for d in deliveries]
     arrival_values=[v for v in arrival_values if v['related']]
@@ -130,7 +133,7 @@ def statistics(data,query):
     stats['unallocated_kg']=sum(d['kg'] for d in deliveries if not d['allocations'])
     uses=[u for u in data['usages'] if u['active'] and u['batch_id'] in chosen and u['end']<=next_day(until) and (not start or u['start']>=start)]
     excluded=[u for u in data['usages'] if u['active'] and u['batch_id'] in chosen and u['start']<=until and u['end']>(start or '0001-01-01') and u not in uses]
-    values=[consumption(u,data['deliveries']) for u in uses]
+    values=[consumption(u,received) for u in uses]
     stats['consumption_kg']=sum(values) if values and all(v is not None and v>=0 for v in values) else None
     stats['usage_count']=len(uses);stats['excluded_usage_count']=len(excluded)
     stats['negative_usage']=any(v is not None and v<0 for v in values)
@@ -139,7 +142,7 @@ def statistics(data,query):
     for b in data['batches']:
         if b['id'] not in chosen or b['entry_date']>until:continue
         source_weights=[w for w in source_history(data,'weights') if w.get('batch_id')==b['id'] and not w.get('archive')]
-        p=performance(b,data['batches'],data['movements'],data['weights']+source_weights,data['usages'],data['deliveries'],until,start,until)
+        p=performance(b,data['batches'],data['movements'],data['weights']+source_weights,data['usages'],received,until,start,until)
         if p.get('first') and any(r.get('date') and p['first']['date']<=r['date']<=p['last']['date'] and b['id'] in r.get('legacy_members',[]) for r in source_history(data)):
             p['composition_changed']=True
         perfs.append(p)
@@ -233,6 +236,7 @@ def next_day(s):
 
 
 def client_snapshot(snapshot,cursor):
+    from .feed_receipts import receipts,orders_are_arrivals
     dashboard=statistics(snapshot,{'summary':['1']})
     cohorts={cohort_key(b):{'key':cohort_key(b),'name':b['name'],'entry_date':b['entry_date'],'archive':False} for b in sorted(snapshot['batches'],key=lambda b:b['entry_date'],reverse=True)}
     for source in source_rows(snapshot,archives=True):
@@ -243,7 +247,7 @@ def client_snapshot(snapshot,cursor):
             row=next((x['row'] for x in source_rows(snapshot,archives=True) if cohort_key(x['row'])==key),None)
             c['barns']=[str(n)+'棟' for n in row['barns']] if row else []
     from .review import daily_review, data_quality
-    return snapshot|{'daily_review':daily_review(snapshot,dashboard['as_of']),'data_quality':data_quality(snapshot,dashboard['as_of'],dashboard), 'cohorts':list(cohorts.values()),'dashboard':dashboard,'version':VERSION,'cursor':cursor,
+    return snapshot|{'feed_orders_are_arrivals':orders_are_arrivals(),'feed_receipts':receipts(snapshot),'daily_review':daily_review(snapshot,dashboard['as_of']),'data_quality':data_quality(snapshot,dashboard['as_of'],dashboard), 'cohorts':list(cohorts.values()),'dashboard':dashboard,'version':VERSION,'cursor':cursor,
         'workbooks':[{k:b.get(k) for k in ('id','revision','filename','sha256','base_book_id','pending_cohorts')}|{'as_of':b['report']['as_of']} for b in snapshot['workbooks']]}
 
 
@@ -587,7 +591,7 @@ class Handler(BaseHTTPRequestHandler):
                 for r in rows:
                     batch=batches.get(r.get('batch_id'),{})
                     if kind=='feed_orders' and len(r['allocations'])==1:batch=batches.get(r['allocations'][0]['batch_id'],{})
-                    q=consumption(r,data['deliveries']) if kind=='usages' else r.get('quantity',r.get('kg',r.get('total_kg','')))
+                    q=consumption(r,receipts(data)) if kind=='usages' else r.get('quantity',r.get('kg',r.get('total_kg','')))
                     mean=(r.get('mean_kg') if r.get('source_mean') else r['total_kg']/r['count']) if kind=='weights' else ''
                     values=[r['id'],r['revision'],r.get('date',r.get('start','')),r.get('end',''),barns.get(batch.get('barn_id') or r.get('barn_id'),r.get('barn_number') or ''),batch.get('name',r.get('legacy_batch','')),r.get('type',r.get('method','sample' if kind=='weights' else 'feed_order' if kind=='feed_orders' else 'delivery')),q,'heads' if kind=='movements' else 'kg',mean,r.get('age_days',''),r.get('vendor',''),r.get('item',''),r.get('note',''),encode(r.get('allocations',[])),('active' if r['active'] else 'excluded') if kind=='usages' else '',r.get('count',''),encode(r.get('individual_kg',[])),r.get('pen',''),sum(a['kg'] for a in r.get('allocations',[]) if a['batch_id'] in set(selected_ids(data,query))) ,'source_mean' if r.get('source_mean') else 'legacy_excel_readonly' if r.get('legacy_source') else r.get('method','recorded'),r.get('source_cell',''),r.get('section',''),r.get('session_id',''),r.get('session_number','')]
                     if kind=='feed_orders' and r.get('feed_bin_id'):
@@ -609,6 +613,9 @@ class Handler(BaseHTTPRequestHandler):
                 if (method=='POST' and not rid) or (method in ('PUT','DELETE') and rid):
                     if method=='DELETE':
                         store.require(user,True);raise Problem('void_preview_required')
+                    if orders_are_arrivals() and kind in ('deliveries','feed_orders'):store.require(user)
+                    if orders_are_arrivals() and kind=='deliveries' and method=='POST':raise Problem('feed_receipt_use_order',409)
+                    if orders_are_arrivals() and kind=='feed_orders':raise Problem('feed_receipt_review_required',409)
                     result=store.mutate(user,kind,self.body(),self.headers.get('Idempotency-Key'),rid,method=='DELETE',return_snapshot=True)
                     if '_snapshot' in result:
                         snapshot=result.pop('_snapshot');sequence=result.pop('_sequence')

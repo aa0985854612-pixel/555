@@ -1,6 +1,7 @@
 """Review incoming feed quantities against history before an atomic write."""
 import copy,hashlib,json,uuid
 from .store import Problem,encode,now
+from .feed_receipts import orders_are_arrivals,stock_warnings
 
 
 def _same_scope(a,b,data):
@@ -35,8 +36,19 @@ def _preview(store,user,body,db,data,deleted_rows=None):
     linked=set(incoming.get('target_batch_ids',[]))|{a['batch_id'] for a in incoming.get('allocations',[])}
     for r in matches:linked.update(r.get('target_batch_ids',[]));linked.update(a['batch_id'] for a in r.get('allocations',[]))
     state=[[(r['id'],r['revision']) for r in matches],[(r['id'],r['revision']) for r in data['feed_bins'] if r['id'] in bins],[(r['id'],r['revision']) for r in data['batches'] if r['id'] in linked]]
-    proof=hashlib.sha256(encode([user['id'],incoming,rid,state,[(r['id'],r['revision']) for r in deleted]]).encode()).hexdigest()
-    return {'record':incoming,'rid':rid,'preview_token':proof,'matches':[r|{'can_update':user['role']=='admin' or r.get('created_by')==user['id']} for r in matches],
+    warnings=[]
+    if orders_are_arrivals():
+        from .operations import token
+        state.append(token(data))
+        after=copy.deepcopy(data);old=previous or (matches[0] if len(matches)==1 else None)
+        after['feed_orders']=[r for r in after['feed_orders'] if not old or r['id']!=old['id']]+[incoming|{'id':'receipt-preview'}]
+        warnings=stock_warnings(data,after,[incoming,old])
+        if old and not rid:
+            added=copy.deepcopy(data);added['feed_orders'].append(incoming|{'id':'receipt-add-preview'})
+            if 'quick_capacity_exceeded' in stock_warnings(data,added,[incoming]) and 'quick_capacity_exceeded' not in warnings:
+                warnings.append('feed_receipt_possible_capacity')
+    proof=hashlib.sha256(encode([orders_are_arrivals(),user['id'],incoming,rid,state,[(r['id'],r['revision']) for r in deleted]]).encode()).hexdigest()
+    return {'receipt_warnings':warnings,'record':incoming,'rid':rid,'preview_token':proof,'matches':[r|{'can_update':user['role']=='admin' or r.get('created_by')==user['id']} for r in matches],
             'voided_matches':[{'id':r['id'],'date':r['date'],'kg':r['kg'],'vendor':r.get('vendor',''),'item':r.get('item','')} for r in deleted]}
 
 
@@ -103,8 +115,23 @@ def _bulk_preview(store,user,body,db,data):
         if not isinstance(row,dict) or not isinstance(row.get('record'),dict) or row['record'].get('date')!=body['date']:raise Problem('invalid_feed_bulk')
         previews.append(_preview(store,user,row,db,data,deleted))
     for i,p in enumerate(previews):p['queue_matches']=[j for j,other in enumerate(previews) if j!=i and _same_scope(p['record'],other['record'],data)]
-    proof=hashlib.sha256(encode([user['id'],body['date'],[(p['preview_token'],p['queue_matches']) for p in previews]]).encode()).hexdigest()
-    return {'date':body['date'],'rows':previews,'preview_token':proof,'count':len(previews),'total_kg':sum(p['record']['kg'] for p in previews)}
+    warnings=[]
+    if orders_are_arrivals():
+        after=copy.deepcopy(data);changes=[]
+        for i,p in enumerate(previews):
+            old=next((r for r in p['matches'] if r['id']==p['rid']),None) if p['rid'] else (p['matches'][0] if len(p['matches'])==1 else None)
+            after['feed_orders']=[r for r in after['feed_orders'] if not old or r['id']!=old['id']]
+            after['feed_orders'].append(p['record']|{'id':'bulk-receipt-preview-'+str(i)});changes.extend([p['record'],old])
+        warnings=stock_warnings(data,after,changes)
+        if any(p['matches'] and not p['rid'] for p in previews):
+            added=copy.deepcopy(data)
+            for i,p in enumerate(previews):
+                if p['rid']:added['feed_orders']=[r for r in added['feed_orders'] if r['id']!=p['rid']]
+                added['feed_orders'].append(p['record']|{'id':'bulk-add-preview-'+str(i)})
+            if 'quick_capacity_exceeded' in stock_warnings(data,added,changes) and 'quick_capacity_exceeded' not in warnings:
+                warnings.append('feed_receipt_possible_capacity')
+    proof=hashlib.sha256(encode([user['id'],body['date'],warnings,[(p['preview_token'],p['queue_matches']) for p in previews]]).encode()).hexdigest()
+    return {'receipt_warnings':warnings,'date':body['date'],'rows':previews,'preview_token':proof,'count':len(previews),'total_kg':sum(p['record']['kg'] for p in previews)}
 
 
 def preview_feed_bulk(store,user,body):
