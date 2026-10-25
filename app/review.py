@@ -96,8 +96,9 @@ def data_quality(data, on, dashboard=None, apply_completions=True):
         for c in book.get('pending_cohorts',[]):
             if c.get('decision')=='keep_app':continue
             issues.append({'id':'conflict:'+book['id']+':'+c['cohort'],'kind':'workbooks','fields':['source_conflict'],'name':c.get('cohort',''),'source_cell':book['filename']})
+    from .feed_allocation import automatic_allocation
     for o in data.get('feed_orders',[]):
-        if not o['allocations'] and (not o.get('feed_bin_id') or len(o.get('target_batch_ids',[]))!=len(o['feed_bin_snapshot']['barn_ids'])):issues.append({'id':'order:'+o['id'],'kind':'feed_orders','fields':['unassigned_feed'],'date':o['date'],'name':o.get('note',''),'record_id':o['id']})
+        if not automatic_allocation(o,data) and not o['allocations'] and (not o.get('feed_bin_id') or len(o.get('target_batch_ids',[]))!=len(o['feed_bin_snapshot']['barn_ids'])):issues.append({'id':'order:'+o['id'],'kind':'feed_orders','fields':['unassigned_feed'],'date':o['date'],'name':o.get('note',''),'record_id':o['id']})
     completed=0
     if apply_completions:
         accepted={(item['id'],tuple(sorted(item['fields'])))

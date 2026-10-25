@@ -47,8 +47,10 @@ def _preview(store,user,body,db,data,deleted_rows=None):
             added=copy.deepcopy(data);added['feed_orders'].append(incoming|{'id':'receipt-add-preview'})
             if 'quick_capacity_exceeded' in stock_warnings(data,added,[incoming]) and 'quick_capacity_exceeded' not in warnings:
                 warnings.append('feed_receipt_possible_capacity')
-    proof=hashlib.sha256(encode([orders_are_arrivals(),user['id'],incoming,rid,state,[(r['id'],r['revision']) for r in deleted]]).encode()).hexdigest()
-    return {'receipt_warnings':warnings,'record':incoming,'rid':rid,'preview_token':proof,'matches':[r|{'can_update':user['role']=='admin' or r.get('created_by')==user['id']} for r in matches],
+    from .feed_allocation import automatic_allocation,allocation_policy
+    plan=automatic_allocation(incoming,data)
+    proof=hashlib.sha256(encode([allocation_policy(),plan,orders_are_arrivals(),user['id'],incoming,rid,state,[(r['id'],r['revision']) for r in deleted]]).encode()).hexdigest()
+    return {'automatic_allocation':plan,'receipt_warnings':warnings,'record':incoming,'rid':rid,'preview_token':proof,'matches':[r|{'can_update':user['role']=='admin' or r.get('created_by')==user['id']} for r in matches],
             'voided_matches':[{'id':r['id'],'date':r['date'],'kg':r['kg'],'vendor':r.get('vendor',''),'item':r.get('item','')} for r in deleted]}
 
 

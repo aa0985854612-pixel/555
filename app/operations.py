@@ -7,7 +7,8 @@ from .feed_receipts import receipts,orders_are_arrivals
 
 
 def token(data):
-    return hashlib.sha256(encode([orders_are_arrivals(),[(k,[(r['id'],r.get('revision',1)) for r in rows if not r.get('_source_derived')]) for k,rows in data.items()]]).encode()).hexdigest()
+    from .feed_allocation import allocation_policy
+    return hashlib.sha256(encode([allocation_policy(),orders_are_arrivals(),[(k,[(r['id'],r.get('revision',1)) for r in rows if not r.get('_source_derived')]) for k,rows in data.items()]]).encode()).hexdigest()
 
 
 def apply_source_voids(data):

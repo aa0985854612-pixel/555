@@ -31,7 +31,16 @@ def validate_bin_allocations(rows,total,targets,barn_ids,batches):
 
 
 def report_order_parts(order,data,selected):
-    """Separate confirmed portions so each arrival date retains pre-entry status."""
+    """Separate portions across reports while preserving each original physical-bin total."""
+    from .feed_allocation import automatic_allocation
+    plan=automatic_allocation(order,data)
+    if plan:
+        order=order|{'bin_allocations':plan['allocations'],'allocation_basis':plan['basis']}
+        ids={r['batch_id'] for r in plan['allocations']};batches={b['id']:b for b in data['batches']}
+        before={order['date']<batches[rid]['entry_date'] for rid in ids}
+        # A report covering the whole bin prints that physical order once.
+        # Mixed pre-entry dates must still retain their separate portions.
+        if ids<=set(selected) and len(before)==1:return [order|{'target_batch_ids':[r['batch_id'] for r in plan['allocations']]}]
     rows=order.get('bin_allocations',[])
     if not rows:return [order]
     return [order|{'kg':r['kg'],'bin_total_kg':order['kg'],'bin_allocations':[r],'target_batch_ids':[r['batch_id']]} for r in rows if r['batch_id'] in selected]
@@ -60,9 +69,12 @@ def order_scope(order, data, selected=None):
     """A bin total belongs once to its full identified scope, never split by guess."""
     if selected is None:return {'related':True,'kg':order['kg'],'state':'farm_total'}
     chosen=set(selected)
+    from .feed_allocation import automatic_allocation
+    plan=automatic_allocation(order,data)
+    if plan:order=order|{'bin_allocations':plan['allocations'],'allocation_basis':plan['basis']}
     if order.get('bin_allocations'):
         kg=sum(a['kg'] for a in order['bin_allocations'] if a['batch_id'] in chosen)
-        return {'related':bool(kg),'kg':kg,'state':'allocated' if kg else 'unassigned','batch_ids':[a['batch_id'] for a in order['bin_allocations'] if a['batch_id'] in chosen]}
+        return {'related':bool(kg),'kg':kg,'state':order.get('allocation_basis','allocated') if kg else 'unassigned','batch_ids':[a['batch_id'] for a in order['bin_allocations'] if a['batch_id'] in chosen]}
     if not order.get('feed_bin_id'):
         kg=sum(a['kg'] for a in order.get('allocations',[]) if a['batch_id'] in chosen)
         return {'related':bool(kg),'kg':kg,'state':'allocated' if kg else 'unassigned'}
@@ -79,7 +91,7 @@ def order_detail(order, data, batch_id=None):
     if order.get('feed_bin_id'):
         snap=order['feed_bin_snapshot'];label=order_bin_label(snap);assigned=order.get('bin_allocations',[])
         return {'id':order['id'],'date':order['date'],'batch_id':assigned[0]['batch_id'] if len(assigned)==1 else None,'barn':'、'.join(barns[batches[a['batch_id']]['barn_id']] for a in assigned) if assigned else '、'.join(snap['barn_names']),
-            'bin':label,'bin_label':label,'kg':order['kg'],'vendor':order['vendor'],'item':order['item'],'target_batch_ids':order['target_batch_ids'],'bin_total_kg':order.get('bin_total_kg',order['kg'])}
+            'bin':label,'bin_label':label,'kg':order['kg'],'vendor':order['vendor'],'item':order['item'],'target_batch_ids':order['target_batch_ids'],'bin_total_kg':order.get('bin_total_kg',order['kg']),'allocation_basis':order.get('allocation_basis','confirmed' if assigned else 'bin_total')}
     a=next(a for a in order['allocations'] if a['batch_id']==batch_id)
     return {'id':order['id'],'date':order['date'],'batch_id':batch_id,'barn':barns[batches[batch_id]['barn_id']],'kg':a['kg'],'vendor':order.get('vendor',''),'item':order.get('item','')}
 

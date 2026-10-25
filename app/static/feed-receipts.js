@@ -2,6 +2,7 @@
 /* One farm ledger: received quantities are derived from original orders by date. */
 (() => {
 Object.assign(words,{
+ feedAutoHeadcount:['依登記日各棟存欄比例自動分攤','Tự phân bổ theo tỷ lệ đàn từng chuồng tại ngày ghi'],feedAutoEqual:['依各棟自動平均分攤','Tự chia đều cho từng chuồng'],feedAutoManual:['可選填已確認的各棟分量，取代自動分攤。','Có thể nhập lượng từng chuồng đã xác nhận để thay phân bổ tự động.'],
  feedReceiptScheduled:['預定到料','Dự kiến nhận cám'],
  feed_receipt_possible_capacity:['若選擇「另外新增」，會超過料桶安全容量；請核對應新增還是更正原筆。','Nếu thêm lần khác sẽ vượt sức chứa an toàn; kiểm tra cần thêm hay sửa bản cũ.'],
  feedReceiptHint:['叫料就是到料，只登記一次。依紀錄日期計入到料與庫存；未來日期尚未計入目前庫存。實際耗料另行登記。','Đặt cám là nhận cám, chỉ ghi một lần. Tính nhập và tồn theo ngày ghi; ngày tương lai chưa cộng tồn hiện tại. Tiêu thụ thực tế ghi riêng.'],
@@ -22,7 +23,19 @@ const policyWords={
 };
 const original=Object.fromEntries(Object.keys(policyWords).map(k=>[k,words[k]]));
 const base={selections,translate,statHTML};
-function labels(){const values=data?.feed_orders_are_arrivals?policyWords:original;for(const [k,v] of Object.entries(values))if(v)words[k]=v;}
+const manualHints={feedSharedHint:words.feedSharedHint,feedSplitHint:words.feedSplitHint};
+window.feedAllocationHTML=(plan,ids=null)=>!plan?'':`<div class="feed-auto-allocation"><p class="hint">${t(plan.basis==='auto_equal'?'feedAutoEqual':'feedAutoHeadcount')}</p>${plan.allocations.filter(a=>!ids||ids.includes(a.batch_id)).map(a=>`<p class="feed-portion-summary">${esc(feedBatchScope(a.batch_id))}：${fmtFeed(a.kg/1000)} ${t('ton')}</p>`).join('')}</div>`;
+function labels(){
+ const values=data?.feed_orders_are_arrivals?policyWords:original;for(const [k,v] of Object.entries(values))if(v)words[k]=v;
+ Object.assign(words,manualHints);
+ if(data?.feed_auto_allocation){
+  const key=data.feed_auto_allocation==='equal'?'feedAutoEqual':'feedAutoHeadcount';
+  words.feedSharedHint=words[key];words.feedSplitHint=words.feedAutoManual;
+  const rule=words[key];
+  words.weeklyFeedBasis=[rule[0]+'；人工已確認的分量優先保留，整桶量只計一次。分攤的是到料量，實際耗料另計。',rule[1]+'. Giữ lượng đã xác nhận; cả bồn chỉ tính một lần. Đây là lượng cám nhận, không phải tiêu thụ.'];
+  words.weeklyPDFLegend=['空白＝未登記或資料待補。'+rule[0]+'；人工確認量優先，整桶不重複加算。全部登記含未來日期，實際耗料另計。','Trống = chưa ghi hoặc thiếu dữ liệu. '+rule[1]+'. Giữ lượng đã xác nhận, không cộng trùng bồn. Hiện cả ngày tương lai; tiêu thụ tính riêng.'];
+ }
+}
 selections=(force=false)=>{labels();base.selections(force);base.translate();};
 translate=()=>{labels();base.translate();};
 statHTML=s=>{const html=base.statHTML(s);if(!data?.feed_orders_are_arrivals)return html;return html.replace(`<div>${t('orderTotal')}<strong>${fmt(s.feed_order_kg)}</strong></div>`,'');};

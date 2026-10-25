@@ -38,7 +38,8 @@ def filter_rows(kind,data,query):
             from .bin_stock import delivery_scope
             attribution=(order_scope if kind=='feed_orders' else delivery_scope)(r,data,ids if scoped else None)
             if scoped and not attribution['related']:continue
-            r=r|{'scope_attribution':attribution}
+            from .feed_allocation import automatic_allocation
+            r=r|{'scope_attribution':attribution,'automatic_allocation':automatic_allocation(r,data)}
         elif kind in ('deliveries','feed_orders'):
             if scoped and not any(a['batch_id'] in ids for a in r['allocations']):continue
         elif kind=='batches':
@@ -130,7 +131,8 @@ def statistics(data,query):
     order_values=[v for v in order_values if v['related']]
     stats['feed_order_known_kg']=sum(v['kg'] or 0 for v in order_values)
     stats['feed_order_kg']=None if any(v['kg'] is None for v in order_values) else stats['feed_order_known_kg']
-    stats['unallocated_kg']=sum(d['kg'] for d in deliveries if not d['allocations'])
+    from .feed_allocation import automatic_allocation
+    stats['unallocated_kg']=sum(d['kg'] for d in deliveries if not d['allocations'] and not automatic_allocation(d,data))
     uses=[u for u in data['usages'] if u['active'] and u['batch_id'] in chosen and u['end']<=next_day(until) and (not start or u['start']>=start)]
     excluded=[u for u in data['usages'] if u['active'] and u['batch_id'] in chosen and u['start']<=until and u['end']>(start or '0001-01-01') and u not in uses]
     values=[consumption(u,received) for u in uses]
@@ -247,7 +249,8 @@ def client_snapshot(snapshot,cursor):
             row=next((x['row'] for x in source_rows(snapshot,archives=True) if cohort_key(x['row'])==key),None)
             c['barns']=[str(n)+'棟' for n in row['barns']] if row else []
     from .review import daily_review, data_quality
-    return snapshot|{'feed_orders_are_arrivals':orders_are_arrivals(),'feed_receipts':receipts(snapshot),'daily_review':daily_review(snapshot,dashboard['as_of']),'data_quality':data_quality(snapshot,dashboard['as_of'],dashboard), 'cohorts':list(cohorts.values()),'dashboard':dashboard,'version':VERSION,'cursor':cursor,
+    from .feed_allocation import allocation_policy
+    return snapshot|{'feed_auto_allocation':allocation_policy(),'feed_orders_are_arrivals':orders_are_arrivals(),'feed_receipts':receipts(snapshot),'daily_review':daily_review(snapshot,dashboard['as_of']),'data_quality':data_quality(snapshot,dashboard['as_of'],dashboard), 'cohorts':list(cohorts.values()),'dashboard':dashboard,'version':VERSION,'cursor':cursor,
         'workbooks':[{k:b.get(k) for k in ('id','revision','filename','sha256','base_book_id','pending_cohorts')}|{'as_of':b['report']['as_of']} for b in snapshot['workbooks']]}
 
 
@@ -599,7 +602,8 @@ class Handler(BaseHTTPRequestHandler):
                         scoped=any(query.get(k,[''])[0] for k in ('batch_id','barn_id','group','cohort'))
                         attribution=order_scope(r,data,selected_ids(data,query) if scoped else None)
                         values[4]='、'.join(r['feed_bin_snapshot']['barn_names']);values[5]='、'.join(batches[x]['name'] for x in r['target_batch_ids']);values[19]=attribution['kg']
-                        values[14]=encode(r.get('bin_allocations') or r.get('allocations',[]))
+                        values[14]=encode(r.get('bin_allocations') or (r.get('automatic_allocation') or {}).get('allocations') or r.get('allocations',[]))
+                        if r.get('automatic_allocation'):values[20]=r['automatic_allocation']['basis']
                         values.extend([bin_label(r['feed_bin_snapshot']),'、'.join(r['feed_bin_snapshot']['barn_names']),encode(r['target_batch_ids']),attribution['state']])
                     else:values.extend(['','','',''])
                     values.extend([r.get('outgoing_destination',''),r.get('outgoing_trip','')])
