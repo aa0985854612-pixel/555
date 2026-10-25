@@ -14,7 +14,8 @@ Object.assign(words,{weeklyPlanned:['週期預排至32週；所選日期以外�
 Object.assign(words,{weeklyShippingMore:['另有{n}筆出豬備註，完整內容詳CSV。','Còn {n} ghi chú xuất heo; xem đầy đủ trong CSV.']});
 Object.assign(words,{weeklyPaperSale:['正常出豬','Xuất bán'],weeklyPaperCull:['淘汰數（隻）','Loại (con)'],weeklyPaperDeath:['死亡數（隻）','Chết (con)'],weeklyPaperStart:['起始日','Ngày đầu']});
 Object.assign(words,{
- weeklyBasis:['選棟舍，自動帶出批次；列出全部已登記資料，包含未來日期。','Chọn chuồng để tự chọn lứa; hiện mọi bản ghi đã lưu, kể cả ngày tương lai.'],
+ weeklyBatch:['批號','Mã lứa'],
+ weeklyBasis:['先選批號，再選棟舍；列出全部已登記資料，包含未來日期。','Chọn mã lứa trước, rồi chọn chuồng; hiện mọi bản ghi đã lưu, kể cả ngày tương lai.'],
  weeklyTotal:['全部登記合計','Tổng mọi bản ghi'],
  weeklyPaperPeriod:['每7天一欄，列出全部登記（含未來日期）。','Mỗi cột 7 ngày; hiện mọi bản ghi, kể cả ngày tương lai.'],
  weeklyPlanned:['空白週欄保留至32週；有登記就會顯示。','Giữ cột trống đến tuần 32; có bản ghi thì hiển thị.'],
@@ -41,18 +42,21 @@ function label(key,n){return t(key).replace('{n}',n);}
 function resetPrint(){if(title!==null){document.title=title;title=null;}printing=false;el('weekly-print-root')?.replaceChildren();el('weekly-print-root')?.classList.remove('weekly-rendered-pages');}
 function chosen(){return data?.batches.find(b=>(b._cohort_key||b.name+'|'+b.entry_date)===el('weekly-cohort').value);}
 function syncCohorts(preferred=el('weekly-cohort').value){
- const barn=el('weekly-barn').value,keys=new Set(data.batches.filter(b=>!barn||b.barn_id===barn).map(b=>b._cohort_key||b.name+'|'+b.entry_date));
- const cohorts=(data.cohorts||[]).filter(c=>!c.archive&&keys.has(c.key)).sort((a,b)=>b.entry_date.localeCompare(a.entry_date)||b.name.localeCompare(a.name));
- el('weekly-cohort').innerHTML=cohorts.map(c=>`<option value="${safe(c.key)}">${safe(c.name)} · ${safe(c.entry_date)}</option>`).join('');
+ const cohorts=(data.cohorts||[]).filter(c=>!c.archive).sort((a,b)=>b.entry_date.localeCompare(a.entry_date)||b.name.localeCompare(a.name));
+ el('weekly-cohort').innerHTML=cohorts.map(c=>`<option value="${safe(c.key)}">${safe(c.name)}｜${safe(c.barns.join('、'))}</option>`).join('');
  if(cohorts.some(c=>c.key===preferred))el('weekly-cohort').value=preferred;
+}
+function syncBarns(preferred=''){
+ const key=el('weekly-cohort').value,ids=new Set(data.batches.filter(b=>(b._cohort_key||b.name+'|'+b.entry_date)===key).map(b=>b.barn_id));
+ const barns=data.barns.filter(b=>ids.has(b.id)).sort((a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true}));
+ el('weekly-barn').innerHTML=`<option value="">${t('weeklyAllBarns')}</option>`+barns.map(b=>`<option value="${safe(b.id)}">${safe(b.name)}</option>`).join('');
+ if(ids.has(preferred))el('weekly-barn').value=preferred;
 }
 function openWeekly(){
  if(!data)return;serial++;clearPDF();report=null;el('weekly-sheet-body').replaceChildren();el('weekly-export-actions').hidden=true;el('weekly-error').textContent='';
  const f=current==='daily'?el('movement-form'):el('stats-filter'),b=data.batches.find(b=>b.id===val(f,'batch_id'));
- const barns=data.barns.filter(barn=>data.batches.some(b=>b.barn_id===barn.id)).sort((a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true}));
- el('weekly-barn').innerHTML=`<option value="">${t('weeklyAllBarns')}</option>`+barns.map(barn=>`<option value="${safe(barn.id)}">${safe(barn.name)}</option>`).join('');
- el('weekly-barn').value=val(f,'barn_id')||b?.barn_id||barns[0]?.id||'';
  syncCohorts(val(f,'cohort')||(b?(b._cohort_key||b.name+'|'+b.entry_date):''));
+ syncBarns(val(f,'barn_id')||b?.barn_id||'');
  const d=el('weekly-report-dialog');if(!d.open)d.showModal();d.scrollTop=0;
  if(chosen())generate({preventDefault(){}});
 }
@@ -204,14 +208,14 @@ function csvSheet(){
 build=()=>{
  base.build();el('stats-filter').closest('.card').insertAdjacentHTML('beforeend',`<div class="weekly-entry"><button type="button" id="open-weekly-report">${txt('weeklyOpen')}</button><p class="hint">${txt('weeklyBasis')}</p></div>`);
  el('movement-form').insertAdjacentHTML('afterend',`<div class="weekly-entry"><button type="button" id="open-daily-weekly-report">${txt('weeklyOpen')}</button></div>`);
- document.body.insertAdjacentHTML('beforeend',`<dialog id="weekly-report-dialog" aria-labelledby="weekly-title"><div class="weekly-toolbar"><div class="section-row"><h2 id="weekly-title">${txt('weeklyReport')}</h2><button type="button" id="weekly-close">${txt('reportClose')}</button></div><form id="weekly-report-form"><div class="grid"><label>${txt('barn')}<select id="weekly-barn"></select></label><label>${txt('batch')}<select id="weekly-cohort" required></select></label></div><p class="hint">${txt('weeklyBasis')}</p><button type="submit" id="weekly-generate" class="primary">${txt('weeklyMake')}</button><p id="weekly-error" role="status"></p></form><div id="weekly-export-actions" class="actions" hidden><button type="button" id="weekly-print" class="primary">${txt('weeklyDownloadPDF')}</button><button type="button" id="weekly-browser-print">${txt('weeklyBrowserPrint')}</button><button type="button" id="weekly-csv">${txt('reportCSV')}</button></div></div><p class="weekly-export-hint hint">${txt('weeklyPDFHint')}</p><div id="weekly-a4-preview" aria-live="polite"></div><div id="weekly-sheet-body"></div></dialog><div id="weekly-print-root"></div>`);
- el('open-weekly-report').onclick=openWeekly;el('weekly-barn').onchange=()=>syncCohorts(el('weekly-barn').value?'':el('weekly-cohort').value);el('weekly-report-form').onsubmit=generate;el('weekly-print').onclick=downloadPDF;el('weekly-browser-print').onclick=printSheet;el('weekly-csv').onclick=csvSheet;el('weekly-close').onclick=()=>el('weekly-report-dialog').close();el('weekly-report-dialog').addEventListener('close',()=>{serial++;clearPDF();report=null;reportUser=null;el('weekly-generate').disabled=false;resetPrint();});
+ document.body.insertAdjacentHTML('beforeend',`<dialog id="weekly-report-dialog" aria-labelledby="weekly-title"><div class="weekly-toolbar"><div class="section-row"><h2 id="weekly-title">${txt('weeklyReport')}</h2><button type="button" id="weekly-close">${txt('reportClose')}</button></div><form id="weekly-report-form"><div class="grid"><label>${txt('weeklyBatch')}<select id="weekly-cohort" required></select></label><label>${txt('barn')}<select id="weekly-barn"></select></label></div><p class="hint">${txt('weeklyBasis')}</p><button type="submit" id="weekly-generate" class="primary">${txt('weeklyMake')}</button><p id="weekly-error" role="status"></p></form><div id="weekly-export-actions" class="actions" hidden><button type="button" id="weekly-print" class="primary">${txt('weeklyDownloadPDF')}</button><button type="button" id="weekly-browser-print">${txt('weeklyBrowserPrint')}</button><button type="button" id="weekly-csv">${txt('reportCSV')}</button></div></div><p class="weekly-export-hint hint">${txt('weeklyPDFHint')}</p><div id="weekly-a4-preview" aria-live="polite"></div><div id="weekly-sheet-body"></div></dialog><div id="weekly-print-root"></div>`);
+ el('open-weekly-report').onclick=openWeekly;el('weekly-cohort').onchange=()=>syncBarns();el('weekly-report-form').onsubmit=generate;el('weekly-print').onclick=downloadPDF;el('weekly-browser-print').onclick=printSheet;el('weekly-csv').onclick=csvSheet;el('weekly-close').onclick=()=>el('weekly-report-dialog').close();el('weekly-report-dialog').addEventListener('close',()=>{serial++;clearPDF();report=null;reportUser=null;el('weekly-generate').disabled=false;resetPrint();});
  el('open-daily-weekly-report').onclick=openWeekly;
  for(const event of ['input','change'])el('weekly-report-form').addEventListener(event,()=>{serial++;clearPDF();report=null;reportUser=null;el('weekly-sheet-body').replaceChildren();el('weekly-export-actions').hidden=true;el('weekly-generate').disabled=false;el('weekly-error').textContent='';if(event==='change'&&chosen())queueMicrotask(()=>generate({preventDefault(){}}));});
 };
 window.addEventListener('afterprint',resetPrint);
 document.addEventListener('pigledger:logout',()=>{serial++;clearPDF();report=null;reportUser=null;if(el('weekly-report-dialog').open)el('weekly-report-dialog').close();el('weekly-sheet-body').replaceChildren();resetPrint();});
-translate=()=>{base.translate();render();};
+translate=()=>{base.translate();if(data&&el('weekly-report-dialog')?.open){syncCohorts();syncBarns(el('weekly-barn').value);}render();};
 refresh=async(...args)=>{const previous=data;await base.refresh(...args);if(me&&data!==previous&&report&&el('weekly-report-dialog')?.open)await generate({preventDefault(){}});};
 enter=async user=>{if(el('weekly-report-dialog')?.open)el('weekly-report-dialog').close();return base.enter(user);};
 })();
