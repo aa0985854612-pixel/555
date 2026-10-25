@@ -11,3 +11,10 @@
 .outgoing-preview-error{border-color:#b42343;background:#fff3f5}
 .outgoing-preview-error .outgoing-preview-message,.outgoing-preview-error [data-shipment="shipmentAfter"]{color:#a11d3d}
 @media(min-width:600px){.outgoing-preview-flow{grid-template-columns:minmax(0,1fr) auto minmax(0,1fr) auto minmax(0,1fr);align-items:center}.outgoing-preview-step{flex-direction:column;align-items:stretch;text-align:center}.outgoing-preview-step strong{text-align:center}.outgoing-preview-arrow{transform:none}}
+
+/* Keep a filled shipment preview compact on phones; no empty placeholder card. */
+.outgoing-preview{padding:.8rem;border-radius:10px}.outgoing-preview h3{font-size:1rem}
+.outgoing-preview-flow{grid-template-columns:minmax(0,1fr) auto minmax(0,1fr) auto minmax(0,1fr);align-items:center}
+.outgoing-preview-step{flex-direction:column;align-items:center;padding:.5rem .25rem;gap:.25rem;text-align:center}
+.outgoing-preview-step>span{font-size:.82rem}.outgoing-preview-step strong{font-size:1.1rem;text-align:center}.outgoing-preview-step small{display:block;font-size:.75rem}
+.outgoing-preview-arrow{transform:none}.outgoing-preview-scope,.outgoing-preview .hint,.outgoing-preview-message{font-size:.82rem}.outgoing-preview-message{font-weight:400}.outgoing-preview-error .outgoing-preview-message{font-weight:650}

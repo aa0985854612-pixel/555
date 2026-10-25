@@ -55,6 +55,7 @@ function update(force=false){
  const f=$('#movement-form');if(!f||!$('#outgoing-preview'))return;
  if(!['sale','cull'].includes(val(f,'type'))||!me||!data){clear();return;}
  const c=context();
+ if(!c||c.quantity==null){clear();return;}
  if(force){generation++;clearTimeout(timer);flight=null;cached=null;}
  if(!c||c.date<c.batch.entry_date){generation++;clearTimeout(timer);flight=null;cached=null;paint(c,null);return;}
  if(cached?.key===c.key&&cached.snapshot===c.snapshot){paint(c,cached);return;}

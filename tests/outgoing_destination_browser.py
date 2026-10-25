@@ -20,7 +20,7 @@ with tempfile.TemporaryDirectory() as tmp:
   with sync_playwright() as p:
    browser=p.chromium.launch(executable_path='/usr/bin/chromium',args=['--no-sandbox']);page=browser.new_page(viewport={'width':390,'height':844},is_mobile=True,has_touch=True);errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
    def login(name,pw):page.locator('#login-form [name=username]').fill(name);page.locator('#login-form [name=password]').fill(pw);page.locator('#login-form button').click();page.wait_for_selector('#workspace:not([hidden])')
-   page.goto(url);login('owner','83000011');f=page.locator('#movement-form');f.locator('[name=date]').fill('2026-01-05');f.locator('[name=barn_id]').select_option(barns[0]['id'])
+   page.goto(url);login('owner','83000011');f=page.locator('#movement-form');f.locator('details').evaluate('(e)=>e.open=true');f.locator('[name=date]').fill('2026-01-05');f.locator('[name=barn_id]').select_option(barns[0]['id'])
    for i,city in enumerate(('新北','南投','嘉義')):
     f.locator('[name=type]').select_option('sale');f.locator('[name=outgoing_destination]').select_option(city);f.locator('[name=quantity]').fill(str(i+2));page.select_option('#language','vi');page.select_option('#language','zh');page.evaluate('async()=>await refresh()');assert f.locator('[name=outgoing_destination]').input_value()==city
     with page.expect_response(lambda r:'/api/movements' in r.url and r.request.method=='POST') as response:f.locator('button.primary').click()

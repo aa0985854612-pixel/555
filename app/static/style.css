@@ -20,9 +20,9 @@ button:disabled { opacity: .5; cursor: default; }
 button.primary { background: var(--navy); color: #fff; border-color: var(--navy); }
 button.danger { color: var(--red); border-color: #e4c3c8; }
 a { color: var(--navy); }
-.home-report-shortcut { margin-bottom: 16px; }
-.home-report-shortcut a { display: flex; align-items: center; justify-content: center; gap: 12px; min-height: 54px; padding: 12px 18px; border: 1px solid var(--navy); border-radius: 12px; background: var(--navy); color: #fff; text-decoration: none; font-size: 1.05rem; font-weight: 700; }
-.home-report-shortcut a:hover { background: #284569; }
+.home-report-shortcut { margin-bottom: 10px; }
+.home-report-shortcut a { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 8px; background: #fff; color: var(--navy); text-decoration: none; font-size: .9rem; font-weight: 600; }
+.home-report-shortcut a:hover { background: #edf1f7; }
 .home-report-shortcut a:focus-visible { outline: 3px solid #92abc9; outline-offset: 3px; }
 header { min-height: 70px; background: #fff; border-bottom: 1px solid var(--line); display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 28px; position: sticky; top: 0; z-index: 30; }
 .brand { text-decoration: none; display: flex; align-items: center; gap: 10px; font-size: 1.12rem; font-weight: 760; white-space: nowrap; }
@@ -902,3 +902,12 @@ body [hidden] { display: none !important; }
 #line-feed-settings li{margin:.5rem 0;overflow-wrap:anywhere}
 #line-feed-settings .actions{flex-wrap:wrap}
 #line-feed-code{padding:.75rem;background:var(--soft,#f5f7fa);border-radius:.5rem}
+
+/* Six daily destinations, without retired quick-entry/calendar panels. */
+.page-heading h1{font-size:1.25rem;margin:0 0 4px}.page-heading{margin-bottom:14px}
+#daily-entry h2,#daily-review h2{font-size:1.12rem;line-height:1.4}
+.review-totals strong{font-size:1.45rem}
+.bin-stock-row{padding:.75rem 0;border-bottom:1px solid var(--line);display:flex;align-items:start;justify-content:space-between;gap:.5rem}.bin-stock-row small{display:block;color:var(--muted)}.bin-stock-row strong{font-size:1rem}#bin-stock-panel .hint{font-size:.85rem}
+#receipt-edit-dialog{width:min(560px,calc(100% - 24px));max-height:90dvh;overflow:auto}#receipt-edit-dialog .check{padding:12px;background:#fff5dc;border-radius:8px;margin:8px 0}.receipt-edit-note{white-space:pre-wrap;overflow-wrap:anywhere}
+@media(max-width:700px){nav{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));overflow-x:visible}nav a{min-width:0;width:auto;padding:7px 1px;font-size:max(11px,.68rem)}nav a [data-i]{overflow-wrap:anywhere}#daily-entry,#daily-review{padding:18px}}
+@media print{#bin-stock-panel{display:none!important}}

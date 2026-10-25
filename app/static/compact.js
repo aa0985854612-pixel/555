@@ -2,9 +2,10 @@
 /* Group the existing records for display; never merge IDs or infer missing counts. */
 (() => {
 Object.assign(words,{
+ newMovement:['豬隻登記','Ghi đàn heo'],movementExtras:['備註與其他資料（選填）','Ghi chú và thông tin khác (tùy chọn)'],
  cumulativeCulledShort:['淘汰','Loại'],
  openReportForm:['線上維修單','Phiếu sửa chữa trực tuyến'],
- groupedSetup:['按批次設定','Cài đặt theo lứa'],groupedHint:['同批各棟集中在一起；點批次展開，再選棟舍編輯。','Các chuồng cùng lứa nằm chung; mở lứa rồi chọn chuồng để sửa.'],findBatch:['找批次／棟舍','Tìm lứa / chuồng'],newBatch:['新增單棟批次','Thêm lứa tại chuồng'],batchDetailsShort:['其他批次資料','Thông tin lứa khác'],entryMeanShort:['入場均重（kg／隻）','TB nhập (kg/con)'],knownEntry:['已填進場','Số nhập đã ghi'],missingBarns:['棟待補','chuồng cần bổ sung'],barnCount:['棟','chuồng'],editHere:['正在編輯','Đang sửa'],saveBeforeSwitch:['請先儲存或取消目前修改，再切換棟舍。','Lưu hoặc hủy thay đổi hiện tại trước khi chuyển chuồng.'],otherSettings:['其他設定','Cài đặt khác'],dailyOverview:['全場總覽','Tổng quan trại'],dailyEntry:['登記異動','Ghi biến động'],currentHeadsShort:['存欄','Tồn đàn'],cumulativeDeadShort:['死亡','Chết'],cumulativeSoldShort:['出豬','Xuất'],survivalShort:['育成率','Tỷ lệ sống'],overviewHint:['每列一棟；點棟舍即可登記。死亡、出豬與淘汰為該批進場至今日累計；出豬只計正常出豬，淘汰另外列出。未知資料顯示 —。','Mỗi dòng một chuồng; chạm tên để ghi. Chết, xuất bán và loại thải lũy kế từ ngày nhập lứa đến hôm nay; xuất bán chỉ tính bán thường, loại thải ghi riêng. Chưa rõ hiển thị —.'],noMatchingBatch:['沒有符合的批次，可改選全部或搜尋其他棟舍。','Không có lứa phù hợp; chọn tất cả hoặc tìm chuồng khác.'],createBarnShort:['新增／編輯棟舍','Thêm / sửa chuồng'],batchSavedHint:['每棟分別儲存；不會連帶更改同批其他棟。','Lưu riêng từng chuồng; không thay đổi các chuồng khác cùng lứa.'],queryConditions:['查詢條件','Điều kiện lọc']
+ groupedSetup:['按批次設定','Cài đặt theo lứa'],groupedHint:['同批各棟集中在一起；點批次展開，再選棟舍編輯。','Các chuồng cùng lứa nằm chung; mở lứa rồi chọn chuồng để sửa.'],findBatch:['找批次／棟舍','Tìm lứa / chuồng'],newBatch:['新增單棟批次','Thêm lứa tại chuồng'],batchDetailsShort:['其他批次資料','Thông tin lứa khác'],entryMeanShort:['入場均重（kg／隻）','TB nhập (kg/con)'],knownEntry:['已填進場','Số nhập đã ghi'],missingBarns:['棟待補','chuồng cần bổ sung'],barnCount:['棟','chuồng'],editHere:['正在編輯','Đang sửa'],saveBeforeSwitch:['請先儲存或取消目前修改，再切換棟舍。','Lưu hoặc hủy thay đổi hiện tại trước khi chuyển chuồng.'],otherSettings:['其他設定','Cài đặt khác'],dailyOverview:['全場總覽','Tổng quan trại'],dailyEntry:['登記','Ghi chép'],currentHeadsShort:['存欄','Tồn đàn'],cumulativeDeadShort:['死亡','Chết'],cumulativeSoldShort:['出豬','Xuất'],survivalShort:['育成率','Tỷ lệ sống'],overviewHint:['每列一棟；點棟舍即可登記。死亡、出豬與淘汰為該批進場至今日累計；出豬只計正常出豬，淘汰另外列出。未知資料顯示 —。','Mỗi dòng một chuồng; chạm tên để ghi. Chết, xuất bán và loại thải lũy kế từ ngày nhập lứa đến hôm nay; xuất bán chỉ tính bán thường, loại thải ghi riêng. Chưa rõ hiển thị —.'],noMatchingBatch:['沒有符合的批次，可改選全部或搜尋其他棟舍。','Không có lứa phù hợp; chọn tất cả hoặc tìm chuồng khác.'],createBarnShort:['新增／編輯棟舍','Thêm / sửa chuồng'],batchSavedHint:['每棟分別儲存；不會連帶更改同批其他棟。','Lưu riêng từng chuồng; không thay đổi các chuồng khác cùng lứa.'],queryConditions:['查詢條件','Điều kiện lọc']
 });
 Object.assign(words,{
  cohortRemaining:['本批次剩餘總頭數','Tổng heo còn lại của lứa'],
@@ -65,6 +66,9 @@ build=()=>{
  $$('input[type="date"]').forEach(el=>el.closest('label')?.classList.add('date-field'));
  const movement=$('#movement-form'),typeField=movement.elements.type.closest('label'),quantityField=movement.elements.quantity.closest('label');
  typeField.classList.add('movement-type');quantityField.classList.add('movement-quantity');typeField.after(quantityField);
+ const extras=movement.querySelector('details'),extraGrid=extras.querySelector('.grid');
+ for(const name of ['outgoing_destination','outgoing_trip'])extraGrid.prepend(movement.elements[name].closest('label'));
+ const extraSummary=extras.querySelector('summary');extraSummary.dataset.i='movementExtras';extraSummary.textContent=t('movementExtras');
  movement.querySelector('details').append(movement.querySelector('[data-i="movementHint"]'));
  entry.id='daily-entry';split.before(entry);split.remove();daily.append(recent);const recentFold=fold(recent,'recent');recentFold.classList.add('recent-fold');
  daily.insertAdjacentHTML('afterbegin',`<div class="view-switch" id="daily-switch" role="group" aria-label="${esc(t('daily'))}"><button type="button" data-daily-view="entry" aria-pressed="true">${txt('dailyEntry')}</button><button type="button" data-daily-view="overview" aria-pressed="false">${txt('dailyOverview')}</button></div>`);
@@ -111,6 +115,7 @@ renderSettings=()=>{
 edit=(kind,id)=>{
  if(kind==='batches'&&!canSwitch(id))return;
  base.edit(kind,id);
+ if(kind==='movements'){const r=data.movements.find(r=>r.id===id);if(r?.outgoing_destination||r?.outgoing_trip)$('#movement-form details').open=true;}
  if(kind==='batches'){attachEditor();$('#batch-form').querySelectorAll('details').forEach(d=>d.open=false);$('#batch-editor').scrollIntoView({block:'start',behavior:'smooth'});}
  if(kind==='barns'){const fold=$('#barn-form').closest('.settings-fold');if(fold)fold.open=true;$('#barn-form').scrollIntoView({block:'start',behavior:'smooth'});}
 };
