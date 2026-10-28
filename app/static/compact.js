@@ -8,6 +8,7 @@ Object.assign(words,{
  groupedSetup:['按批次設定','Cài đặt theo lứa'],groupedHint:['同批各棟集中在一起；點批次展開，再選棟舍編輯。','Các chuồng cùng lứa nằm chung; mở lứa rồi chọn chuồng để sửa.'],findBatch:['找批次／棟舍','Tìm lứa / chuồng'],newBatch:['新增單棟批次','Thêm lứa tại chuồng'],batchDetailsShort:['其他批次資料','Thông tin lứa khác'],entryMeanShort:['入場均重（kg／隻）','TB nhập (kg/con)'],knownEntry:['已填進場','Số nhập đã ghi'],missingBarns:['棟待補','chuồng cần bổ sung'],barnCount:['棟','chuồng'],editHere:['正在編輯','Đang sửa'],saveBeforeSwitch:['請先儲存或取消目前修改，再切換棟舍。','Lưu hoặc hủy thay đổi hiện tại trước khi chuyển chuồng.'],otherSettings:['其他設定','Cài đặt khác'],dailyOverview:['全場總覽','Tổng quan trại'],dailyEntry:['登記','Ghi chép'],currentHeadsShort:['存欄','Tồn đàn'],cumulativeDeadShort:['死亡','Chết'],cumulativeSoldShort:['出豬','Xuất'],survivalShort:['育成率','Tỷ lệ sống'],overviewHint:['每列一棟；點棟舍即可登記。死亡、出豬與淘汰為該批進場至今日累計；出豬只計正常出豬，淘汰另外列出。未知資料顯示 —。','Mỗi dòng một chuồng; chạm tên để ghi. Chết, xuất bán và loại thải lũy kế từ ngày nhập lứa đến hôm nay; xuất bán chỉ tính bán thường, loại thải ghi riêng. Chưa rõ hiển thị —.'],noMatchingBatch:['沒有符合的批次，可改選全部或搜尋其他棟舍。','Không có lứa phù hợp; chọn tất cả hoặc tìm chuồng khác.'],createBarnShort:['新增／編輯棟舍','Thêm / sửa chuồng'],batchSavedHint:['每棟分別儲存；不會連帶更改同批其他棟。','Lưu riêng từng chuồng; không thay đổi các chuồng khác cùng lứa.'],queryConditions:['查詢條件','Điều kiện lọc']
 });
 Object.assign(words,{
+ movementDestination:['出豬地點','Nơi xuất heo'],
  cohortRemaining:['本批次剩餘總頭數','Tổng heo còn lại của lứa'],
  cohortRemainingShort:['剩餘','Còn lại'],
  cohortSurvival:['整批育成率','Tỷ lệ sống cả lứa'],cohortBasis:['查看整批計算依據','Xem căn cứ tính cả lứa'],cohortIncludes:['涵蓋全部棟舍（含已出清）','Tất cả chuồng, gồm chuồng đã xuất hết'],cohortMissingEntry:['整批可靠進場分母待補','Cần bổ sung mẫu số nhập đáng tin của cả lứa'],cohortMissingDead:['整批累計死亡待補','Cần bổ sung số chết lũy kế cả lứa'],cohortZeroEntry:['尚無正的進場分母','Chưa có mẫu số nhập lớn hơn 0'],cohortFormula:['（可靠進場分母－累計死亡）÷可靠進場分母 × 100%；淘汰不降低育成率。','(Mẫu số nhập đáng tin − chết lũy kế) ÷ mẫu số nhập × 100%; loại thải không giảm tỷ lệ sống.'],customBarnGroup:['自訂組別（選填，非批號）','Nhóm tự đặt (tùy chọn, không phải mã lứa)'],barnSetupHelp:['這裡管理棟舍名稱與自訂分區；不需要分區時，組別可留空。同批豬的資料請到上方「按批次設定」。','Quản lý tên chuồng và khu vực tự đặt; có thể để trống nhóm. Sửa thông tin đàn cùng lứa ở mục cài đặt theo lứa phía trên.']
@@ -67,7 +68,9 @@ build=()=>{
  const movement=$('#movement-form'),typeField=movement.elements.type.closest('label'),quantityField=movement.elements.quantity.closest('label');
  typeField.classList.add('movement-type');quantityField.classList.add('movement-quantity');typeField.after(quantityField);
  const extras=movement.querySelector('details'),extraGrid=extras.querySelector('.grid');
- for(const name of ['outgoing_destination','outgoing_trip'])extraGrid.prepend(movement.elements[name].closest('label'));
+ const destinationField=movement.elements.outgoing_destination.closest('label');quantityField.after(destinationField);
+ const destinationLabel=destinationField.querySelector('[data-i]');destinationLabel.dataset.i='movementDestination';destinationLabel.textContent=t('movementDestination');
+ extraGrid.prepend(movement.elements.outgoing_trip.closest('label'));
  const extraSummary=extras.querySelector('summary');extraSummary.dataset.i='movementExtras';extraSummary.textContent=t('movementExtras');
  movement.querySelector('details').append(movement.querySelector('[data-i="movementHint"]'));
  entry.id='daily-entry';split.before(entry);split.remove();daily.append(recent);const recentFold=fold(recent,'recent');recentFold.classList.add('recent-fold');
