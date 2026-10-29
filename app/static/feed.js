@@ -38,6 +38,8 @@ build=()=>{
  const exportButton=document.createElement('button');exportButton.type='button';exportButton.dataset.export='feed_orders';exportButton.dataset.filter='feed-filter';exportButton.innerHTML=txt('csv');filter.after(exportButton);
  $('#history-filter [name=record_kind]').insertAdjacentHTML('beforeend',option('feed_orders','feed_orders'));
  const f=$('#feed-order-form');f.elements.date.value=today();f.querySelectorAll('.scope select').forEach(e=>e.required=false);
+ // Avoid 2.0 / 2.000 after typing or pasting, without rounding real fractions.
+ f.elements.amount.addEventListener('blur',()=>{const e=f.elements.amount;if(/^\d+\.\d+$/.test(e.value))e.value=e.value.replace(/0+$/,'').replace(/\.$/,'');});
  f.addEventListener('submit',saveForm);for(const event of ['input','change'])f.addEventListener(event,e=>{if(e.isTrusted)f.dataset.dirty='1';});
  f.elements.barn_id.addEventListener('change',()=>{updateScope(f.querySelector('.scope'),true);f.elements.batch_id.required=!!val(f,'barn_id');});
  f.elements.display_unit.addEventListener('change',e=>{const previous=f.dataset.unit||'kg',n=Number(val(f,'amount'));if(val(f,'amount'))f.elements.amount.value=previous==='ton'?n*1000:n/1000;f.dataset.unit=e.target.value;});

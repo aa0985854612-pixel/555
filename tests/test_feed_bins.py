@@ -80,6 +80,20 @@ class FeedBinTests(unittest.TestCase):
   d=self.store.snapshot();before=herd(d['batches'],d['movements'],'2026-10-15');self.order();d=self.store.snapshot();self.assertEqual(herd(d['batches'],d['movements'],'2026-10-15'),before);self.assertEqual(d['deliveries'],[]);self.assertEqual(d['usages'],[])
  def test_report_header_has_configured_supplier_and_actual_recorded_types(self):
   self.order(item='哺乳二期料');setup=self.report()['feed_setup'];self.assertEqual(setup['configured_vendors'],['養全']);self.assertEqual(setup['recorded_types'],['哺乳二期料']);self.assertEqual(setup['recorded_vendors'],['養全'])
+ def test_latest_report_type_uses_record_date_and_retains_type_history(self):
+  self.order(date='2026-10-14',item='大豬料');self.order(date='2026-10-12',item='仔豬料');self.order(date='2026-10-15',item='')
+  setup=self.report()['feed_setup'];self.assertEqual(setup['latest_type'],'大豬料');self.assertEqual(setup['recorded_types'],['仔豬料','大豬料'])
+ def test_latest_report_type_future_and_scope_do_not_change_totals(self):
+  self.order(item='仔豬料');future=self.order(date='2026-11-01',item='大豬料')
+  self.order(date='2026-11-02',feed_bin_id=self.dual[0]['id'],target_batch_ids=[self.batches[2]['id']],item='哺乳二期料')
+  report=weekly_report(self.store.snapshot(),{'cohort':['SAME|2026-10-01'],'all_records':['1']},today='2026-10-15')
+  self.assertEqual(report['feed_setup']['latest_type'],'大豬料');self.assertEqual(report['totals']['feed_orders'],4000)
+  self.assertEqual(self.report()['feed_setup']['latest_type'],'仔豬料')
+  self.store.mutate(self.staff,'feed_orders',future|{'item':'哺乳二期料'},str(uuid.uuid4()),future['id'])
+  updated=weekly_report(self.store.snapshot(),{'cohort':['SAME|2026-10-01'],'all_records':['1']},today='2026-10-15')
+  self.assertEqual(updated['feed_setup']['latest_type'],'哺乳二期料');self.assertEqual(updated['totals']['feed_orders'],4000)
+ def test_latest_report_type_blank_when_no_typed_orders(self):
+  self.assertEqual(self.report()['feed_setup']['latest_type'],'');self.order(item='');self.assertEqual(self.report()['feed_setup']['latest_type'],'')
  def test_barn_vendor_setting_and_old_clients_preserve_default(self):
   b=self.barns[0];updated=self.store.mutate(self.admin,'barns',b|{'feed_vendor':'新農科'},str(uuid.uuid4()),b['id'])
   oldclient=self.store.mutate(self.admin,'barns',{'name':b['name'],'group':'test','revision':updated['revision']},str(uuid.uuid4()),b['id'])

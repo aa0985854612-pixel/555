@@ -109,7 +109,10 @@ def report_feed_setup(data, members, orders):
     for b in bins:
         label=order_bin_label(b);names=[x['name'] for x in data['barns'] if x['id'] in b['barn_ids']]
         labels.setdefault((label,b['vendor'],tuple(names)),{'name':label,'vendor':b['vendor'],'barns':names})
+    typed=[o for o in orders if o.get('item')]
+    latest=max(typed,key=lambda o:(o['date'],o.get('created_at',''),o['id']),default={})
     return {'configured_vendors':suppliers,'recorded_vendors':sorted({o['vendor'] for o in orders if o.get('vendor')}),
+        'latest_type':latest.get('item',''),
         'recorded_types':sorted({o['item'] for o in orders if o.get('item')}),
         'bins':list(labels.values())}
 
