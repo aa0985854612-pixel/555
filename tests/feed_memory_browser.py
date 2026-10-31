@@ -43,9 +43,8 @@ with tempfile.TemporaryDirectory() as tmp,patch.dict(os.environ,{'FEED_ORDERS_AR
    header=page.evaluate('models.at(-1).basics');assert dict(header)['料別']=='哺乳二期料';assert '本期間登記料別' not in dict(header);assert not any('仔豬料' in str(row) or '大豬料' in str(row) for row in header);assert page.locator('#weekly-sheet-body .weekly-basics').text_content().count('哺乳二期料')==1
    with page.expect_download() as download:page.locator('#weekly-print').click()
    pdf=Path(download.value.path()).read_bytes();assert pdf.startswith(b'%PDF');passed('A4 preview, browser print model and downloaded PDF use only the latest type in the header, including saved future records')
-   with page.expect_download() as download:page.locator('#weekly-csv').click()
-   rows=list(csv.reader(io.StringIO(Path(download.value.path()).read_text(encoding='utf-8-sig'))));assert any('仔豬料' in r for r in rows) and any('大豬料' in r for r in rows);assert len(s.snapshot()['feed_orders'])==original_count+1
-   page.locator('#weekly-close').click();page.locator('nav [href="#feed"]').click();choose(13);page.screenshot(path=str(root/'artifacts/feed-memory-mobile.png'));assert s.export_backup()['users']==original['users'];assert not errors,errors;passed('historical feed types remain in raw CSV and original records; no account changes or JavaScript errors')
+   assert page.locator('#weekly-csv').count()==0;assert {r['item'] for r in s.snapshot()['feed_orders']} >= {'仔豬料','大豬料','哺乳二期料'};assert len(s.snapshot()['feed_orders'])==original_count+1
+   page.locator('#weekly-close').click();page.locator('nav [href="#feed"]').click();choose(13);page.screenshot(path=str(root/'artifacts/feed-memory-mobile.png'));assert s.export_backup()['users']==original['users'];assert not errors,errors;passed('historical feed types remain in original records, while the paper CSV button stays removed; no account changes or JavaScript errors')
    browser.close()
  finally:server.shutdown();server.server_close()
 (root/'artifacts/feed-memory-browser-results.json').write_text(json.dumps({'version':VERSION,'checks':checks,'mode':'Chromium/real HTTP/isolated SQLite, simulated mobile; no production writes'},ensure_ascii=False,indent=2));print('Completed',len(checks),'feed memory scenarios')

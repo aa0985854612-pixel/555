@@ -85,6 +85,15 @@ def statistics(data,query):
     chosen=set(ids)
     if get('summary')=='1':
         stats['batches']=[{'id':b['id'],'age_days':age(b,until),'herd':herd(data['batches'],data['movements'],until,[b['id']])} for b in data['batches'] if b['id'] in chosen]
+        # The home overview describes pigs still in the farm. Cleared/ended
+        # batches remain in history and the original lifetime statistics.
+        by_id={row['id']:row['herd'] for row in stats['batches']}
+        current=[b for b in data['batches'] if b['id'] in chosen and b['entry_date']<=until and b['status']=='active' and (by_id[b['id']]['remaining'] is None or by_id[b['id']]['remaining']>0)]
+        current_ids=[b['id'] for b in current]
+        stats['current_farm']={'ids':current_ids,'herd':herd(data['batches'],data['movements'],until,current_ids),
+            'unknown_stock_ids':[b['id'] for b in current if by_id[b['id']]['remaining'] is None]}
+        stats['current_farm']['cohorts']=[{'cohort':key,'herd':herd(data['batches'],data['movements'],until,[b['id'] for b in current if cohort_key(b)==key])}
+            for key in dict.fromkeys(cohort_key(b) for b in current)]
         # Include ended barns in the cohort, and calculate from their combined
         # denominator/deaths. Unknown per-barn entry counts can still have a
         # reliable complete-cohort source total; percentages must not be averaged.

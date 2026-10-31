@@ -6,13 +6,13 @@ window.weeklyPdf = async function(model) {
  const family='-apple-system, BlinkMacSystemFont, "Noto Sans CJK TC", "Noto Sans TC", sans-serif';
  await document.fonts.ready;
  // Plan physical pages from actual feed lines, before drawing any cells.
- // Feed may grow or continue; it must never use the generic CSV truncation.
+ // Feed and shipment values continue in full across fixed pages.
  const measure=document.createElement('canvas').getContext('2d');
- function wrappedCount(value,width,size,bold=false){
-  measure.font=`${bold?'600':'400'} ${size}px ${family}`;let count=0;
-  for(const line of String(value??'').split('\n')){let part='';count++;for(const ch of line){if(part&&measure.measureText(part+ch).width>width){count++;part='';}part+=ch;}}
-  return count;
+ function wrap(value,width,size,bold=false){
+  measure.font=`${bold?'600':'400'} ${size}px ${family}`;const out=[];
+  for(const line of String(value??'').split('\n')){let part='';for(const ch of line){if(part&&measure.measureText(part+ch).width>width){out.push(part);part='';}part+=ch;}out.push(part);}return out;
  }
+ const wrappedCount=(...args)=>wrap(...args).length;
  const headerH=98+Math.ceil(model.basics.length/3)*31+model.entries.length*21;
  const footerReserve=15+39+wrappedCount(model.cumulative,W,9,true)*11.25+6+wrappedCount(model.legend,W,7.5)*9.375;
  const noteReserve=Math.max(64,18+Math.ceil(Math.min(6,(model.death_groups||[]).length)/3)*35+4);
@@ -42,20 +42,58 @@ window.weeklyPdf = async function(model) {
   currentPage.bands.push(band);currentPage.height+=height;
  }
  for(const inputPage of model.pages)for(const input of inputPage){
-  const size=input.headers.length>16?7:8,lh=size*1.25;
-  const band={...input,rows:input.rows.map(row=>({...row,cells:row.cells.slice(),height:row.left?Math.max(row.height,8+Math.max(0,...row.cells.map(v=>v?String(v).split('\n').length:0))*lh):row.height}))};
-  const feedIndex=band.rows.findIndex(row=>row.left),height=19+band.rows.reduce((n,r)=>n+r.height,0)+8;
-  if(height<=capacity){addBand(band);continue;}
-  if(feedIndex<0)throw new Error('weekly_pdf_layout_overflow');
-  const feed=band.rows[feedIndex],fixed=height-feed.height,maxLines=Math.floor((capacity-fixed-8)/lh);
-  if(maxLines<1)throw new Error('weekly_pdf_layout_overflow');
-  const count=Math.max(0,...feed.cells.map(value=>value?String(value).split('\n').length:0));
-  for(let offset=0;offset<count;offset+=maxLines){
-   const cells=feed.cells.map(value=>continuationLines(value,offset,maxLines).join('\n'));
-   const rows=band.rows.map((row,i)=>i===feedIndex?{...row,cells,height:8+Math.max(1,...cells.map(value=>value?value.split('\n').length:0))*lh}:offset&&i>0?{...row,cells:row.cells.map(()=>'')}:row);
-   addBand({...band,continued:offset>0,rows});
+  const size=input.headers.length>16?7:8,lh=size*1.25,cw=(W-58)/input.headers.length;
+  const rows=input.rows.map(row=>{
+   const cells=row.cells.map(v=>row.complete?wrap(v,cw-6,size,row.bold).join('\n'):v);
+   const complete=row.left||row.complete;
+   return {...row,cells,singleLine:complete||row.singleLine,height:complete?Math.max(row.height,8+Math.max(0,...cells.map(v=>v?String(v).split('\n').length:0))*lh):row.height};
+  });
+  const height=19+rows.reduce((n,r)=>n+r.height,0)+8;
+  if(height<=capacity){addBand({...input,rows});continue;}
+  const first=rows[0];let chunk=[first],continued=false;
+  const flush=()=>{if(chunk.length>1){addBand({...input,rows:chunk,continued});continued=true;}chunk=[first];};
+  for(const row of rows.slice(1)){
+   if(row.height+19+first.height+8<=capacity){if(19+chunk.reduce((n,r)=>n+r.height,0)+row.height+8>capacity)flush();chunk.push(row);continue;}
+   if(!row.left&&!row.complete)throw new Error('weekly_pdf_layout_overflow');
+   const total=Math.max(0,...row.cells.map(v=>v?String(v).split('\n').length:0));let offset=0;
+   while(offset<total){
+    const room=capacity-19-chunk.reduce((n,r)=>n+r.height,0)-8,maxLines=Math.floor((room-8)/lh);
+    if(maxLines<1){flush();continue;}
+    const cells=row.cells.map(v=>continuationLines(v,offset,maxLines).join('\n'));
+    chunk.push({...row,cells,height:8+Math.max(1,...cells.map(v=>v?v.split('\n').length:0))*lh});offset+=maxLines;if(offset<total)flush();
+   }
   }
+  flush();
  }
+ // Notes fill a column from top to bottom, then continue at its right.
+ // Both sections use all remaining writing space, and continue on A4 pages.
+ let death=(model.death_groups||[]).filter(g=>g.notes.length).flatMap(g=>[{value:g.title,bold:true},...g.notes.map(value=>({value}))]);
+ let shipping=(model.shipping_notes||[]).map(value=>({value}));
+ if(!death.length&&(model.death_notes||[]).length)death=model.death_notes.map(value=>({value}));
+ function flow(items,height){
+  const size=8.5,lh=size*1.25,gap=2,half=W/2;
+  const one=items.map(item=>({...item,parts:wrap(item.value,half-8,size,item.bold)}));
+  const columns=one.reduce((n,item)=>n+item.parts.length*lh+gap,0)<=height?1:2,cw=half/columns;
+  const draws=[];let column=0,y=0;
+  for(let index=0;index<items.length;index++){
+   const item=items[index],parts=wrap(item.value,cw-8,size,item.bold);
+   for(let line=0;line<parts.length;line++){
+    if(y+lh>height){column++;y=0;}
+    if(column>=columns)return {draws,remaining:[{...item,value:parts.slice(line).join('\n')},...items.slice(index+1)],size,lh,cw};
+    draws.push({text:parts[line],x:4+column*cw,y,bold:item.bold});y+=lh;
+   }
+   y+=gap;
+  }
+  return {draws,remaining:[],size,lh,cw};
+ }
+ let notePage=currentPage;
+ do{
+  const available=PH-M-headerH-notePage.height-footerReserve-8;
+  if(available<44){notePage=newPage();continue;}
+  const left=flow(death,available-24),right=flow(shipping,available-24);
+  notePage.notes={height:available,left,right};death=left.remaining;shipping=right.remaining;
+  if(death.length||shipping.length)notePage=newPage();
+ }while(death.length||shipping.length||!notePage.notes);
  for(let page=0;page<layouts.length;page++){
   const canvas=document.createElement('canvas');canvas.width=Math.ceil(PW*SCALE);canvas.height=Math.ceil(PH*SCALE);
   const c=canvas.getContext('2d');c.scale(SCALE,SCALE);c.fillStyle='#fff';c.fillRect(0,0,PW,PH);c.strokeStyle='#444';c.lineWidth=.55;
@@ -63,7 +101,7 @@ window.weeklyPdf = async function(model) {
   function lines(text,width,size,bold=false){font(size,bold);const out=[];for(const line of String(text??'').split('\n')){let part='';for(const ch of line){if(part&&c.measureText(part+ch).width>width){out.push(part);part='';}part+=ch;}out.push(part);}return out;}
   function text(value,x,y,width,size=9,bold=false,align='left',height=100,singleLine=false,monospace=false,complete=false){
    const lh=size*1.25,all=singleLine?String(value??'').split('\n'):lines(value,width,size,bold),limit=Math.max(1,Math.floor(height/lh)),shown=all.slice(0,limit);
-   if(all.length>limit){if(complete)throw new Error('weekly_pdf_feed_overflow');shown[shown.length-1]='… CSV';}
+   if(all.length>limit){if(complete)throw new Error('weekly_pdf_feed_overflow');shown[shown.length-1]='…';}
    c.fillStyle='#111';c.textBaseline='top';c.textAlign=align;font(size,bold,monospace);
    const feedScale=monospace&&singleLine?Math.min(1,width/Math.max(1,...all.filter(line=>!line.includes(' · ')).map(line=>c.measureText(line).width))):null;
    for(let j=0;j<shown.length;j++){const ax=x+(align==='center'?width/2:0);if(singleLine)c.fillText(shown[j],ax,y+j*lh,feedScale===null?width:Math.min(width,Math.max(1,c.measureText(shown[j]).width)*feedScale));else c.fillText(shown[j],ax,y+j*lh);}
@@ -88,70 +126,21 @@ window.weeklyPdf = async function(model) {
   for(const band of bands){
    const n=band.headers.length,labelW=58,cw=(W-labelW)/n,size=n>16?7:8;
    const rows=[{label:model.cycle+(band.continued?' · '+(model.continued||'續'):''),cells:band.headers,height:19,shade:true,bold:true},...band.rows];
-   for(const originalRow of rows){const row=originalRow;cell(row.label,M,y,labelW,row.height,{size:8.5,bold:true,shade:row.shade});for(let j=0;j<n;j++)cell(row.cells[j]||'',M+labelW+j*cw,y,cw,row.height,{size:row.bold?size+.5:size,bold:row.bold,shade:row.shade,align:row.left?'left':'center',singleLine:row.singleLine,monospace:row.monospace,complete:row.left});y+=row.height;}
+   for(const originalRow of rows){const row=originalRow;cell(row.label,M,y,labelW,row.height,{size:8.5,bold:true,shade:row.shade});for(let j=0;j<n;j++)cell(row.cells[j]||'',M+labelW+j*cw,y,cw,row.height,{size:row.bold?size+.5:size,bold:row.bold,shade:row.shade,align:row.left?'left':'center',singleLine:row.singleLine,monospace:row.monospace,complete:row.left||row.complete});y+=row.height;}
    y+=8;
   }
-  if(page===layouts.length-1){
-  // Measure complete notes against the space left by the actual tables and footer.
-  // Normal reports keep every entry; only a physically full page uses a CSV count.
-  const groups=model.death_groups||[],shipping=model.shipping_notes||[],half=W/2;
+  const planned=layouts[page].notes;
   const cumulativeH=lines(model.cumulative,W,9,true).length*9*1.25,legendH=lines(model.legend,W,7.5).length*7.5*1.25;
-  const footerH=15+39+cumulativeH+6+legendH,available=PH-M-y-8-footerH;
-  function notePlan(size,compact=false){
-   const lh=size*1.25,gap=1,entryHeight=parts=>parts.length*lh+gap;
-   const cols=Math.max(1,Math.min(3,groups.length)),cw=half/cols;
-   let visible=groups,extra=0;
-   if(compact){const maxRows=Math.max(1,Math.floor((available-18-12+4)/(28+lh+2)));visible=groups.slice(0,maxRows*cols);extra=groups.length-visible.length;}
-   const tiles=[];
-   for(let i=0;i<visible.length;i+=cols){
-    const members=visible.slice(i,i+cols).map(g=>({...g,entries:g.notes.map(note=>lines(note,cw-8,size)),more:0}));
-    tiles.push({members,full:Math.max(0,...members.map(g=>g.entries.reduce((n,parts)=>n+entryHeight(parts),0)))});
+  if(planned){
+   const half=W/2;
+   for(const [index,title,plan] of [[0,model.death_title,planned.left],[1,model.shipping_title,planned.right]]){
+    const x=M+index*half;cell(title||'',x,y,half,18,{size:9,bold:true,shade:true});cell('',x,y+18,half,planned.height-18);
+    for(const entry of plan.draws)text(entry.text,x+entry.x,y+22+entry.y,plan.cw-8,plan.size,entry.bold,'left',plan.lh+.1,true);
    }
-   const overhead=18+tiles.length*24+Math.max(0,tiles.length-1)*4+(extra?lh+2:0),need=tiles.reduce((n,r)=>n+r.full,0);
-   const content=Math.max(0,available-overhead),base=tiles.map(r=>Math.min(r.full,lh+2));
-   const spare=Math.max(0,content-base.reduce((n,h)=>n+h,0)),remaining=need-base.reduce((n,h)=>n+h,0);
-   tiles.forEach((r,i)=>r.budget=Math.min(r.full,base[i]+(remaining?spare*(r.full-base[i])/remaining:0)));
-   for(const tile of tiles){
-    if(compact)for(const g of tile.members){
-     const budget=tile.budget,total=g.entries.reduce((n,parts)=>n+entryHeight(parts),0);
-     if(total>budget){let used=0,count=0;while(count<g.entries.length&&used+entryHeight(g.entries[count])+lh+2<=budget){used+=entryHeight(g.entries[count++]);}g.more=g.entries.length-count;g.entries=g.entries.slice(0,count);}
-    }
-    tile.height=24+Math.max(0,...tile.members.map(g=>g.entries.reduce((n,parts)=>n+entryHeight(parts),0)+(g.more?lh+2:0)));
-   }
-   function shippingPlan(columns){
-    const width=half/columns,rows=[];
-    for(let i=0;i<shipping.length;i+=columns){const entries=shipping.slice(i,i+columns).map(note=>lines(note,width-8,size));rows.push({entries,height:Math.max(...entries.map(entryHeight))});}
-    return {columns,width,rows,height:26+rows.reduce((n,r)=>n+r.height,0),more:0};
-   }
-   const candidates=[shippingPlan(2),shippingPlan(1)],out=candidates.sort((a,b)=>a.height-b.height)[0];
-   if(compact&&out.height>available){let used=26,count=0;while(count<out.rows.length&&used+out.rows[count].height+lh+2<=available){used+=out.rows[count++].height;}out.more=out.rows.slice(count).reduce((n,r)=>n+r.entries.length,0);out.rows=out.rows.slice(0,count);out.height=used+(out.more?lh+2:0);}
-   return {size,lh,gap,cols,cw,tiles,extra,shipping:out,height:Math.max(44,18+tiles.reduce((n,r)=>n+r.height,0)+Math.max(0,tiles.length-1)*4+(extra?lh+2:0),out.height)};
+   y+=planned.height+8;
   }
-  let plan;
-  for(const size of [8.5,8,7.5,7]){plan=notePlan(size);if(plan.height<=available)break;}
-  if(plan.height>available)plan=notePlan(7,true);
-  const noteH=plan.height;
-  function noteLines(parts,x,on,width){for(let i=0;i<parts.length;i++)text(parts[i],x,on+i*plan.lh,width,plan.size,false,'left',plan.lh+.1,true);}
-  cell(model.death_title||'',M,y,half,18,{size:9,bold:true,shade:true});cell('',M,y+18,half,noteH-18);
-  let tileY=y+18;
-  for(const tile of plan.tiles){
-   tile.members.forEach((g,index)=>{
-    const x=M+index*plan.cw;
-    cell(g.title,x,tileY,plan.cw,16,{size:8.5,bold:true,shade:true});cell('',x,tileY+16,plan.cw,tile.height-16);
-    let on=tileY+20;
-    for(const parts of g.entries){noteLines(parts,x+4,on,plan.cw-8);on+=parts.length*plan.lh+plan.gap;}
-    if(g.more)text(model.death_more.replace('{n}',g.more),x+4,on,plan.cw-8,plan.size,false,'left',plan.lh+.1,true);
-   });
-   tileY+=tile.height+4;
-  }
-  if(plan.extra)text(model.death_groups_more.replace('{n}',plan.extra),M+4,y+noteH-plan.lh-2,half-8,plan.size,false,'left',plan.lh+.1,true);
-  const sx=M+half;cell(model.shipping_title||'',sx,y,half,18,{size:9,bold:true,shade:true});cell('',sx,y+18,half,noteH-18);
-  let shippingY=y+22;
-  for(const row of plan.shipping.rows){row.entries.forEach((parts,i)=>noteLines(parts,sx+4+i*plan.shipping.width,shippingY,plan.shipping.width-8));shippingY+=row.height;}
-  if(plan.shipping.more)text(model.shipping_more.replace('{n}',plan.shipping.more),sx+4,shippingY,half-8,plan.size,false,'left',plan.lh+.1,true);
-  y+=noteH+8;
-  // Footer stays within the fixed page; long individual cells explicitly point
-  // to the full CSV instead of creating an unplanned second page.
+  if(page===layouts.length-1){
+  const footerH=15+39+cumulativeH+6+legendH;
   if(y+footerH>PH-M+.1)throw new Error('weekly_pdf_layout_overflow');
   text(model.totalLabel,M,y,W,9,true,'left',14);y+=15;
   for(let i=0;i<model.totals.length;i++){const x=M+i*W/4,pair=model.totals[i];cell('',x,y,W/4,32);text(pair[0],x+4,y+3,W/4-8,8,false,'left',10);text(pair[1],x+4,y+15,W/4-8,11,true,'left',14);}y+=39;

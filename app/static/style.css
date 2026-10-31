@@ -911,3 +911,5 @@ body [hidden] { display: none !important; }
 #receipt-edit-dialog{width:min(560px,calc(100% - 24px));max-height:90dvh;overflow:auto}#receipt-edit-dialog .check{padding:12px;background:#fff5dc;border-radius:8px;margin:8px 0}.receipt-edit-note{white-space:pre-wrap;overflow-wrap:anywhere}
 @media(max-width:700px){nav{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));overflow-x:visible}nav a{min-width:0;width:auto;padding:7px 1px;font-size:max(11px,.68rem)}nav a [data-i]{overflow-wrap:anywhere}#daily-entry,#daily-review{padding:18px}}
 @media print{#bin-stock-panel{display:none!important}}
+
+.cleared-record{padding:12px 0;border-bottom:1px solid var(--border,#dbe2ea)}.cleared-record>small{display:block;color:#617189;margin-top:4px}

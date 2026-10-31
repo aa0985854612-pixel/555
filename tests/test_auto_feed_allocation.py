@@ -54,6 +54,18 @@ class AutoFeedAllocationTests(unittest.TestCase):
   o=self.order();d=self.s.snapshot()
   with patch.dict(os.environ,{'FEED_AUTO_ALLOCATION':'equal'}):self.assertEqual([a['kg'] for a in automatic_allocation(o,d)['allocations']],[2000,2000])
   with patch.dict(os.environ,{'FEED_AUTO_ALLOCATION':''}):self.assertIsNone(automatic_allocation(o,d));self.assertIsNone(order_scope(o,d,{self.batches[1]['id']})['kg'])
+ def test_equal_mode_divides_odd_kg_in_half_without_headcount_rounding(self):
+  o=self.order(kg=2001);d=self.s.snapshot()
+  with patch.dict(os.environ,{'FEED_AUTO_ALLOCATION':'equal'}):
+   p=automatic_allocation(o,d);self.assertEqual([a['kg'] for a in p['allocations']],[1000.5,1000.5]);self.assertEqual(self.report()['totals']['feed_orders'],1000.5)
+ def test_equal_mode_ignores_zero_or_unknown_heads_for_explicit_targets(self):
+  o=self.order(kg=2000);d=self.s.snapshot();next(b for b in d['batches'] if b['id']==self.batches[1]['id'])['entry_count']=0
+  with patch.dict(os.environ,{'FEED_AUTO_ALLOCATION':'equal'}):self.assertEqual([a['kg'] for a in automatic_allocation(o,d)['allocations']],[1000,1000])
+  next(b for b in d['batches'] if b['id']==self.batches[1]['id'])['entry_count']=None
+  with patch.dict(os.environ,{'FEED_AUTO_ALLOCATION':'equal'}):self.assertEqual([a['kg'] for a in automatic_allocation(o,d)['allocations']],[1000,1000])
+ def test_equal_mode_retains_manually_confirmed_portions(self):
+  o=self.order(bin_allocations=[{'batch_id':self.batches[1]['id'],'kg':1000},{'batch_id':self.batches[2]['id'],'kg':3000}])
+  with patch.dict(os.environ,{'FEED_AUTO_ALLOCATION':'equal'}):self.assertIsNone(automatic_allocation(o,self.s.snapshot()));self.assertEqual(self.report()['totals']['feed_orders'],1000)
  def test_preentry_uses_explicit_upcoming_entry_counts_in_a_separate_section(self):
   self.order(date='2026-09-30');r=self.report();self.assertEqual(r['preentry_feed']['total_kg'],1000);self.assertEqual(r['totals']['feed_orders'],0)
  def test_original_review_shows_auto_parts_and_retry_creates_one_order(self):

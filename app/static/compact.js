@@ -13,6 +13,11 @@ Object.assign(words,{
  cohortRemainingShort:['剩餘','Còn lại'],
  cohortSurvival:['整批育成率','Tỷ lệ sống cả lứa'],cohortBasis:['查看整批計算依據','Xem căn cứ tính cả lứa'],cohortIncludes:['涵蓋全部棟舍（含已出清）','Tất cả chuồng, gồm chuồng đã xuất hết'],cohortMissingEntry:['整批可靠進場分母待補','Cần bổ sung mẫu số nhập đáng tin của cả lứa'],cohortMissingDead:['整批累計死亡待補','Cần bổ sung số chết lũy kế cả lứa'],cohortZeroEntry:['尚無正的進場分母','Chưa có mẫu số nhập lớn hơn 0'],cohortFormula:['（可靠進場分母－累計死亡）÷可靠進場分母 × 100%；淘汰不降低育成率。','(Mẫu số nhập đáng tin − chết lũy kế) ÷ mẫu số nhập × 100%; loại thải không giảm tỷ lệ sống.'],customBarnGroup:['自訂組別（選填，非批號）','Nhóm tự đặt (tùy chọn, không phải mã lứa)'],barnSetupHelp:['這裡管理棟舍名稱與自訂分區；不需要分區時，組別可留空。同批豬的資料請到上方「按批次設定」。','Quản lý tên chuồng và khu vực tự đặt; có thể để trống nhóm. Sửa thông tin đàn cùng lứa ở mục cài đặt theo lứa phía trên.']
 });
+Object.assign(words,{
+ currentFarmSold:['現養批次出豬','Xuất bán của lứa đang nuôi'],currentFarmBasis:['僅合計仍有豬的飼養中批次','Chỉ cộng lứa đang nuôi còn heo'],
+ clearedRecords:['已清空／已結束紀錄','Lịch sử chuồng trống / lứa kết thúc'],cleared:['已清空','Đã trống'],viewHistory:['查看紀錄','Xem lịch sử'],
+ clearedHint:['清空與結束的紀錄仍完整保留，可查看異動或下載肉豬紀錄表。','Giữ đầy đủ dữ liệu chuồng trống và lứa kết thúc; xem biến động hoặc tải bảng heo thịt.']
+});
 const base={build,renderHome,edit,finishForm,clickAction,enter,restorePending};
 const keyOf=b=>b._cohort_key||b.name+'|'+b.entry_date;
 const barnOf=b=>data.barns.find(x=>x.id===b.barn_id)?.name||t('unassigned');
@@ -132,19 +137,31 @@ renderHome=async()=>{
  const openDetails=new Set($$('#barns details[data-key][open]').map(el=>el.dataset.key));
  const dashboard=await base.renderHome();if(!data||!dashboard)return;
  const result=b=>dashboard?.batches.find(x=>x.id===b.id);
+ const currentIds=new Set(dashboard.current_farm?.ids||data.batches.filter(b=>b.status==='active').map(b=>b.id));
  const row=b=>{const r=result(b),h=r?.herd;return `<article class="barn-card overview-barn"><button class="overview-barn-link" data-add-barn="${b.barn_id}" data-add-batch="${b.id}"><strong>${esc(barnOf(b))}</strong><small>${esc(displayAge(r?.age_days))}</small></button><strong class="overview-heads">${fmt(h?.remaining,0)}</strong><strong class="overview-dead">${fmt(h?.dead,0)}</strong><strong class="overview-sold">${fmt(h?.sold,0)}</strong><strong class="overview-culled">${fmt(h?.culled,0)}</strong><div class="barn-survival">${h?.survival==null?`<details><summary aria-label="${esc(t('sourceLimit'))}">— ⓘ</summary><p>${t('sourceLimit')}</p></details>`:`<strong>${fmt(h.survival)}%</strong>`}</div></article>`;};
  const total=g=>{
-  const h=dashboard?.cohorts?.find(c=>c.cohort===g.key)?.herd;
+  const h=(dashboard.current_farm?.cohorts||dashboard.cohorts)?.find(c=>c.cohort===g.key)?.herd;
   const missing=[h?.denominator==null?t('cohortMissingEntry'):h.denominator<=0?t('cohortZeroEntry'):'',h?.dead==null?t('cohortMissingDead'):''].filter(Boolean);
-  return `<div class="cohort-total" data-cohort-total="${esc(g.key)}"><div class="cohort-total-head cohort-remaining"><span title="${esc(t('cohortRemaining'))}">${t('cohortRemainingShort')}</span><strong>${fmt(h?.remaining,0)} <small>${t('heads')}</small></strong></div><details data-key="cohort-basis-${esc(g.key)}"><summary class="cohort-total-head" aria-label="${esc(t('cohortBasis'))}"><span>${t('survivalShort')}</span><strong>${h?.survival==null?'—':fmt(h.survival)+'%'} <small aria-hidden="true">ⓘ</small></strong></summary><p>${t('asOf')} ${esc(dashboard.as_of)}</p><p>${t('cohortIncludes')}：${g.members.map(b=>esc(barnOf(b))).join('、')}</p><dl><div><dt>${t('denominator')}</dt><dd>${fmt(h?.denominator,0)} ${t('heads')}</dd></div><div><dt>${t('dead')}</dt><dd>${fmt(h?.dead,0)} ${t('heads')}</dd></div></dl><p>${t('cohortFormula')}</p>${missing.length?`<p class="warning-text">${missing.map(esc).join('；')}</p>`:''}</details></div>`;
+  return `<div class="cohort-total" data-cohort-total="${esc(g.key)}"><div class="cohort-total-head cohort-remaining"><span title="${esc(t('cohortRemaining'))}">${t('cohortRemainingShort')}</span><strong>${fmt(h?.remaining,0)} <small>${t('heads')}</small></strong></div><details data-key="cohort-basis-${esc(g.key)}"><summary class="cohort-total-head" aria-label="${esc(t('cohortBasis'))}"><span>${t('survivalShort')}</span><strong>${h?.survival==null?'—':fmt(h.survival)+'%'} <small aria-hidden="true">ⓘ</small></strong></summary><p>${t('asOf')} ${esc(dashboard.as_of)}</p><p>${t('currentFarmBasis')}：${g.members.filter(b=>currentIds.has(b.id)).map(b=>esc(barnOf(b))).join('、')}</p><dl><div><dt>${t('denominator')}</dt><dd>${fmt(h?.denominator,0)} ${t('heads')}</dd></div><div><dt>${t('dead')}</dt><dd>${fmt(h?.dead,0)} ${t('heads')}</dd></div></dl><p>${t('cohortFormula')}</p>${missing.length?`<p class="warning-text">${missing.map(esc).join('；')}</p>`:''}</details></div>`;
  };
- preserveBox('barns',groups().filter(g=>g.members.some(b=>b.status==='active')).map(g=>`<section class="overview-cohort"><div class="overview-cohort-heading"><h3>${esc(g.name)}</h3><span>${g.date}</span></div>${total(g)}<div class="overview-columns"><span>${t('barn')}</span><span>${t('currentHeadsShort')}</span><span>${t('cumulativeDeadShort')}</span><span>${t('cumulativeSoldShort')}</span><span>${t('cumulativeCulledShort')}</span><span>${t('survivalShort')}</span></div>${g.members.filter(b=>b.status==='active').map(row).join('')}</section>`).join('')||empty());
+ preserveBox('barns',groups().filter(g=>g.members.some(b=>currentIds.has(b.id))).map(g=>`<section class="overview-cohort"><div class="overview-cohort-heading"><h3>${esc(g.name)}</h3><span>${g.date}</span></div>${total(g)}<div class="overview-columns"><span>${t('barn')}</span><span>${t('currentHeadsShort')}</span><span>${t('cumulativeDeadShort')}</span><span>${t('cumulativeSoldShort')}</span><span>${t('cumulativeCulledShort')}</span><span>${t('survivalShort')}</span></div>${g.members.filter(b=>currentIds.has(b.id)).map(row).join('')}</section>`).join('')||empty());
  $$('#barns details[data-key]').forEach(el=>el.open=openDetails.has(el.dataset.key));
  $('#barns').classList.add('compact-barns');
- let hint=$('#overview-hint');if(!hint){hint=document.createElement('p');hint.id='overview-hint';hint.className='hint';$('#barns').before(hint);}hint.textContent=t('overviewHint');
+ let archive=$('#cleared-records');if(!archive){archive=document.createElement('details');archive.id='cleared-records';archive.className='card';$('#barns').after(archive);}
+ const cleared=data.batches.filter(b=>b.entry_date<=dashboard.as_of&&(b.status==='ended'||result(b)?.herd.remaining===0)).sort((a,b)=>b.entry_date.localeCompare(a.entry_date)||compareBarn(a,b));
+ preserveBox('cleared-records',`<summary>${t('clearedRecords')} ${cleared.length}</summary><p class="hint">${t('clearedHint')}</p>${cleared.map(b=>`<article class="cleared-record"><strong>${esc(b.name)} · ${esc(barnOf(b))}</strong><small>${t(b.status==='ended'?'ended':'cleared')}</small><div class="actions"><button type="button" data-cleared-history="${b.id}">${t('viewHistory')}</button><button type="button" data-cleared-report="${b.id}">${t('weeklyReport')}</button></div></article>`).join('')||empty()}`);
+ archive.hidden=!cleared.length;
+
+ let hint=$('#overview-hint');if(!hint){hint=document.createElement('p');hint.id='overview-hint';hint.className='hint';$('#barns').before(hint);}hint.textContent=t('currentFarmBasis')+'。'+t('overviewHint');
  showDaily(dailyView);
 };
 clickAction=e=>{
+ const archiveButton=e.target.closest('[data-cleared-history],[data-cleared-report]');
+ if(archiveButton){
+  const record=data.batches.find(b=>b.id===(archiveButton.dataset.clearedHistory||archiveButton.dataset.clearedReport));if(!record)return;
+  if(archiveButton.dataset.clearedReport){document.dispatchEvent(new CustomEvent('pigledger:weekly-open',{detail:{batch_id:record.id}}));return;}
+  const f=$('#history-filter');f.reset();if(f.elements.scope_type){f.elements.scope_type.value='barn';f.elements.scope_type.dispatchEvent(new Event('change'));}f.elements.barn_id.value=record.barn_id;updateFilterBatch(f);f.elements.batch_id.value=record.id;syncFilters(f);location.hash='history';setPage('history',false);renderCurrent();return;
+ }
  const b=e.target.closest('button');if(b?.dataset.addBatch){const f=$('#movement-form');showDaily('entry');f.elements.barn_id.value=b.dataset.addBarn;updateScope(f.querySelector('.scope'));f.elements.batch_id.value=b.dataset.addBatch;f.scrollIntoView({block:'start',behavior:'smooth'});return;}
  return base.clickAction(e);
 };

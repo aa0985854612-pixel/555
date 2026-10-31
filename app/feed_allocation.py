@@ -37,11 +37,12 @@ def automatic_allocation(record,data):
         if mode=='headcount' and n is None:return None
         if n is not None and n<0:return None
         selected.append(b);counts[b['id']]=n
-    weights=[Decimal(str(counts[b['id']] or 0)) if mode=='headcount' else Decimal(0 if counts[b['id']]==0 else 1) for b in selected]
+    # Equal means divide by the configured barns, independently of headcounts.
+    weights=[Decimal(str(counts[b['id']] or 0)) if mode=='headcount' else Decimal(1) for b in selected]
     total_weight=sum(weights)
     if not total_weight:return None
     # Whole-kg inputs split to whole kilograms; the last positive portion keeps the remainder.
-    total=Decimal(str(record['kg']));quantum=Decimal(1).scaleb(min(0,total.normalize().as_tuple().exponent));left=total;rows=[]
+    total=Decimal(str(record['kg']));quantum=Decimal(1).scaleb(min(-3 if mode=='equal' else 0,total.normalize().as_tuple().exponent));left=total;rows=[]
     positive=[(b,w) for b,w in zip(selected,weights) if w>0]
     for index,(b,weight) in enumerate(positive):
         amount=left if index==len(positive)-1 else (total*weight/total_weight).quantize(quantum,rounding=ROUND_DOWN)
