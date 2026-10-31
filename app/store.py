@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from .domain import Invalid, day, number, herd, consumption, age
 from .notification_schema import PUSH_SCHEMA
 
-VERSION='2.0.67'
+VERSION='2.0.68'
 SCHEMA_VERSION=4
 KINDS=('barns','batches','movements','feed_orders','deliveries','usages','weights','workbooks','source_voids','daily_checks','feed_bins','work_tasks','feed_drafts')
 SCHEMA='''

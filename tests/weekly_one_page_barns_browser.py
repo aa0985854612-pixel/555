@@ -1,0 +1,32 @@
+"""One A4: adjacent barn panes, continuation inside each pane and compressed details."""
+import collections,copy,json,re,subprocess,sys,tempfile,threading
+from pathlib import Path
+sys.path[:0]=[str(Path(__file__).resolve().parents[1]),str(Path(__file__).resolve().parent)]
+from app.store import Store,VERSION
+from app.server import Server
+from playwright.sync_api import sync_playwright
+root=Path(__file__).resolve().parents[1];(root/'artifacts').mkdir(exist_ok=True);checks=[]
+def passed(s):checks.append(s);print('PASS '+s,flush=True)
+def fixture(count=9):
+ def band(start):return {'headers':[f'{i}週' for i in range(start,start+12)],'rows':[{'label':'起始日','cells':['7/31']+['']*11,'height':18},{'label':'死亡數（隻）','cells':['3']+['']*11,'height':23,'bold':True},{'label':'飼料（噸）','cells':['\n'.join(f'{8 if start==11 else 10}/{i+1}+{i+1}(14)' for i in range(count))]+['']*11,'left':True,'singleLine':True,'monospace':True,'height':46},{'label':'售出數','cells':['50、60']+['']*11,'complete':True,'height':20}]}
+ return {'title':'嘉得 · 肉豬每週紀錄表','basics':[['批次','JD-115-29.30'],['棟舍','8棟、14棟'],['進場頭數','1400頭'],['廠商','養全'],['料別','大豬料'],['週期','11週–32週']],'entryHeaders':['棟舍','進場日','進場數','日齡','均重'],'entries':[['8棟','2026-07-24','700','71天','20kg'],['14棟','2026-07-31','700','71天','21kg']],'period':'2026-07-24 → 2026-10-31','cycle':'週期','pages':[[band(11),band(23)]],'death_title':'死亡備註','death_groups':[{'title':f'第{n}棟','notes':[f'8/{i+1} 死亡{1 if n==8 else 2}隻' for i in range(13 if n==8 else 11)]} for n in (8,14)],'shipping_title':'出豬備註','shipping_notes':['10/13 南投3','10/16 嘉義80','10/23 嘉義39','10/23 南投39','10/26 南投70','10/27 南投59','10/30 嘉義39'],'totalLabel':'全部登記合計','totals':[['死亡數','35'],['飼料（噸）','90'],['售出數','329']],'cumulative':'目前剩餘頭數1036 育成率97.50%','legend':'固定一頁A4；上方明細依資料量縮排，所有紀錄完整保留。'}
+with tempfile.TemporaryDirectory() as tmp:
+ store=Store(Path(tmp)/'db');server=Server(('127.0.0.1',0),store);threading.Thread(target=server.serve_forever,daemon=True).start();url=f'http://127.0.0.1:{server.server_port}'
+ try:
+  with sync_playwright() as p:
+   browser=p.chromium.launch(executable_path='/usr/bin/chromium',args=['--no-sandbox']);page=browser.new_page();page.goto(url);page.wait_for_function('()=>typeof weeklyPdf==="function"');errors=[];page.on('pageerror',lambda e:errors.append(str(e)))
+   page.evaluate('()=>{const draw=CanvasRenderingContext2D.prototype.fillText;CanvasRenderingContext2D.prototype.fillText=function(...a){draws.push({text:String(a[0]),x:a[1],y:a[2],font:this.font});return draw.apply(this,a)};window.draws=[];window.makeOne=async m=>{draws=[];const before=JSON.stringify(m),pdf=await weeklyPdf(m);window.oneImages=pdf.previewPages;window.sameModel=before===JSON.stringify(m);const a=document.createElement("a");a.href=URL.createObjectURL(pdf);a.download="one-page.pdf";a.click();}}')
+   def render(model,name):
+    with page.expect_download() as dl:page.evaluate('m=>makeOne(m)',model)
+    output=root/'artifacts'/name;dl.value.save_as(output);info=subprocess.check_output(['pdfinfo',str(output)],text=True);assert re.search(r'Pages:\s+1\b',info) and '595.28 x 841.89' in info;assert page.evaluate('oneImages.length===1&&sameModel');draws=page.evaluate('draws');assert not any('…' in d['text'] or 'CSV' in d['text'] for d in draws);assert all(d['y']+float(re.search(r'([0-9.]+)px',d['font'])[1])*1.25<=818.1 for d in draws if d['text']);return draws
+   model=fixture();draws=render(model,'weekly-8-14-single-page.pdf');heads=[next(d for d in draws if d['text']==title) for title in ('第8棟','第14棟')];assert heads[0]['y']==heads[1]['y'] and heads[0]['x']<heads[1]['x'];middle=heads[1]['x'];notes=[]
+   for index,g in enumerate(model['death_groups']):
+    actual=[next(d for d in draws if d['text']==note) for note in g['notes']];assert len(set(d['x'] for d in actual))==2;assert all(heads[index]['x']<=d['x']<(middle if index==0 else 297.64) for d in actual);assert all(d['y']>heads[index]['y'] for d in actual);notes+=actual
+   assert not any('淘汰' in d['text'] for d in draws);passed('8 and14 barn headings align side by side; each barn continues into its own right-hand space and stays inside its own pane on one A4')
+   (root/'artifacts/weekly-8-14-single-page.jpg').write_bytes(bytes(page.evaluate('async()=>Array.from(new Uint8Array(await oneImages[0].arrayBuffer()))')))
+   page.evaluate('async()=>{const image=document.createElement("img");image.id="one-preview";image.src=URL.createObjectURL(oneImages[0]);image.style.width="900px";document.body.append(image);await image.decode()}');page.locator('#one-preview').screenshot(path=str(root/'artifacts/weekly-8-14-single-page.png'))
+   dense=fixture(95);draws=render(dense,'weekly-8-14-dense-single-page.pdf');expected=[line for pp in dense['pages'] for band in pp for row in band['rows'] if row.get('left') for cell in row['cells'] for line in cell.split('\n') if line];actual=[d for d in draws if '+' in d['text']];assert collections.Counter(d['text'] for d in actual)==collections.Counter(expected);assert max(float(re.search(r'([0-9.]+)px',d['font'])[1]) for d in actual)<8;assert all('8.5px' in d['font'] for d in draws if d['text'] in model['death_groups'][0]['notes']);passed('190 feed details compress above full-size8.5pt barn notes; all original quantities stay on one A4')
+   extra=fixture(2);extra['shipping_notes']=[f'10/{i} 嘉義{i}' for i in range(1,121)];extra['death_groups']=[{'title':'第8棟','notes':[f'9/{i} 死亡1隻' for i in range(1,101)]}];draws=render(extra,'weekly-8-14-many-notes-one-page.pdf');assert all(sum(d['text']==note for d in draws)==1 for note in extra['shipping_notes']+extra['death_groups'][0]['notes']);passed('even120 shipments and100 deaths remain complete on exactly one page without continuation or omitted counts')
+   many=fixture(4);many['death_groups']=[{'title':f'第{n}棟','notes':[f'9/{n} 死亡1隻']} for n in (5,6,7,8)];draws=render(many,'weekly-four-barns-single-page.pdf');assert all(any(d['text']==g['title'] for d in draws) and any(d['text']==g['notes'][0] for d in draws) for g in many['death_groups']);passed('four barns use separate adjacent panes in two rows without deleting any original note');assert not errors,errors;browser.close()
+ finally:server.shutdown();server.server_close()
+(root/'artifacts/weekly-one-page-barns-results.json').write_text(json.dumps({'version':VERSION,'checks':checks,'mode':'real Chromium canvas, actual one-page A4 PDFs; synthetic farm only'},ensure_ascii=False,indent=2));print('Completed',len(checks),'single-page barn note scenarios')
