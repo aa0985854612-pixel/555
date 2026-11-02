@@ -1,10 +1,14 @@
-# 肉豬紀錄管理 App — PigLedger 2.0.69
+# 肉豬紀錄管理 App — PigLedger 2.1.0
 
 **[開啟正式網站：555-rho-nine.vercel.app](https://555-rho-nine.vercel.app/)**。沿用你目前的帳號、密碼、Vercel專案及Turso資料庫。
 
-- [完整原始碼／Docker／Vercel設定 v2.0.69](https://github.com/aa0985854612-pixel/555/tree/main)
+- [完整原始碼／Docker／Vercel設定 v2.1.0](https://github.com/aa0985854612-pixel/555/tree/main)
 - [簡短操作說明](docs/USER_GUIDE.md)／[部署說明](docs/VERCEL.md)
-- [2.0.69備註框空間與字級驗收](docs/TEST_REPORT_2.0.69.md)
+- [2.1.0全站介面與流程驗收](docs/TEST_REPORT_2.1.0.md)／[設計規範](docs/DESIGN_SYSTEM.md)
+
+本版重新整理六頁的共同版型與操作：桌面側欄、手機六格底部導覽、低彩度統計列、緊湊日期標題、手機紀錄清單，以及可搜尋／排序／分頁的原紀錄表格。每日登記與核對在寬螢幕並排，秤重先輸入再看估算；設定保留自主管理批次、棟舍與進場資料。繁中／越南文、Aa字級、PWA、原資料及計算持續沿用，不需遷移資料庫。肉豬A4的單頁規則與內容保持。
+
+下方保留歷次功能說明；目前共用視覺以[2.1.0設計規範](docs/DESIGN_SYSTEM.md)為準。
 
 飼料登記選棟舍自動帶入最近登記日期的非空白料別，可自行修改；共用桶沿用同桶紀錄，雙料桶依選擇的桶分別帶入。整數用量不補小數零；空白數量按上箭頭從1開始，每次增減1。肉豬紀錄表A4上方只顯示所選範圍的最新料別，原逐筆資料保留歷史料別。
 
@@ -103,6 +107,7 @@ python3 tests/redesign_browser.py
 python3 tests/entry_correction_browser.py
 python3 tests/appearance_browser.py
 python3 tests/install_icon_browser.py
+python3 tests/workspace_ui_browser.py
 ```
 
 ```sh

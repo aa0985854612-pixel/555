@@ -47,3 +47,5 @@ node --check app/static/bin-stock.js
 node --check app/static/feed-receipts.js
 
 node --check app/static/delivery-review.js
+
+node --check app/static/workspace-ui.js
