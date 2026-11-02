@@ -1,5 +1,5 @@
 'use strict';
-/* A single portrait A4. Reserve complete barn notes before fitting the upper tables. */
+/* One A4: keep the weekly tables readable; use one shared note font and rhythm. */
 window.weeklyPdf = async function(model) {
  const PW=595.28,PH=841.89,SCALE=4,M=24,W=PW-2*M,images=[];
  const family='-apple-system, BlinkMacSystemFont, "Noto Sans CJK TC", "Noto Sans TC", sans-serif';
@@ -16,29 +16,36 @@ window.weeklyPdf = async function(model) {
  const footerFont=7.5,footerH=15+36+wrap(model.cumulative,W,8.5,true).length*10.625+5+wrap(model.legend,W,footerFont).length*9.375;
  // Each barn owns its own pane. Long lists use the empty space to its right,
  // rather than pushing the next barn below the previous barn's remaining dates.
- function noteItems(values,width,size){return values.map(value=>({parts:wrap(value,width,size),height:wrap(value,width,size).length*size*1.25+size*.18}));}
+ const NOTE_SIZE=8,NOTE_LINE=1.25,NOTE_GAP=.25;
+ function noteItems(values,width,size){return values.map(value=>{const parts=wrap(value,width,size);return {parts,height:(parts.length*NOTE_LINE+NOTE_GAP)*size};});}
+ // Partition in the original order. A continuation always starts in the next
+ // column, and every column shares the same line height and inter-record gap.
  function divide(items,columns){
-  if(columns===1)return [items];
-  let best=0,height=Infinity,total=items.reduce((n,item)=>n+item.height,0),prefix=0;
-  for(let i=1;i<items.length;i++){prefix+=items[i-1].height;const h=Math.max(prefix,total-prefix);if(h<height){height=h;best=i;}}
-  return best?[items.slice(0,best),items.slice(best)]:[items];
+  if(columns===1||items.length<2)return [items];
+  let low=Math.max(...items.map(item=>item.height)),high=items.reduce((n,item)=>n+item.height,0);
+  function partition(limit){const out=[[]];let used=0;for(const item of items){if(used+item.height>limit+.0001&&out.at(-1).length){out.push([]);used=0;}out.at(-1).push(item);used+=item.height;}return out;}
+  for(let i=0;i<24;i++){const mid=(low+high)/2;if(partition(mid).length<=columns)high=mid;else low=mid;}
+  return partition(high+.0001);
  }
- function barnPlan(group,width,size){
-  const single=noteItems(group.notes,width-8,size);let columns=1,items=single;
-  if(single.reduce((n,item)=>n+item.parts.length,0)>8){
-   const narrow=noteItems(group.notes,width/2-8,size),parts=divide(narrow,2);
-   if(Math.max(...parts.map(col=>col.reduce((n,item)=>n+item.height,0)))<single.reduce((n,item)=>n+item.height,0)){columns=2;items=narrow;}
+ function panePlan(values,width,size,available=0){
+  let best=null;
+  for(let columns=1;columns<=Math.min(4,Math.max(1,Math.floor(width/48)));columns++){
+   const parts=divide(noteItems(values,width/columns-8,size),columns),height=Math.max(0,...parts.map(col=>col.reduce((n,item)=>n+item.height,0)));
+   const plan={size,columns,parts,height};
+   if(available&&height<=available+.001)return plan;
+   if(!best||height<best.height-.001)best=plan;
   }
-  const columnsItems=divide(items,columns),height=Math.max(0,...columnsItems.map(col=>col.reduce((n,item)=>n+item.height,0)));
-  return {group,columns,items:columnsItems,height:18+height+5};
+  return best;
  }
  function notesPlan(size){
-  const half=W/2,cols=Math.max(1,Math.min(3,groups.length)),pane=half/cols,rows=[];
-  for(let i=0;i<groups.length;i+=cols){const barns=groups.slice(i,i+cols).map(g=>barnPlan(g,pane,size));rows.push({barns,height:Math.max(24,...barns.map(g=>g.height))});}
-  const deathH=rows.reduce((n,row)=>n+row.height,0);
-  const one=noteItems(shipping,half-8,size),two=divide(noteItems(shipping,half/2-8,size),2);
-  const shipH=Math.min(one.reduce((n,item)=>n+item.height,0),Math.max(0,...two.map(col=>col.reduce((n,item)=>n+item.height,0))));
-  return {size,cols,pane,rows,height:Math.max(44,22+deathH,26+shipH)};
+  const half=W/2,cols=Math.max(1,Math.min(3,groups.length)),rows=[];
+  for(let i=0;i<groups.length;i+=cols){
+   const selected=groups.slice(i,i+cols),minimum=half/selected.length*.7,extra=half*.3,total=selected.reduce((n,g)=>n+Math.max(1,g.notes.length),0);
+   const barns=selected.map(group=>{const width=minimum+extra*Math.max(1,group.notes.length)/total;return {group,width,...panePlan(group.notes,width,size)};});
+   rows.push({barns,height:21+Math.max(0,...barns.map(g=>g.height))});
+  }
+  const deathH=rows.reduce((n,row)=>n+row.height,0),ship=panePlan(shipping,half,size);
+  return {size,cols,rows,height:Math.max(44,18+deathH,39+ship.height)};
  }
  function upperPlan(scale){
   const titleH=26,basicsH=Math.ceil(model.basics.length/3)*26;
@@ -57,48 +64,32 @@ window.weeklyPdf = async function(model) {
    const rows=input.rows.map(row=>{
     const cells=row.cells.map(value=>row.singleLine||row.left?String(value??'').split('\n'):wrap(value,cw-4,size,row.bold));
     const lines=Math.max(1,...cells.map(parts=>parts.length)),minimum=row.left?18*scale:12*scale;
-    return {...row,cells,height:Math.max(minimum,lines*lh+5*scale)};
+    return {...row,cells,height:Math.max(minimum,(row.height||0)*scale,lines*lh+5*scale)};
    });
    const band={...input,rows,size,headerH:14*scale,cw};height+=band.headerH+rows.reduce((n,row)=>n+row.height,0)+5*scale;bands.push(band);
   }
   return {scale,height,entryRows,entryFont,entryLH,widths,preentry,bands};
  }
  const room=PH-2*M-footerH-6;
- let notes=notesPlan(8.5),upper=upperPlan(1);
- const fits=(u,n)=>u.height+n.height<=room;
- if(!fits(upper,notes)){
+ let upper=upperPlan(1),notes=notesPlan(NOTE_SIZE);
+ const fits=(u,n)=>u.height+n.height<=room+.001;
+ // The weekly detail is the primary record. Keep it at its normal size unless
+ // its own content leaves less than a modest minimum area for the notes.
+ const noteMinimum=Math.max(136,notesPlan(.05).height);
+ if(upper.height+noteMinimum>room){
   let low=.05,high=1;upper=upperPlan(low);
-  if(fits(upper,notes)){
-   for(let i=0;i<22;i++){const mid=(low+high)/2,attempt=upperPlan(mid);if(fits(attempt,notes)){low=mid;upper=attempt;}else high=mid;}
-  }else{
-   // Only exceptionally dense notes need a smaller note font, after the upper
-   // section has already yielded its space. No records are omitted or paged.
-   let lowNote=.05,highNote=8.5;notes=notesPlan(lowNote);
-   for(let i=0;i<24;i++){const mid=(lowNote+highNote)/2,attempt=notesPlan(mid);if(fits(upper,attempt)){lowNote=mid;notes=attempt;}else highNote=mid;}
-  }
+  for(let i=0;i<24;i++){const mid=(low+high)/2,attempt=upperPlan(mid);if(attempt.height+noteMinimum<=room){low=mid;upper=attempt;}else high=mid;}
+ }
+ if(!fits(upper,notes)){
+  let low=.05,high=NOTE_SIZE;notes=notesPlan(low);
+  for(let i=0;i<24;i++){const mid=(low+high)/2,attempt=notesPlan(mid);if(fits(upper,attempt)){low=mid;notes=attempt;}else high=mid;}
  }
  if(!fits(upper,notes))throw new Error('weekly_pdf_layout_overflow');
- // The compact plan above only reserves the minimum necessary space. In the
- // actual pane, use the available height before splitting or keeping small text.
  function fillPane(values,width,height){
-  const base=notes.size;
-  const single=noteItems(values,width-8,base);
-  const columns=single.reduce((n,item)=>n+item.height,0)<=height?1:2;
-  const arrange=size=>{
-   const items=noteItems(values,width/columns-8,size),parts=divide(items,columns);
-   return {size,columns,parts,height:Math.max(0,...parts.map(col=>col.reduce((n,item)=>n+item.height,0)))};
-  };
-  let plan=arrange(base),low=base,high=Math.max(base,13.5);
-  for(let i=0;i<20;i++){const mid=(low+high)/2,attempt=arrange(mid);if(attempt.height<=height){low=mid;plan=attempt;}else high=mid;}
+  const plan=panePlan(values,width,notes.size,height);
   if(plan.height>height+.01)throw new Error('weekly_pdf_note_overflow');
   plan.draws=[];
-  plan.parts.forEach((items,column)=>{
-   const lh=plan.size*1.25,ink=items.reduce((n,item)=>n+item.parts.length*lh,0);
-   const spareGap=items.length>1?(height-ink)/(items.length-1):0;
-   const gap=items.length>1?Math.max(plan.size*.18,items.length>=4?spareGap:Math.min(lh,spareGap)):0;
-   let on=0;
-   for(const item of items){plan.draws.push({parts:item.parts,x:4+column*width/columns,y:on});on+=item.parts.length*lh+gap;}
-  });
+  plan.parts.forEach((items,column)=>{let on=0;for(const item of items){plan.draws.push({parts:item.parts,x:4+column*width/plan.columns,y:on});on+=item.height;}});
   return plan;
  }
  const canvas=document.createElement('canvas');canvas.width=Math.ceil(PW*SCALE);canvas.height=Math.ceil(PH*SCALE);
@@ -128,14 +119,14 @@ window.weeklyPdf = async function(model) {
  const baseDeathH=notes.rows.reduce((n,row)=>n+row.height,0),extraDeathH=Math.max(0,noteH-18-baseDeathH);
  let barnY=y+18;
  for(const row of notes.rows){
-  const rowH=row.height+extraDeathH*(row.height/baseDeathH);
+  const rowH=row.height+extraDeathH*(row.height/baseDeathH);let barnX=M;
   row.barns.forEach((reserved,index)=>{
-   const x=M+index*notes.pane,plan=fillPane(reserved.group.notes,notes.pane,rowH-23);
-   box(x,barnY,notes.pane,rowH);text(reserved.group.title,x+4,barnY+3,notes.pane-8,Math.min(11.5,Math.max(9,plan.size)),true,'left',true);
-   drawPane(plan,x,barnY+21,notes.pane);
+   const x=barnX,width=reserved.width,plan=fillPane(reserved.group.notes,width,rowH-21);barnX+=width;
+   box(x,barnY,width,rowH);text(reserved.group.title,x+4,barnY+3,width-8,8.5,true,'left',true);
+   drawPane(plan,x,barnY+17,width);
   });barnY+=rowH;
  }
- drawPane(fillPane(shipping,half,noteH-26),M+half,y+22,half);
+ drawPane(fillPane(shipping,half,noteH-39),M+half,y+35,half);
  y+=noteH+6;text(model.totalLabel,M,y,W,8.5,true,'left',true);y+=15;
  const totalW=W/Math.max(1,model.totals.length);
  model.totals.forEach((pair,i)=>{const x=M+i*totalW;box(x,y,totalW,30);text(pair[0],x+4,y+3,totalW-8,7,false,'left',true);text(pair[1],x+4,y+15,totalW-8,10,true,'left',true);});y+=36;

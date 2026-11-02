@@ -1,4 +1,4 @@
-"""Reproduce the user's9/23-barn whitespace: bigger notes fill their labeled panes."""
+"""Weekly detail has priority; all note panes use one font and fixed spacing."""
 import copy,json,re,subprocess,sys,tempfile,threading
 from pathlib import Path
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
@@ -24,12 +24,30 @@ with tempfile.TemporaryDirectory() as tmp:
    with page.expect_download() as dl:page.evaluate('m=>renderFill(m)',model)
    output=root/'artifacts/weekly-9-23-note-fill.pdf';dl.value.save_as(output);info=subprocess.check_output(['pdfinfo',str(output)],text=True);assert re.search(r'Pages:\s+1\b',info);assert page.evaluate('noteImages.length===1&&unchanged')
    (root/'artifacts/weekly-9-23-note-fill.jpg').write_bytes(bytes(page.evaluate('async()=>Array.from(new Uint8Array(await noteImages[0].arrayBuffer()))')))
-   draws=page.evaluate('draws');rects=page.evaluate('rects');head=next(d for d in draws if d['text']=='死亡備註');body=next(r for r in rects if abs(r['x']-24)<.01 and abs(r['y']-(head['y']+15))<.01 and abs(r['w']-(595.28-48)/2)<.01);bottom=body['y']+body['h']
-   for g in model['death_groups']:
-    own=[next(d for d in draws if d['text']==n) for n in g['notes']];assert len({d['x'] for d in own})==1;assert min(d['size'] for d in own)>10;last=own[-1];assert abs(last['y']+last['size']*1.25-(bottom-2))<.1
-   passed('9-barn13 entries and23-barn7 entries stay in single columns, grow above10pt, and both reach the bottom instead of leaving a blank lower box')
-   panes=[r for r in rects if abs(r['y']-body['y'])<.01 and abs(r['w']-body['w']/2)<.01];assert len(panes)==2 and all(abs(r['y']+r['h']-bottom)<.1 for r in panes);passed('each labeled barn pane extends to the full frame bottom; there is no empty unlabeled rectangle below the barn lists')
-   outgoing=[next(d for d in draws if d['text']==n) for n in model['shipping_notes']];assert len({d['x'] for d in outgoing})==1;assert min(d['size'] for d in outgoing)>10;last=outgoing[-1];assert abs(last['y']+last['size']*1.25-(bottom-4))<.1;passed('all16 shipments use a larger single column and spaced lines through the bottom, while preserving every destination and quantity')
-   assert all(sum(d['text']==n for d in draws)==1 for g in model['death_groups'] for n in g['notes']);assert not any('淘汰' in d['text'] or 'CSV' in d['text'] or '…' in d['text'] for d in draws);assert all(d['y']+d['size']*1.25<=818.1 for d in draws if d['text']);assert not errors,errors;passed('actual A4 is one page with every original note once, no crop, no cull row and no CSV');browser.close()
+   def note_draws(model):
+    draws=page.evaluate('draws');notes=[n for group in model['death_groups'] for n in group['notes']]+model['shipping_notes'];actual=[d for d in draws if d['text'] in notes]
+    assert len(actual)==len(notes),(len(actual),len(notes));assert len({round(d['size'],5) for d in actual})==1;assert actual[0]['size']<=8
+    for group in model['death_groups']+[{'notes':model['shipping_notes']}]:
+     positions={};left=297.64;right=571.28
+     if 'title' in group:
+      head=next(d for d in draws if d['text']==group['title']);left=head['x'];right=min([d['x'] for d in draws if d['text'] in [g['title'] for g in model['death_groups']] and d['x']>left]+[297.64])
+     for note in group['notes']:
+      found=[d for d in draws if d['text']==note and left<=d['x']<right];assert len(found)==1,(note,left,right,found);d=found[0];positions.setdefault(d['x'],[]).append(d)
+     for column in positions.values():
+      for before,after in zip(column,column[1:]):assert abs(after['y']-before['y']-before['size']*1.5)<.01
+    assert not any('淘汰' in d['text'] or 'CSV' in d['text'] or '…' in d['text'] for d in draws);assert all(d['y']+d['size']*1.25<=818.1 for d in draws if d['text'])
+    return draws,actual
+   draws,actual=note_draws(model)
+   assert all(d['size']==8 for d in actual);feed=[d for d in draws if '+' in d['text']];assert all(d['size']==8 for d in feed)
+   passed('normal weekly tables keep8pt detail; both barns and all16 shipments share8pt text and12pt pitch without stretching to the frame bottom')
+   assert next(d for d in draws if d['text']==model['death_groups'][0]['notes'][0])['y']==next(d for d in draws if d['text']==model['shipping_notes'][0])['y'];passed('barn note columns and shipment notes start on the same baseline; all records appear exactly once on one A4')
+   dense=fixture();dense['basics'][0][1]='JD-DEMO-20.21';dense['basics'][1][1]='11棟、21棟';dense['basics'][2][1]='1400頭';dense['entries'][0][0]='11棟';dense['entries'][1][0]='21棟';dense['entries'][0][2]=dense['entries'][1][2]='700';dense['totals']=[['死亡數','74'],['飼料（噸）','24'],['售出數','1173']];dense['cumulative']='目前剩餘頭數153 育成率94.71%';dense['legend']='合成資料版面驗證：週表優先，備註統一字級與行距，固定一頁A4。';dense['death_groups']=[{'title':'第11棟','notes':[f'{6+i//28}/{i%28+1} 死亡1隻' for i in range(43)]},{'title':'第21棟','notes':[f'6/{i+1} 死亡1隻' for i in range(17)]},{'title':'未指定','notes':[f'7/{i+1} 死亡2隻' for i in range(7)]}];dense['shipping_notes']=[f'9/{i+1} 南投{40+i}' for i in range(23)]
+   with page.expect_download() as dl:page.evaluate('m=>renderFill(m)',dense)
+   output=root/'artifacts/weekly-priority-uniform.pdf';dl.value.save_as(output);assert re.search(r'Pages:\s+1\b',subprocess.check_output(['pdfinfo',str(output)],text=True));draws,actual=note_draws(dense);assert all(d['size']==8 for d in draws if '+' in d['text']);assert all(6<=d['size']<=8 for d in actual),actual[0]['size']
+   edge=next(d['x'] for d in draws if d['text']=='第21棟');first=[d for d in actual if d['text'] in dense['death_groups'][0]['notes'] and d['x']<edge];assert len({d['x'] for d in first})==2;assert page.evaluate('unchanged');(root/'artifacts/weekly-priority-uniform.jpg').write_bytes(bytes(page.evaluate('async()=>Array.from(new Uint8Array(await noteImages[0].arrayBuffer()))')))
+   passed('screenshot-shaped43/17/7 deaths and23 shipments preserve full-size upper tables; the long barn continues beside itself and all panes share the same compact font and fixed spacing')
+   sparse=fixture();sparse['death_groups']=[{'title':'第8棟','notes':['10/1 死亡1隻','10/2 死亡2隻']}];sparse['shipping_notes']=['10/3 嘉義50']
+   with page.expect_download() as dl:page.evaluate('m=>renderFill(m)',sparse)
+   draws,actual=note_draws(sparse);assert all(d['size']==8 for d in actual);assert not errors,errors;passed('sparse notes stay8pt with fixed spacing rather than becoming oversized; original report data is unchanged');browser.close()
  finally:server.shutdown();server.server_close()
-(root/'artifacts/weekly-note-fill-results.json').write_text(json.dumps({'version':VERSION,'checks':checks,'mode':'real Chromium and A4 PDF, synthetic reproduction of screenshot; no live farm writes'},ensure_ascii=False,indent=2));print('Completed',len(checks),'note-fill scenarios')
+(root/'artifacts/weekly-note-fill-results.json').write_text(json.dumps({'version':VERSION,'checks':checks,'mode':'real Chromium and one A4 PDF; synthetic uneven note counts; no live farm writes'},ensure_ascii=False,indent=2));print('Completed',len(checks),'note-fill scenarios')
