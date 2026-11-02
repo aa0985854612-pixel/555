@@ -78,6 +78,29 @@ window.weeklyPdf = async function(model) {
   }
  }
  if(!fits(upper,notes))throw new Error('weekly_pdf_layout_overflow');
+ // The compact plan above only reserves the minimum necessary space. In the
+ // actual pane, use the available height before splitting or keeping small text.
+ function fillPane(values,width,height){
+  const base=notes.size;
+  const single=noteItems(values,width-8,base);
+  const columns=single.reduce((n,item)=>n+item.height,0)<=height?1:2;
+  const arrange=size=>{
+   const items=noteItems(values,width/columns-8,size),parts=divide(items,columns);
+   return {size,columns,parts,height:Math.max(0,...parts.map(col=>col.reduce((n,item)=>n+item.height,0)))};
+  };
+  let plan=arrange(base),low=base,high=Math.max(base,13.5);
+  for(let i=0;i<20;i++){const mid=(low+high)/2,attempt=arrange(mid);if(attempt.height<=height){low=mid;plan=attempt;}else high=mid;}
+  if(plan.height>height+.01)throw new Error('weekly_pdf_note_overflow');
+  plan.draws=[];
+  plan.parts.forEach((items,column)=>{
+   const lh=plan.size*1.25,ink=items.reduce((n,item)=>n+item.parts.length*lh,0);
+   const spareGap=items.length>1?(height-ink)/(items.length-1):0;
+   const gap=items.length>1?Math.max(plan.size*.18,items.length>=4?spareGap:Math.min(lh,spareGap)):0;
+   let on=0;
+   for(const item of items){plan.draws.push({parts:item.parts,x:4+column*width/columns,y:on});on+=item.parts.length*lh+gap;}
+  });
+  return plan;
+ }
  const canvas=document.createElement('canvas');canvas.width=Math.ceil(PW*SCALE);canvas.height=Math.ceil(PH*SCALE);
  const c=canvas.getContext('2d');c.scale(SCALE,SCALE);c.fillStyle='#fff';c.fillRect(0,0,PW,PH);c.strokeStyle='#444';c.lineWidth=.5;
  function text(value,x,y,width,size=8,bold=false,align='left',single=false,mono=false){
@@ -99,15 +122,20 @@ window.weeklyPdf = async function(model) {
   for(const row of band.rows){box(M,y,58,row.height);text(row.label,M+2,y+2*upper.scale,54,7.5*upper.scale,true,'left',true);row.cells.forEach((parts,j)=>{const x=M+58+j*band.cw;box(x,y,band.cw,row.height);text(parts,x+2,y+2*upper.scale,band.cw-4,band.size,row.bold,row.left?'left':'center',true,row.monospace);});y+=row.height;}
   y+=5*upper.scale;
  }
- const noteH=PH-M-footerH-y-6,half=W/2,contentH=noteH-22,lh=notes.size*1.25,gap=notes.size*.18;
- for(const [index,title] of [[0,model.death_title],[1,model.shipping_title]]){box(M+index*half,y,half,18,true);text(title,M+index*half+4,y+3,half-8,9,true,'left',true);box(M+index*half,y+18,half,noteH-18);}
+ const noteH=PH-M-footerH-y-6,half=W/2;
+ for(const [index,title] of [[0,model.death_title],[1,model.shipping_title]]){box(M+index*half,y,half,18,true);text(title,M+index*half+4,y+3,half-8,10.5,true,'left',true);box(M+index*half,y+18,half,noteH-18);}
+ function drawPane(plan,x,on,width){for(const entry of plan.draws)text(entry.parts,x+entry.x,on+entry.y,width/plan.columns-8,plan.size,false,'left',true);}
+ const baseDeathH=notes.rows.reduce((n,row)=>n+row.height,0),extraDeathH=Math.max(0,noteH-18-baseDeathH);
  let barnY=y+18;
  for(const row of notes.rows){
-  row.barns.forEach((plan,index)=>{const x=M+index*notes.pane;box(x,barnY,notes.pane,row.height);text(plan.group.title,x+4,barnY+3,notes.pane-8,notes.size,true,'left',true);plan.items.forEach((items,column)=>{let on=barnY+18;for(const item of items){text(item.parts,x+4+column*notes.pane/plan.columns,on,notes.pane/plan.columns-8,notes.size,false,'left',true);on+=item.height;}});});barnY+=row.height;
+  const rowH=row.height+extraDeathH*(row.height/baseDeathH);
+  row.barns.forEach((reserved,index)=>{
+   const x=M+index*notes.pane,plan=fillPane(reserved.group.notes,notes.pane,rowH-23);
+   box(x,barnY,notes.pane,rowH);text(reserved.group.title,x+4,barnY+3,notes.pane-8,Math.min(11.5,Math.max(9,plan.size)),true,'left',true);
+   drawPane(plan,x,barnY+21,notes.pane);
+  });barnY+=rowH;
  }
- const fullShip=noteItems(shipping,half-8,notes.size),oneH=fullShip.reduce((n,item)=>n+item.height,0),columns=oneH<=contentH?1:2;
- const items=columns===1?fullShip:noteItems(shipping,half/2-8,notes.size);let column=0,shipY=y+22;
- for(const item of items){for(const line of item.parts){if(shipY+lh>y+noteH){column++;shipY=y+22;}if(column>=columns)throw new Error('weekly_pdf_note_overflow');text(line,M+half+4+column*half/columns,shipY,half/columns-8,notes.size,false,'left',true);shipY+=lh;}shipY+=gap;}
+ drawPane(fillPane(shipping,half,noteH-26),M+half,y+22,half);
  y+=noteH+6;text(model.totalLabel,M,y,W,8.5,true,'left',true);y+=15;
  const totalW=W/Math.max(1,model.totals.length);
  model.totals.forEach((pair,i)=>{const x=M+i*totalW;box(x,y,totalW,30);text(pair[0],x+4,y+3,totalW-8,7,false,'left',true);text(pair[1],x+4,y+15,totalW-8,10,true,'left',true);});y+=36;
