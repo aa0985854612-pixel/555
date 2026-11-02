@@ -121,6 +121,8 @@
     }
   }
   function labels() {
+    const repair = $(".home-report-shortcut");
+    if (repair) repair.hidden = !me || current !== "daily";
     $("#nav")?.setAttribute("aria-label", t("uiNav"));
     document.querySelectorAll("#nav a").forEach((a) => {
       if (a.classList.contains("active"))
@@ -571,7 +573,15 @@
       $("#weighing-form").before(jump);
     }
     const shortcut = $("#page-daily .home-report-shortcut");
-    if (shortcut) $("#page-daily").append(shortcut);
+    if (shortcut) {
+      $(".content .page-heading").before(shortcut);
+      const pig = document.createElement("img");
+      pig.src = "/repair-pig-v2.1.2.png";
+      pig.alt = "";
+      pig.width = pig.height = 64;
+      pig.setAttribute("aria-hidden", "true");
+      shortcut.querySelector("a").prepend(pig);
+    }
     const settings = $("#page-settings");
     settings.insertAdjacentHTML(
       "afterbegin",

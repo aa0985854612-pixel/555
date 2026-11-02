@@ -752,18 +752,35 @@
   }
   .home-report-shortcut {
     display: flex;
-    justify-content: flex-end;
-    margin: 0 0 4px;
+    justify-content: flex-start;
+    margin: 0 0 20px;
   }
   .home-report-shortcut a {
-    font-size: 0.6875rem;
-    font-weight: 500;
-    min-height: 32px;
-    background: transparent;
-    border: 0;
-    padding: 4px 0;
-    color: #7f8b9c;
-    border-radius: 0;
+    width: 100%;
+    max-width: 520px;
+    min-height: 80px;
+    gap: 12px;
+    padding: 8px 16px;
+    border: 1px solid #c5d6eb;
+    border-radius: 8px;
+    background: #fff;
+    color: var(--ui-accent);
+    font-size: 1rem;
+    font-weight: 700;
+    line-height: 1.4;
+  }
+  .home-report-shortcut a:hover {
+    border-color: var(--ui-accent);
+    background: #f4f8ff;
+  }
+  .home-report-shortcut img {
+    width: 64px;
+    height: 64px;
+    flex: 0 0 64px;
+    object-fit: contain;
+  }
+  .home-report-shortcut a > span:last-child {
+    margin-left: auto;
   }
   #daily-entry {
     max-width: none;
@@ -1872,11 +1889,11 @@
       min-height: 44px;
     }
     .home-report-shortcut {
-      margin-bottom: 0;
+      margin-bottom: 20px;
     }
     .home-report-shortcut a {
-      font-size: 0.625rem;
-      min-height: 28px;
+      font-size: 1rem;
+      min-height: 80px;
     }
     #movement-form > .grid {
       grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -2774,7 +2791,6 @@
   .metric.feature small,
   .content > footer,
   .empty,
-  .home-report-shortcut a,
   .overview-columns {
     color: var(--muted);
   }
