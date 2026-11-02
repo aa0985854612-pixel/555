@@ -21,7 +21,8 @@ Object.assign(words,{
  weeklyPlanned:['空白週欄保留至32週；有登記就會顯示。','Giữ cột trống đến tuần 32; có bản ghi thì hiển thị.'],
  weeklyNone:['空白＝沒有登記或資料待補；已登記的未來資料照常列出。','Trống = chưa ghi hoặc thiếu dữ liệu; bản ghi ngày tương lai vẫn hiển thị.']
 });
-const base={build,clickAction,translate,enter,refresh};
+const base={build,clickAction,translate,enter,refresh,selections};
+let selectionStatus='active',selectionData=null,selectionTask=null;
 let report=null,reportUser=null,serial=0,printing=false,title=null,pdfCache=null,pdfTask=null,previewURLs=[];
 Object.assign(words,{weeklyContinue:['續','tiếp'],weeklyActualPreview:['A4列印預覽（與下載PDF相同）','Xem trước in A4 (giống PDF tải xuống)'],weeklyScreenDetails:['查看完整畫面明細','Xem chi tiết trên màn hình']});
 Object.assign(words,{weeklyLatestFeedType:['料別','Loại cám'],weeklySales:['售出數（隻）','Số xuất bán (con)'],weeklyPaperSale:['售出數','Số xuất bán']});
@@ -41,30 +42,43 @@ async function ensurePDF(){
 const el=id=>document.getElementById(id),safe=esc;
 function label(key,n){return t(key).replace('{n}',n);}
 function resetPrint(){if(title!==null){document.title=title;title=null;}printing=false;el('weekly-print-root')?.replaceChildren();el('weekly-print-root')?.classList.remove('weekly-rendered-pages');}
-function chosen(){return data?.batches.find(b=>(b._cohort_key||b.name+'|'+b.entry_date)===el('weekly-cohort').value);}
+Object.assign(words,{
+ weeklyEndedTitle:['已結束紀錄 · 肉豬每週紀錄表','Lứa đã kết thúc · Bảng ghi hằng tuần'],
+ weeklyNoEnded:['目前沒有已結束的批次。','Chưa có lứa đã kết thúc.'],
+ weeklyNoActive:['目前沒有飼養中批次，已結束資料請到「歷史紀錄 → 已結束紀錄」查看。','Không có lứa đang nuôi. Xem lứa đã kết thúc tại Lịch sử → Lứa đã kết thúc.'],
+ weeklyStatusChanged:['批次狀態已變更，請重新選擇；已結束資料保留在歷史紀錄。','Trạng thái lứa đã đổi. Hãy chọn lại; dữ liệu đã kết thúc vẫn ở Lịch sử.'],
+ endedRecords:['已結束紀錄','Lứa đã kết thúc']
+});
+function selectableBatches(){return (data?.batches||[]).filter(b=>b.status===selectionStatus);}
+function updateHeader(){el('weekly-title').textContent=t(selectionStatus==='ended'?'weeklyEndedTitle':'weeklyReport');el('weekly-generate').disabled=!selectableBatches().length;}
+function resetReport(){serial++;clearPDF();report=null;reportUser=null;el('weekly-sheet-body').replaceChildren();el('weekly-export-actions').hidden=true;resetPrint();}
+function chosen(){return selectableBatches().find(b=>(b._cohort_key||b.name+'|'+b.entry_date)===el('weekly-cohort').value);}
 function syncCohorts(preferred=el('weekly-cohort').value){
- const cohorts=(data.cohorts||[]).filter(c=>!c.archive).sort((a,b)=>b.entry_date.localeCompare(a.entry_date)||b.name.localeCompare(a.name));
+ const batches=selectableBatches(),keys=new Set(batches.map(b=>b._cohort_key||b.name+'|'+b.entry_date));
+ const cohorts=(data.cohorts||[]).filter(c=>!c.archive&&keys.has(c.key)).map(c=>({...c,barns:data.barns.filter(barn=>batches.some(b=>b.barn_id===barn.id&&(b._cohort_key||b.name+'|'+b.entry_date)===c.key)).map(b=>b.name)})).sort((a,b)=>b.entry_date.localeCompare(a.entry_date)||b.name.localeCompare(a.name));
  el('weekly-cohort').innerHTML=cohorts.map(c=>`<option value="${safe(c.key)}">${safe(c.name)}｜${safe(c.barns.join('、'))}</option>`).join('');
- if(cohorts.some(c=>c.key===preferred))el('weekly-cohort').value=preferred;
+ if(preferred)el('weekly-cohort').value=cohorts.some(c=>c.key===preferred)?preferred:'';
+ updateHeader();
 }
 function syncBarns(preferred=''){
- const key=el('weekly-cohort').value,ids=new Set(data.batches.filter(b=>(b._cohort_key||b.name+'|'+b.entry_date)===key).map(b=>b.barn_id));
+ const key=el('weekly-cohort').value,ids=new Set(selectableBatches().filter(b=>(b._cohort_key||b.name+'|'+b.entry_date)===key).map(b=>b.barn_id));
  const barns=data.barns.filter(b=>ids.has(b.id)).sort((a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true}));
  el('weekly-barn').innerHTML=`<option value="">${t('weeklyAllBarns')}</option>`+barns.map(b=>`<option value="${safe(b.id)}">${safe(b.name)}</option>`).join('');
  if(ids.has(preferred))el('weekly-barn').value=preferred;
 }
 function openWeekly(context={}){
- if(!data)return;serial++;clearPDF();report=null;el('weekly-sheet-body').replaceChildren();el('weekly-export-actions').hidden=true;el('weekly-error').textContent='';
+ if(!data)return;selectionData=data;resetReport();el('weekly-error').textContent='';
+ const requested=data.batches.find(b=>b.id===context.batch_id);selectionStatus=context.batch_status==='ended'||requested?.status==='ended'?'ended':'active';
  const f=current==='daily'?el('movement-form'):el('stats-filter'),b=data.batches.find(b=>b.id===(context.batch_id||val(f,'batch_id')));
- syncCohorts((context.batch_id?'':val(f,'cohort'))||(b?(b._cohort_key||b.name+'|'+b.entry_date):''));
- syncBarns(context.batch_id?b?.barn_id||'':val(f,'barn_id')||b?.barn_id||'');
+ syncCohorts(context.cohort||(context.batch_id?'':val(f,'cohort'))||(b?(b._cohort_key||b.name+'|'+b.entry_date):''));
+ syncBarns(context.batch_id?b?.barn_id||'':context.cohort?'':val(f,'barn_id')||b?.barn_id||'');
  const d=el('weekly-report-dialog');if(!d.open)d.showModal();d.scrollTop=0;
- if(chosen())generate({preventDefault(){}});
+ if(chosen())generate({preventDefault(){}});else if(!selectableBatches().length)el('weekly-error').textContent=t(selectionStatus==='ended'?'weeklyNoEnded':'weeklyNoActive');
 }
 async function generate(e){
  e.preventDefault();const f=el('weekly-report-form');if(!f.reportValidity())return;const mine=++serial,user=me?.id,button=el('weekly-generate');button.disabled=true;el('weekly-error').textContent=t('weeklyLoading');el('weekly-export-actions').hidden=true;clearPDF();report=null;el('weekly-sheet-body').replaceChildren();
  try{
-  const q=new URLSearchParams({cohort:el('weekly-cohort').value,all_records:'1'});if(el('weekly-barn').value)q.set('barn_id',el('weekly-barn').value);
+  const q=new URLSearchParams({cohort:el('weekly-cohort').value,all_records:'1',batch_status:selectionStatus});if(el('weekly-barn').value)q.set('barn_id',el('weekly-barn').value);
   const result=await api('/api/weekly-report?'+q);if(mine!==serial||me?.id!==user||!el('weekly-report-dialog').open)return;report=result;reportUser=user;render();el('weekly-error').textContent='';el('weekly-export-actions').hidden=false;ensurePDF().then(blob=>{if(blob&&e.type==='submit'&&mine===serial&&me?.id===user)el('weekly-a4-preview').scrollIntoView({block:'start',behavior:'smooth'});}).catch(()=>{});
  }catch(err){if(mine===serial)el('weekly-error').textContent=messageError(err);}finally{if(mine===serial)button.disabled=false;}
 }
@@ -204,15 +218,26 @@ async function printSheet(){
 build=()=>{
  base.build();el('stats-filter').closest('.card').insertAdjacentHTML('beforeend',`<div class="weekly-entry"><button type="button" id="open-weekly-report">${txt('weeklyOpen')}</button><p class="hint">${txt('weeklyBasis')}</p></div>`);
  el('movement-form').insertAdjacentHTML('afterend',`<div class="weekly-entry"><button type="button" id="open-daily-weekly-report">${txt('weeklyOpen')}</button></div>`);
- document.body.insertAdjacentHTML('beforeend',`<dialog id="weekly-report-dialog" aria-labelledby="weekly-title"><div class="weekly-toolbar"><div class="section-row"><h2 id="weekly-title">${txt('weeklyReport')}</h2><button type="button" id="weekly-close">${txt('reportClose')}</button></div><form id="weekly-report-form"><div class="grid"><label>${txt('weeklyBatch')}<select id="weekly-cohort" required></select></label><label>${txt('barn')}<select id="weekly-barn"></select></label></div><p class="hint">${txt('weeklyBasis')}</p><button type="submit" id="weekly-generate" class="primary">${txt('weeklyMake')}</button><p id="weekly-error" role="status"></p></form><div id="weekly-export-actions" class="actions" hidden><button type="button" id="weekly-print" class="primary">${txt('weeklyDownloadPDF')}</button><button type="button" id="weekly-browser-print">${txt('weeklyBrowserPrint')}</button></div></div><p class="weekly-export-hint hint">${txt('weeklyPDFHint')}</p><div id="weekly-a4-preview" aria-live="polite"></div><div id="weekly-sheet-body"></div></dialog><div id="weekly-print-root"></div>`);
+ document.body.insertAdjacentHTML('beforeend',`<dialog id="weekly-report-dialog" aria-labelledby="weekly-title"><div class="weekly-toolbar"><div class="section-row"><h2 id="weekly-title">${txt('weeklyReport')}</h2><button type="button" id="weekly-close">${txt('reportClose')}</button></div><form id="weekly-report-form"><div class="grid"><label>${txt('weeklyBatch')}<select id="weekly-cohort" required></select></label><label>${txt('barn')}<select id="weekly-barn"></select></label></div><p class="hint">${txt('weeklyBasis')}</p><button type="submit" id="weekly-generate" class="primary">${txt('weeklyMake')}</button><p id="weekly-error" role="status"></p></form><div id="weekly-export-actions" class="actions" hidden><button type="button" id="weekly-print" class="primary">${txt('weeklyDownloadPDF')}</button><button type="button" id="weekly-browser-print">${txt('weeklyBrowserPrint')}</button></div></div><p class="weekly-archive-link"><button type="button" id="weekly-ended-records">${txt('endedRecords')}</button></p><p class="weekly-export-hint hint">${txt('weeklyPDFHint')}</p><div id="weekly-a4-preview" aria-live="polite"></div><div id="weekly-sheet-body"></div></dialog><div id="weekly-print-root"></div>`);
  el('open-weekly-report').onclick=openWeekly;el('weekly-cohort').onchange=()=>syncBarns();el('weekly-report-form').onsubmit=generate;el('weekly-print').onclick=downloadPDF;el('weekly-browser-print').onclick=printSheet;el('weekly-close').onclick=()=>el('weekly-report-dialog').close();el('weekly-report-dialog').addEventListener('close',()=>{serial++;clearPDF();report=null;reportUser=null;el('weekly-generate').disabled=false;resetPrint();});
  el('open-daily-weekly-report').onclick=openWeekly;
+ el('weekly-ended-records').onclick=()=>{el('weekly-report-dialog').close();document.dispatchEvent(new CustomEvent('pigledger:ended-open'));};
  for(const event of ['input','change'])el('weekly-report-form').addEventListener(event,()=>{serial++;clearPDF();report=null;reportUser=null;el('weekly-sheet-body').replaceChildren();el('weekly-export-actions').hidden=true;el('weekly-generate').disabled=false;el('weekly-error').textContent='';if(event==='change'&&chosen())queueMicrotask(()=>generate({preventDefault(){}}));});
 };
 document.addEventListener('pigledger:weekly-open',event=>openWeekly(event.detail||{}));
 window.addEventListener('afterprint',resetPrint);
 document.addEventListener('pigledger:logout',()=>{serial++;clearPDF();report=null;reportUser=null;if(el('weekly-report-dialog').open)el('weekly-report-dialog').close();el('weekly-sheet-body').replaceChildren();resetPrint();});
-translate=()=>{base.translate();if(data&&el('weekly-report-dialog')?.open){syncCohorts();syncBarns(el('weekly-barn').value);}render();};
-refresh=async(...args)=>{const previous=data;await base.refresh(...args);if(me&&data!==previous&&report&&el('weekly-report-dialog')?.open)await generate({preventDefault(){}});};
+translate=()=>{base.translate();if(data&&el('weekly-report-dialog')?.open){const barn=el('weekly-barn').value;syncCohorts();syncBarns(barn);updateHeader();}render();};
+function syncOpenReport(){
+ if(!me||!data||!el('weekly-report-dialog')?.open)return Promise.resolve();
+ if(selectionData===data)return selectionTask||Promise.resolve();
+ selectionData=data;const key=el('weekly-cohort').value,barn=el('weekly-barn').value;resetReport();syncCohorts(key);syncBarns(barn);
+ if(key&&el('weekly-cohort').value===key&&(!barn||el('weekly-barn').value===barn)){
+  const task=generate({preventDefault(){}});selectionTask=task;task.finally(()=>{if(selectionTask===task)selectionTask=null;});return task;
+ }
+ el('weekly-error').textContent=t('weeklyStatusChanged');return Promise.resolve();
+}
+selections=(...args)=>{const result=base.selections(...args);syncOpenReport();return result;};
+refresh=async(...args)=>{await base.refresh(...args);await syncOpenReport();};
 enter=async user=>{if(el('weekly-report-dialog')?.open)el('weekly-report-dialog').close();return base.enter(user);};
 })();

@@ -148,7 +148,7 @@ renderHome=async()=>{
  $$('#barns details[data-key]').forEach(el=>el.open=openDetails.has(el.dataset.key));
  $('#barns').classList.add('compact-barns');
  let archive=$('#cleared-records');if(!archive){archive=document.createElement('details');archive.id='cleared-records';archive.className='card';$('#barns').after(archive);}
- const cleared=data.batches.filter(b=>b.entry_date<=dashboard.as_of&&(b.status==='ended'||result(b)?.herd.remaining===0)).sort((a,b)=>b.entry_date.localeCompare(a.entry_date)||compareBarn(a,b));
+ const cleared=data.batches.filter(b=>b.entry_date<=dashboard.as_of&&(b.status==='active'&&result(b)?.herd.remaining===0)).sort((a,b)=>b.entry_date.localeCompare(a.entry_date)||compareBarn(a,b));
  preserveBox('cleared-records',`<summary>${t('clearedRecords')} ${cleared.length}</summary><p class="hint">${t('clearedHint')}</p>${cleared.map(b=>`<article class="cleared-record"><strong>${esc(b.name)} · ${esc(barnOf(b))}</strong><small>${t(b.status==='ended'?'ended':'cleared')}</small><div class="actions"><button type="button" data-cleared-history="${b.id}">${t('viewHistory')}</button><button type="button" data-cleared-report="${b.id}">${t('weeklyReport')}</button></div></article>`).join('')||empty()}`);
  archive.hidden=!cleared.length;
 

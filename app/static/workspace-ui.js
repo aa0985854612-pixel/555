@@ -693,6 +693,20 @@
       }
     }
   };
+  document.addEventListener("pigledger:history-query-reset", () => {
+    for (const [key, state] of tableMemory) {
+      if (key.startsWith("history-results|")) {
+        state.search = "";
+        state.page = 0;
+      }
+    }
+    const search = $("#history-results .ui-table-tools input[type=search]");
+    if (search) {
+      search.value = "";
+      search.dispatchEvent(new Event("input"));
+    }
+    if (focusedSearch?.startsWith("history-results|")) focusedSearch = null;
+  });
   document.addEventListener("pigledger:logout", () => {
     tableMemory.clear();
     focusedSearch = null;

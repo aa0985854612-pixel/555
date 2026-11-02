@@ -24,7 +24,10 @@ def weekly_report(data,query,today=None):
     from .server import selected_ids,filter_rows
     get=lambda k:query.get(k,[''])[0]
     today=today or datetime.now(timezone(timedelta(hours=8))).date().isoformat()
+    status=get('batch_status')
+    if status and status not in ('active','ended'):raise Invalid('invalid_status')
     ids=set(selected_ids(data,query))
+    if status:ids&={b['id'] for b in data['batches'] if b['status']==status}
     members=[b for b in data['batches'] if b['id'] in ids]
     keys={cohort_key(b) for b in members}
     if not members or len(keys)!=1 or not (get('cohort') or get('batch_id')):raise Invalid('weekly_choose_batch')
@@ -60,7 +63,9 @@ def weekly_report(data,query,today=None):
     ledger=report_orders(data)
     feed_data=data|{'feed_orders':ledger}
     feed_query=scope if all_records else scope|{'to':[min(end,today)]}
-    candidates=[part for order in filter_rows('feed_orders',feed_data,feed_query) for part in report_order_parts(order,data,ids)]
+    scoped_orders=filter_rows('feed_orders',feed_data,feed_query)
+    if status:scoped_orders=[o for o in scoped_orders if order_scope(o,data,ids)['related']]
+    candidates=[part for order in scoped_orders for part in report_order_parts(order,data,ids)]
     if all_records:
         # Paper is the complete saved ledger, including dated future entries.
         # Stock and survival below retain their separate as-of-today cutoff.
