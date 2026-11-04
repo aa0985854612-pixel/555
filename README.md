@@ -1,10 +1,12 @@
-# 肉豬紀錄管理 App — PigLedger 2.1.3
+# 肉豬紀錄管理 App — PigLedger 2.1.4
 
 **[開啟正式網站：555-rho-nine.vercel.app](https://555-rho-nine.vercel.app/)**。沿用你目前的帳號、密碼、Vercel專案及Turso資料庫。
 
-- [完整原始碼／Docker／Vercel設定 v2.1.3](https://github.com/aa0985854612-pixel/555/tree/main)
+- [完整原始碼／Docker／Vercel設定 v2.1.4](https://github.com/aa0985854612-pixel/555/tree/main)
 - [簡短操作說明](docs/USER_GUIDE.md)／[部署說明](docs/VERCEL.md)
-- [2.1.3已結束紀錄驗收](docs/TEST_REPORT_2.1.3.md)／[設計規範](docs/DESIGN_SYSTEM.md)
+- [2.1.4棟舍數字排序驗收](docs/TEST_REPORT_2.1.4.md)／[設計規範](docs/DESIGN_SYSTEM.md)
+
+所有登記與查詢的棟舍選單按棟號數字排序（1、2、3…24），不依資料建立順序。保留空棟舍、原ID、名稱與批次對應；重新同步或切換語言後仍維持同一順序。
 
 標記「已結束」後，退出一般肉豬紀錄表與週期統計的批次選單；到「歷史紀錄→已結束紀錄」搜尋、查看原明細與列印A4，設定亦有同名入口。管理員透過原核對流程改回飼養中後，自動回到日常選單；原紀錄與頭數保留。
 

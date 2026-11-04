@@ -55,14 +55,14 @@ function resetReport(){serial++;clearPDF();report=null;reportUser=null;el('weekl
 function chosen(){return selectableBatches().find(b=>(b._cohort_key||b.name+'|'+b.entry_date)===el('weekly-cohort').value);}
 function syncCohorts(preferred=el('weekly-cohort').value){
  const batches=selectableBatches(),keys=new Set(batches.map(b=>b._cohort_key||b.name+'|'+b.entry_date));
- const cohorts=(data.cohorts||[]).filter(c=>!c.archive&&keys.has(c.key)).map(c=>({...c,barns:data.barns.filter(barn=>batches.some(b=>b.barn_id===barn.id&&(b._cohort_key||b.name+'|'+b.entry_date)===c.key)).map(b=>b.name)})).sort((a,b)=>b.entry_date.localeCompare(a.entry_date)||b.name.localeCompare(a.name));
+ const cohorts=(data.cohorts||[]).filter(c=>!c.archive&&keys.has(c.key)).map(c=>({...c,barns:orderedBarns(data.barns.filter(barn=>batches.some(b=>b.barn_id===barn.id&&(b._cohort_key||b.name+'|'+b.entry_date)===c.key))).map(b=>b.name)})).sort((a,b)=>b.entry_date.localeCompare(a.entry_date)||b.name.localeCompare(a.name));
  el('weekly-cohort').innerHTML=cohorts.map(c=>`<option value="${safe(c.key)}">${safe(c.name)}｜${safe(c.barns.join('、'))}</option>`).join('');
  if(preferred)el('weekly-cohort').value=cohorts.some(c=>c.key===preferred)?preferred:'';
  updateHeader();
 }
 function syncBarns(preferred=''){
  const key=el('weekly-cohort').value,ids=new Set(selectableBatches().filter(b=>(b._cohort_key||b.name+'|'+b.entry_date)===key).map(b=>b.barn_id));
- const barns=data.barns.filter(b=>ids.has(b.id)).sort((a,b)=>a.name.localeCompare(b.name,undefined,{numeric:true}));
+ const barns=orderedBarns(data.barns.filter(b=>ids.has(b.id)));
  el('weekly-barn').innerHTML=`<option value="">${t('weeklyAllBarns')}</option>`+barns.map(b=>`<option value="${safe(b.id)}">${safe(b.name)}</option>`).join('');
  if(ids.has(preferred))el('weekly-barn').value=preferred;
 }

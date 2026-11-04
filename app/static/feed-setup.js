@@ -91,7 +91,7 @@ selections=(force=false)=>{
  if(force||fingerprint!==binsFingerprint){binsFingerprint=fingerprint;const f=$('#feed-order-form');binOptions();typeOptions(val(f,'item'));targets();
  const filter=$('#feed-filter'),binFilter=filter.elements.feed_bin_id;replaceOptions(binFilter,option('','all')+data.feed_bins.map(b=>`<option value="${b.id}">${esc(feedBinLabel(b))} · ${esc(b.vendor)}</option>`).join(''));
  const itemFilter=filter.elements.namedItem('item'),legacyTypes=[...new Set(data.feed_orders.map(o=>o.item).filter(v=>v&&!types.some(([x])=>x===v)))];replaceOptions(itemFilter,option('','all')+types.map(([v,k])=>`<option value="${v}">${t(k)}</option>`).join('')+legacyTypes.map(v=>`<option value="${esc(v)}">${esc(v)}</option>`).join(''));
- const old=Array.from($('#feed-bin-barns').querySelectorAll('input:checked')).map(e=>e.value);$('#feed-bin-barns').innerHTML=data.barns.map(b=>`<label class="check"><input type="checkbox" name="member_barn" value="${b.id}" ${old.includes(b.id)?'checked':''}>${esc(b.name)}</label>`).join('');}
+ const old=Array.from($('#feed-bin-barns').querySelectorAll('input:checked')).map(e=>e.value);$('#feed-bin-barns').innerHTML=orderedBarns().map(b=>`<label class="check"><input type="checkbox" name="member_barn" value="${b.id}" ${old.includes(b.id)?'checked':''}>${esc(b.name)}</label>`).join('');}
 };
 query=f=>{const result=new URLSearchParams(base.query(f));if(val(f,'feed_bin_id'))result.set('feed_bin_id',val(f,'feed_bin_id'));return result.toString();};
 collect=f=>{
