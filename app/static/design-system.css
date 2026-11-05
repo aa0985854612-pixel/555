@@ -2923,3 +2923,27 @@
     display: none;
   }
 }
+
+@media screen {
+  #barn-delete-dialog {
+    max-width: 560px;
+  }
+  #barn-delete-name {
+    font-size: 1rem;
+  }
+  #barn-delete-info,
+  #barn-delete-links {
+    font-size: 0.875rem;
+    line-height: 1.65;
+    overflow-wrap: anywhere;
+  }
+  #barn-delete-links:empty {
+    display: none;
+  }
+  #workspace .barn-config-actions button {
+    min-height: 44px;
+  }
+  .barn-config-actions {
+    white-space: nowrap;
+  }
+}

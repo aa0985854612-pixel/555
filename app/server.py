@@ -625,7 +625,8 @@ class Handler(BaseHTTPRequestHandler):
                 if method=='GET':return self.send(filter_rows(kind,store.snapshot(include_source=False),query))
                 if (method=='POST' and not rid) or (method in ('PUT','DELETE') and rid):
                     if method=='DELETE':
-                        store.require(user,True);raise Problem('void_preview_required')
+                        store.require(user,True)
+                        if kind!='barns':raise Problem('void_preview_required')
                     if orders_are_arrivals() and kind in ('deliveries','feed_orders'):store.require(user)
                     if orders_are_arrivals() and kind=='deliveries' and method=='POST':raise Problem('feed_receipt_use_order',409)
                     if orders_are_arrivals() and kind=='feed_orders':raise Problem('feed_receipt_review_required',409)

@@ -18,7 +18,35 @@ Object.assign(words,{
  clearedRecords:['已清空／已結束紀錄','Lịch sử chuồng trống / lứa kết thúc'],cleared:['已清空','Đã trống'],viewHistory:['查看紀錄','Xem lịch sử'],
  clearedHint:['清空與結束的紀錄仍完整保留，可查看異動或下載肉豬紀錄表。','Giữ đầy đủ dữ liệu chuồng trống và lứa kết thúc; xem biến động hoặc tải bảng heo thịt.']
 });
-const base={build,renderHome,edit,finishForm,clickAction,enter,restorePending};
+const base={build,renderHome,edit,finishForm,clickAction,enter,restorePending,translate};
+let barnDelete=null;
+Object.assign(words,{
+ barnDeleteTitle:['刪除棟舍','Xóa chuồng'],
+ barnDeleteInfo:['確認刪除這個誤建、未使用的棟舍？原值會保留在操作歷程；不會連帶刪除批次或登記。','Xóa chuồng tạo nhầm, chưa sử dụng? Giữ giá trị gốc trong nhật ký; không xóa lứa hoặc bản ghi liên quan.'],
+ barnDeleteUsed:['這個棟舍已有以下關聯，不能直接刪除。請先更正關聯設定；原批次與歷史紀錄會保留。','Chuồng có các liên kết sau, không thể xóa trực tiếp. Hãy sửa liên kết trước; giữ lứa và lịch sử.'],
+ barnDeleteChanged:['這個棟舍已被更改，請關閉後重新核對。','Chuồng đã được sửa. Đóng rồi kiểm tra lại.'],
+ barnDeleted:['已刪除誤建棟舍','Đã xóa chuồng tạo nhầm']
+});
+function barnReferences(id){
+ const links=data.batches.filter(b=>b.barn_id===id).map(b=>`${t('batch')}：${b.name} · ${b.entry_date} · ${t(b.status)}`);
+ links.push(...(data.feed_bins||[]).filter(bin=>bin.barn_ids.includes(id)).map(bin=>`${t('feedBin')}：${bin.name}`));
+ for(const kind of ['movements','feed_orders','deliveries'])if(data[kind]?.some(r=>r.quick_source?.barn_id===id))links.push(t(kind));
+ return links;
+}
+function drawBarnDelete(){
+ const dialog=$('#barn-delete-dialog');if(!dialog?.open||!barnDelete||!data)return;
+ const row=data.barns.find(b=>b.id===barnDelete.id),links=row?barnReferences(row.id):[];
+ const changed=!row||row.revision!==barnDelete.revision;
+ $('#barn-delete-name').textContent=barnDelete.name;
+ $('#barn-delete-info').textContent=t(changed?'barnDeleteChanged':links.length?'barnDeleteUsed':'barnDeleteInfo');
+ $('#barn-delete-links').innerHTML=links.map(label=>`<li>${esc(label)}</li>`).join('');
+ $('#barn-delete-confirm').disabled=changed||links.length>0||!!pending||me?.role!=='admin';
+}
+function openBarnDelete(id){
+ if(me?.role!=='admin')return;if(pending){toast(t('pending'));return;}
+ const row=data?.barns.find(b=>b.id===id);if(!row)return;
+ barnDelete={id:row.id,revision:row.revision,name:row.name};$('#barn-delete-dialog').showModal();drawBarnDelete();
+}
 const keyOf=b=>b._cohort_key||b.name+'|'+b.entry_date;
 const barnOf=b=>data.barns.find(x=>x.id===b.barn_id)?.name||t('unassigned');
 const compareBarn=(a,b)=>barnOf(a).localeCompare(barnOf(b),'zh-Hant',{numeric:true});
@@ -47,6 +75,16 @@ function editorFields(record){
 }
 build=()=>{
  base.build();
+ document.body.insertAdjacentHTML('beforeend',`<dialog id="barn-delete-dialog" aria-labelledby="barn-delete-title"><h2 id="barn-delete-title">${txt('barnDeleteTitle')}</h2><p><strong id="barn-delete-name"></strong></p><p id="barn-delete-info"></p><ul id="barn-delete-links"></ul><div class="actions"><button type="button" id="barn-delete-cancel">${txt('cancel')}</button><button type="button" class="danger" id="barn-delete-confirm">${txt('delete')}</button></div></dialog>`);
+ $('#barn-delete-cancel').onclick=()=>$('#barn-delete-dialog').close();
+ $('#barn-delete-dialog').addEventListener('close',()=>barnDelete=null);
+ $('#barn-delete-confirm').onclick=async()=>{
+  drawBarnDelete();if(!barnDelete||$('#barn-delete-confirm').disabled)return;
+  const request={...barnDelete},formId=$('#barn-form').dataset.editId===request.id?'barn-form':null;
+  $('#barn-delete-confirm').disabled=true;$('#barn-delete-dialog').close();barnDelete=null;$('#page-title').focus({preventScroll:true});
+  await startWrite('/api/barns/'+request.id,'DELETE',{revision:request.revision},formId);
+  if(!pending&&data&&!data.barns.some(b=>b.id===request.id))toast(t('barnDeleted'));
+ };
  const page=$('#page-settings'),list=$('#batch-settings'),listCard=list.closest('.card'),editor=$('#batch-form').closest('.card'),barnCard=$('#barn-form').closest('.card'),oldSplit=barnCard.parentElement;
  listCard.id='batch-workspace';listCard.classList.add('admin-section');page.prepend(listCard);
  listCard.querySelector('h2').dataset.i='groupedSetup';listCard.querySelector('h2').textContent=t('groupedSetup');listCard.insertAdjacentHTML('afterbegin',`<div class="batch-tools"><label>${txt('findBatch')}<input type="search" id="batch-search" autocomplete="off"></label><label>${txt('status')}<select id="batch-status">${option('active','active')+option('','all')+option('ended','ended')}</select></label></div>`);
@@ -106,7 +144,8 @@ function attachEditor(){
 renderSettings=()=>{
  if(!data)return;
  renderWorkbookSources();
- preserveBox('barn-settings',table(['barn','feedVendor','edit'],data.barns.map(r=>`<tr><td><strong>${esc(r.name)}</strong>${r.group?`<small>${esc(r.group)}</small>`:''}</td><td>${esc(r.feed_vendor||'—')}</td><td>${recordActions('barns',r)}</td></tr>`)));
+ drawBarnDelete();
+ preserveBox('barn-settings',table(['barn','feedVendor','edit'],orderedBarns().map(r=>`<tr><td><strong>${esc(r.name)}</strong>${r.group?`<small>${esc(r.group)}</small>`:''}</td><td>${esc(r.feed_vendor||'—')}</td><td class="barn-config-actions">${recordActions('barns',r)}${me?.role==='admin'?`<button type="button" class="danger" data-barn-delete="${esc(r.id)}">${t('delete')}</button>`:''}</td></tr>`)));
  // Do not detach/rebuild the active editor: IME, keyboard focus and unsaved values stay intact.
  const editor=$('#batch-editor'),editing=editor.contains(document.activeElement);
  if(!editing){
@@ -156,6 +195,7 @@ renderHome=async()=>{
  showDaily(dailyView);
 };
 clickAction=e=>{
+ const removeBarn=e.target.closest('[data-barn-delete]');if(removeBarn){openBarnDelete(removeBarn.dataset.barnDelete);return;}
  const archiveButton=e.target.closest('[data-cleared-history],[data-cleared-report]');
  if(archiveButton){
   const record=data.batches.find(b=>b.id===(archiveButton.dataset.clearedHistory||archiveButton.dataset.clearedReport));if(!record)return;
@@ -165,4 +205,6 @@ clickAction=e=>{
  const b=e.target.closest('button');if(b?.dataset.addBatch){const f=$('#movement-form');showDaily('entry');f.elements.barn_id.value=b.dataset.addBarn;updateScope(f.querySelector('.scope'));f.elements.batch_id.value=b.dataset.addBatch;f.scrollIntoView({block:'start',behavior:'smooth'});return;}
  return base.clickAction(e);
 };
+translate=(...args)=>{const result=base.translate(...args);drawBarnDelete();return result;};
+document.addEventListener('pigledger:logout',()=>{barnDelete=null;$('#barn-delete-dialog')?.close();});
 })();
