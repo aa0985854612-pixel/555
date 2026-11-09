@@ -27,18 +27,33 @@ with tempfile.TemporaryDirectory() as tmp,patch.dict(os.environ,{'FEED_ORDERS_AR
   for name,tons in rows:
    bin=bins[name];original.append(add('feed_orders',date='2026-'+on,kg=tons*1000,display_unit='ton',vendor=vendor,item='仔豬料',feed_bin_id=bin['id'],target_batch_ids=[b['id'] for b in batches.values() if b['barn_id'] in bin['barn_ids']]))
  assert len(original)==24 and sum(r['kg'] for r in original)==78000
+ for typ,on,q in [('cull','2026-10-24',2),('cull','2026-10-26',3),('death','2026-10-24',1)]:add('movements',date=on,batch_id=batches[13]['id'],type=typ,quantity=q)
  before=s.export_backup()['records'];server=Server(('127.0.0.1',0),s);threading.Thread(target=server.serve_forever,daemon=True).start();url=f'http://127.0.0.1:{server.server_port}'
  try:
   with sync_playwright() as p:
    browser=p.chromium.launch(executable_path='/usr/bin/chromium',args=['--no-sandbox']);page=browser.new_page(viewport={'width':390,'height':844},timezone_id='Asia/Taipei');errors=[];page.on('pageerror',lambda e:(errors.append(str(e)),print('BROWSER ERROR',e,flush=True)));page.on('response',lambda r: print('REPORT ERROR',r.status,r.text(),flush=True) if '/api/weekly-report?' in r.url and r.status!=200 else None)
    page.goto(url);page.locator('#login-form [name=username]').fill('owner');page.locator('#login-form [name=password]').fill('83000011');page.locator('#login-form button').click();page.wait_for_selector('#workspace:not([hidden])')
-   page.evaluate('()=>{window.models=[];window.feedDraws=[];const pdf=weeklyPdf;window.weeklyPdf=m=>{models.push(m);return pdf(m)};const draw=CanvasRenderingContext2D.prototype.fillText;CanvasRenderingContext2D.prototype.fillText=function(...args){if(String(args[0]).includes("+"))feedDraws.push(args[0]);return draw.apply(this,args)};}')
+   page.evaluate('()=>{window.models=[];window.feedDraws=[];window.colourDraws=[];const pdf=weeklyPdf;window.weeklyPdf=async m=>{models.push(m);const result=await pdf(m);window.renderedPDF=result;return result};const draw=CanvasRenderingContext2D.prototype.fillText;CanvasRenderingContext2D.prototype.fillText=function(...args){if(String(args[0]).includes("+"))feedDraws.push(args[0]);colourDraws.push({text:String(args[0]),colour:this.fillStyle,x:args[1],y:args[2]});return draw.apply(this,args)};}')
    page.locator('nav [href="#stats"]').click();page.locator('#stats-filter [name=from]').fill('2026-10-01');page.locator('#stats-filter [name=to]').fill('2026-10-20');page.locator('#stats-filter [name=barn_id]').select_option(barns[13]['id'],force=True)
    page.locator('#open-weekly-report').click();page.wait_for_selector('#weekly-a4-preview img');assert page.locator('#weekly-report-form input[type=date]').count()==0;assert page.locator('#weekly-barn').input_value()==barns[13]['id'];assert page.locator('#weekly-cohort').input_value()=='WHITEBOARD-DEMO|2026-07-17';assert page.locator('#weekly-report-form label').all_text_contents()[0].startswith('批號')
    labels=page.locator('#weekly-cohort option').all_text_contents();assert all('｜' in label and not re.search(r'2026-\d{2}-\d{2}',label) for label in labels);assert 'WHITEBOARD-DEMO｜13棟、22棟' in labels,labels
    assert page.locator('#weekly-barn option').all_text_contents()==['同批全部棟舍','13棟','22棟']
    def lines():return page.locator('#weekly-sheet-body .weekly-feed-entry').all_text_contents()
    assert lines()==['10/24+4(13)','10/26+4(13)'],lines();assert dict(page.evaluate('models.at(-1).totals'))['飼料到料（噸）']=='8';passed('batch-first selector shows batch and barns without entry dates; only matching barns are offered; old stats end date cannot hide the saved October 24/26 feed')
+   model=page.evaluate('models.at(-1)');rows=[row for pp in model['pages'] for band in pp for row in band['rows']];culls=[row for row in rows if row['label']=='淘汰數（隻）'];assert len(culls)==2 and sum(int(v) for row in culls for v in row['cells'] if v)==5
+   assert all('淘汰' not in pair[0] for pair in model['totals']) and not any('淘汰' in note for note in model['shipping_notes']+model['death_notes']);assert model['death_color']=='#b42332'
+   colours=page.evaluate('colourDraws');death_rows=[d for d in colours if d['text']=='死亡數（隻）' and d['x']==26];assert death_rows
+   for heading in death_rows:
+    values=[d for d in colours if d['y']==heading['y'] and d['x']>80 and d['text']];assert all(d['colour']=='#b42332' for d in values)
+   total_heading=next(d for d in colours if d['text']=='死亡數（隻）' and d['x']==28);assert next(d for d in colours if d['x']==28 and d['y']==total_heading['y']+12)['colour']=='#b42332'
+   assert next(d for d in colours if d['text']=='10/24 死亡1隻')['colour']=='#b42332';assert any(d['colour']=='#111111' and '+' in d['text'] for d in colours)
+   assert page.locator('#weekly-sheet-body .weekly-death td').first.evaluate('(e)=>getComputedStyle(e).color')=='rgb(180, 35, 50)';assert page.locator('#weekly-sheet-body .weekly-death-entry').first.evaluate('(e)=>getComputedStyle(e).color')=='rgb(180, 35, 50)';assert page.locator('#weekly-sheet-body .weekly-total-death strong').evaluate('(e)=>getComputedStyle(e).color')=='rgb(180, 35, 50)'
+   preview=root/'artifacts/weekly-red-deaths-culls.jpg';preview.write_bytes(bytes(page.evaluate('async()=>Array.from(new Uint8Array(await renderedPDF.previewPages[0].arrayBuffer()))')))
+   from PIL import Image
+   image=Image.open(preview).convert('RGB');assert sum(red>100 and red>green*1.6 and red>blue*1.4 for red,green,blue in image.getdata())>200
+   page.evaluate('window.print=()=>{window.printInvoked=true}');page.click('#weekly-browser-print');page.wait_for_function('()=>window.printInvoked===true');assert page.locator('#weekly-print-root img').count()==1;assert page.locator('#weekly-print-root img').get_attribute('src')==page.locator('#weekly-a4-preview img').get_attribute('src');page.evaluate('dispatchEvent(new Event("afterprint"))')
+   passed('saved and future culls appear only in upper weekly rows; death values, notes and total are red in HTML and actual embedded PDF image; browser printing uses the identical one-page preview')
+
    page.locator('#weekly-barn').select_option('');page.wait_for_selector('#weekly-a4-preview img');assert len(lines())==4,lines();assert dict(page.evaluate('models.at(-1).totals'))['飼料到料（噸）']=='12'
    full=[]
    for name in set(group.values()):

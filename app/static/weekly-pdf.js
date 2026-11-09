@@ -94,9 +94,9 @@ window.weeklyPdf = async function(model) {
  }
  const canvas=document.createElement('canvas');canvas.width=Math.ceil(PW*SCALE);canvas.height=Math.ceil(PH*SCALE);
  const c=canvas.getContext('2d');c.scale(SCALE,SCALE);c.fillStyle='#fff';c.fillRect(0,0,PW,PH);c.strokeStyle='#444';c.lineWidth=.5;
- function text(value,x,y,width,size=8,bold=false,align='left',single=false,mono=false){
+ function text(value,x,y,width,size=8,bold=false,align='left',single=false,mono=false,color='#111'){
   const parts=Array.isArray(value)?value:single?[String(value??'')]:wrap(value,width,size,bold);
-  c.fillStyle='#111';c.textBaseline='top';c.textAlign=align;c.font=`${bold?'600':'400'} ${size}px ${mono?'monospace':family}`;
+  c.fillStyle=color;c.textBaseline='top';c.textAlign=align;c.font=`${bold?'600':'400'} ${size}px ${mono?'monospace':family}`;
   for(let i=0;i<parts.length;i++){const ax=x+(align==='center'?width/2:0);c.fillText(parts[i],ax,y+i*size*1.25,width);}
  }
  function box(x,y,w,h,shade=false){if(shade){c.fillStyle='#f0f0f0';c.fillRect(x,y,w,h);}c.strokeRect(x,y,w,h);}
@@ -110,12 +110,12 @@ window.weeklyPdf = async function(model) {
  for(const band of upper.bands){
   box(M,y,58,band.headerH,true);text(model.cycle,M+2,y+2*upper.scale,54,7.5*upper.scale,true,'center',true);
   band.headers.forEach((value,j)=>{const x=M+58+j*band.cw;box(x,y,band.cw,band.headerH,true);text(value,x+2,y+2*upper.scale,band.cw-4,band.size,true,'center',true);});y+=band.headerH;
-  for(const row of band.rows){box(M,y,58,row.height);text(row.label,M+2,y+2*upper.scale,54,7.5*upper.scale,true,'left',true);row.cells.forEach((parts,j)=>{const x=M+58+j*band.cw;box(x,y,band.cw,row.height);text(parts,x+2,y+2*upper.scale,band.cw-4,band.size,row.bold,row.left?'left':'center',true,row.monospace);});y+=row.height;}
+  for(const row of band.rows){box(M,y,58,row.height);text(row.label,M+2,y+2*upper.scale,54,7.5*upper.scale,true,'left',true);row.cells.forEach((parts,j)=>{const x=M+58+j*band.cw;box(x,y,band.cw,row.height);text(parts,x+2,y+2*upper.scale,band.cw-4,band.size,row.bold,row.left?'left':'center',true,row.monospace,row.color);});y+=row.height;}
   y+=5*upper.scale;
  }
  const noteH=PH-M-footerH-y-6,half=W/2;
  for(const [index,title] of [[0,model.death_title],[1,model.shipping_title]]){box(M+index*half,y,half,18,true);text(title,M+index*half+4,y+3,half-8,10.5,true,'left',true);box(M+index*half,y+18,half,noteH-18);}
- function drawPane(plan,x,on,width){for(const entry of plan.draws)text(entry.parts,x+entry.x,on+entry.y,width/plan.columns-8,plan.size,false,'left',true);}
+ function drawPane(plan,x,on,width,color='#111'){for(const entry of plan.draws)text(entry.parts,x+entry.x,on+entry.y,width/plan.columns-8,plan.size,false,'left',true,false,color);}
  const baseDeathH=notes.rows.reduce((n,row)=>n+row.height,0),extraDeathH=Math.max(0,noteH-18-baseDeathH);
  let barnY=y+18;
  for(const row of notes.rows){
@@ -123,13 +123,13 @@ window.weeklyPdf = async function(model) {
   row.barns.forEach((reserved,index)=>{
    const x=barnX,width=reserved.width,plan=fillPane(reserved.group.notes,width,rowH-21);barnX+=width;
    box(x,barnY,width,rowH);text(reserved.group.title,x+4,barnY+3,width-8,8.5,true,'left',true);
-   drawPane(plan,x,barnY+17,width);
+   drawPane(plan,x,barnY+17,width,model.death_color);
   });barnY+=rowH;
  }
  drawPane(fillPane(shipping,half,noteH-39),M+half,y+35,half);
  y+=noteH+6;text(model.totalLabel,M,y,W,8.5,true,'left',true);y+=15;
  const totalW=W/Math.max(1,model.totals.length);
- model.totals.forEach((pair,i)=>{const x=M+i*totalW;box(x,y,totalW,30);text(pair[0],x+4,y+3,totalW-8,7,false,'left',true);text(pair[1],x+4,y+15,totalW-8,10,true,'left',true);});y+=36;
+ model.totals.forEach((pair,i)=>{const x=M+i*totalW;box(x,y,totalW,30);text(pair[0],x+4,y+3,totalW-8,7,false,'left',true);text(pair[1],x+4,y+15,totalW-8,10,true,'left',true,false,model.total_colors?.[i]);});y+=36;
  text(model.cumulative,M,y,W,8.5,true);y+=wrap(model.cumulative,W,8.5,true).length*10.625+5;text(model.legend,M,y,W,footerFont);
  const blob=await new Promise((resolve,reject)=>canvas.toBlob(b=>b?resolve(b):reject(new Error('weekly_pdf_image_failed')),'image/jpeg',.96));
  images.push({bytes:new Uint8Array(await blob.arrayBuffer()),width:canvas.width,height:canvas.height});canvas.width=canvas.height=1;

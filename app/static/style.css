@@ -913,3 +913,12 @@ body [hidden] { display: none !important; }
 @media print{#bin-stock-panel{display:none!important}}
 
 .cleared-record{padding:12px 0;border-bottom:1px solid var(--border,#dbe2ea)}.cleared-record>small{display:block;color:#617189;margin-top:4px}
+
+/* Death values match the shared A4 canvas in screen details and print. */
+.weekly-sheet .weekly-death td,
+.weekly-sheet .weekly-death-entry,
+.weekly-sheet .weekly-total-death strong,
+.weekly-sheet .weekly-total-death small { color: #b42332; }
+@media print {
+ .weekly-sheet { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+}
