@@ -115,7 +115,7 @@ window.weeklyPdf = async function(model) {
  }
  const noteH=PH-M-footerH-y-6,half=W/2;
  for(const [index,title] of [[0,model.death_title],[1,model.shipping_title]]){box(M+index*half,y,half,18,true);text(title,M+index*half+4,y+3,half-8,10.5,true,'left',true);box(M+index*half,y+18,half,noteH-18);}
- function drawPane(plan,x,on,width,color='#111'){for(const entry of plan.draws)text(entry.parts,x+entry.x,on+entry.y,width/plan.columns-8,plan.size,false,'left',true,false,color);}
+ function drawPane(plan,x,on,width){for(const entry of plan.draws)text(entry.parts,x+entry.x,on+entry.y,width/plan.columns-8,plan.size,false,'left',true);}
  const baseDeathH=notes.rows.reduce((n,row)=>n+row.height,0),extraDeathH=Math.max(0,noteH-18-baseDeathH);
  let barnY=y+18;
  for(const row of notes.rows){
@@ -123,7 +123,7 @@ window.weeklyPdf = async function(model) {
   row.barns.forEach((reserved,index)=>{
    const x=barnX,width=reserved.width,plan=fillPane(reserved.group.notes,width,rowH-21);barnX+=width;
    box(x,barnY,width,rowH);text(reserved.group.title,x+4,barnY+3,width-8,8.5,true,'left',true);
-   drawPane(plan,x,barnY+17,width,model.death_color);
+   drawPane(plan,x,barnY+17,width);
   });barnY+=rowH;
  }
  drawPane(fillPane(shipping,half,noteH-39),M+half,y+35,half);

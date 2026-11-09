@@ -916,9 +916,9 @@ body [hidden] { display: none !important; }
 
 /* Death values match the shared A4 canvas in screen details and print. */
 .weekly-sheet .weekly-death td,
-.weekly-sheet .weekly-death-entry,
 .weekly-sheet .weekly-total-death strong,
 .weekly-sheet .weekly-total-death small { color: #b42332; }
+.weekly-sheet .weekly-death-entry { color: #111; }
 @media print {
  .weekly-sheet { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
 }

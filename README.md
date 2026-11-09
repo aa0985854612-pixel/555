@@ -1,12 +1,12 @@
-# 肉豬紀錄管理 App — PigLedger 2.1.6
+# 肉豬紀錄管理 App — PigLedger 2.1.7
 
 **[開啟正式網站：555-rho-nine.vercel.app](https://555-rho-nine.vercel.app/)**。沿用你目前的帳號、密碼、Vercel專案及Turso資料庫。
 
-- [完整原始碼／Docker／Vercel設定 v2.1.6](https://github.com/aa0985854612-pixel/555/tree/main)
+- [完整原始碼／Docker／Vercel設定 v2.1.7](https://github.com/aa0985854612-pixel/555/tree/main)
 - [簡短操作說明](docs/USER_GUIDE.md)／[部署說明](docs/VERCEL.md)
-- [2.1.6紅色死亡與淘汰週欄驗收](docs/TEST_REPORT_2.1.6.md)／[設計規範](docs/DESIGN_SYSTEM.md)
+- [2.1.7死亡備註黑色驗收](docs/TEST_REPORT_2.1.7.md)／[設計規範](docs/DESIGN_SYSTEM.md)
 
-肉豬紀錄表的死亡週數、死亡備註與死亡合計統一用紅色；淘汰數只列上方各週，不列下方淘汰明細或合計。A4預覽、PDF及瀏覽器列印共用同一張，維持單頁、完整資料與中越語。請套用更新後重新產生A4；舊PDF不會自動更新。
+肉豬紀錄表的死亡週數與死亡合計用紅色，死亡備註維持黑色；淘汰數只列上方各週，不列下方淘汰明細或合計。A4預覽、PDF及瀏覽器列印共用同一張，維持單頁、完整資料與中越語。請套用更新後重新產生A4；舊PDF不會自動更新。
 
 設定的獨立棟舍清單也按1、2、3…24排序；掛在批號下的資料保留分組。管理員在「新增／編輯棟舍」可刪除誤建、未使用的棟舍，先核對原名稱再確認；已有批次（含已結束）、料桶或快捷來源關聯時會列出原因並禁止刪除。原操作歷程保留，斷線重試不重複刪除，不會連帶刪除原登記。
 
