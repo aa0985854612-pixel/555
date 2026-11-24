@@ -267,58 +267,69 @@ async function renderNancyWeeklyPdf(model){
  }
  ctx.stroke();
 
+ const weekColumns=[125,172,220,268,315,363,411,459,506,554,602,650,698,745];
  const sections=[
-  {week:4,x:[125,172,220,268,315,363,411,459,506,554,602,650,698,745],y:[283,307,331,355,379,478]},
-  {week:17,x:[125,172,220,268,315,363,411,459,506,554,602,650,698,745],y:[538,562,585,610,639,663]},
-  {week:30,x:[125,172,220,268],y:[792,823,854,884,914,943]}
+  {week:4,x:weekColumns,y:[283,307,331,355,400,424],headerTop:223,notesBottom:478},
+  {week:17,x:weekColumns,y:[538,562,585,610,655,679],headerTop:478,notesBottom:734},
+  {week:30,x:weekColumns.slice(0,4),y:[792,823,854,884,926,952],headerTop:762,notesBottom:1007}
  ];
+ function panel(x,y,width,height,fill='#fff'){
+  ctx.fillStyle=fill;ctx.fillRect(x,y,width,height);
+  ctx.strokeStyle=black;ctx.lineWidth=.75;ctx.strokeRect(x,y,width,height);
+ }
+ function leftLabel(lines,top,bottom){
+  panel(66,top,59,bottom-top,'#f4f4f4');
+  drawLines(lines,67,top,57,bottom-top,{size:17,bold:true,align:'center'});
+ }
+ const rowLabels=[['起始日'],['淘汰數'],['死亡數'],['飼料量','（噸）'],['售出數']];
  const bands=model.pages.flat(),extraWeeks=bands.filter(band=>band.firstWeek==null);
  const extraFeed=[];
- for(const {week,x,y} of sections){
+ for(const {week,x,y,headerTop,notesBottom} of sections){
   const band=bands.find(band=>band.firstWeek===week);
-  if(!band)continue;
-  if(week===4&&band.rows[0].cells[0]){
-   ctx.strokeStyle=black;ctx.lineWidth=.7;ctx.beginPath();
-   for(const boundary of y.slice(1,5)){ctx.moveTo(x[0],boundary);ctx.lineTo(x[1],boundary);}
-   ctx.stroke();
-  }
-  for(const [rowIndex,row] of band.rows.entries()){
-   row.cells.forEach((value,column)=>{
-    if(!value)return;
-    const parts=value.split('\n');
-    const detail=week===4&&rowIndex===4;
-    const top=detail?y[4]:y[rowIndex];
-    const height=detail?24:y[rowIndex+1]-top;
-    // Crowded feed cells point to a continuation in the form's notes area.
+  leftLabel(['週期'],headerTop,y[0]);
+  for(const [rowIndex,label] of rowLabels.entries()){
+   const top=y[rowIndex],height=y[rowIndex+1]-top;
+   leftLabel(label,top,top+height);
+   const row=band?.rows[rowIndex];
+   for(let column=0;column<x.length-1;column++){
+    const width=x[column+1]-x[column],value=row?.cells[column];
+    panel(x[column],top,width,height);
+    if(!value)continue;
+    const parts=value.split('\n'),feed=rowIndex===3;
     let shown=parts;
-    if(row.monospace&&parts.length>3){
+    if(feed&&parts.length>3){
      shown=parts.slice(0,2).concat('↓');
      extraFeed.push({value:`${week+column}w 飼料`,bold:true},...parts.slice(2).map(value=>({value})));
     }
-    drawLines(shown,x[column],top,x[column+1]-x[column],height,{
-     align:row.left?'left':'center',color:row.color,bold:row.bold
+    drawLines(shown,x[column],top,width,height,{
+     size:feed?15:12,align:feed?'left':'center',color:row.color,bold:row.bold
     });
-   });
+   }
   }
+  const label=week===4?['死亡','備註']:week===17?['資料','明細']:[];
+  leftLabel(label,y.at(-1),notesBottom);
  }
- const totalRows=[[854,884],[884,914],[914,943]];
+ const totalRows=[[854,884],[884,926],[926,952]];
+ panel(268,823,95,31);
+ // Align the totals' feed and sales rows with the resized weekly rows.
+ for(const [index,unit] of [[1,'噸'],[2,'頭']]){
+  const [top,bottom]=totalRows[index];
+  panel(268,top,95,bottom-top);
+  drawLines([unit],344,top,18,bottom-top,{size:13,bold:true,align:'center'});
+ }
  model.totals.forEach(([,value],index)=>{
   if(!value)return;
   const [top,bottom]=totalRows[index];
   drawLines([value],269,top,72,bottom-top,{align:'center',bold:true,color:model.total_colors[index]});
  });
+ panel(268,952,95,23,'#f4f4f4');
+ drawLines(['育成率'],269,952,93,23,{align:'center',size:16,bold:true});
  if(model.survival)drawLines([model.survival],269,975,75,31,{align:'center',bold:true});
 
- // The source PDF splits this label at the page break.
- ctx.fillStyle='#fff';
- ctx.fillRect(69,946,53,57);
- ctx.fillRect(365,974,377,5);
- drawLines(['備註'],69,946,53,57,{align:'center',size:14});
-
- const deaths=[{value:model.death_title,bold:true},...model.death_groups.flatMap(group=>[
+ const deaths=model.death_groups.flatMap(group=>[
   {value:group.title,bold:true},...group.notes.map(value=>({value}))
- ])];
- const other=[{value:model.shipping_title,bold:true},...model.shipping_notes.map(value=>({value})),
+ ]);
+ const metadata=[
   ...model.basics.slice(8).filter(([,value])=>value).map(([label,value])=>({value:label+' '+value})),
   ...model.entries.map(entry=>({value:entry.filter(Boolean).join(' · ').replace(/\n/g,' · ')})),
   {value:model.period},{value:model.cumulative},
@@ -356,21 +367,15 @@ async function renderNancyWeeklyPdf(model){
   const items=band.rows.flatMap(row=>row.cells[i]?row.cells[i].split('\n').map(value=>({value:row.label+' '+value,color:row.color})):[]);
   return items.length?[{value:heading,bold:true},...items]:[];
  }));
- if(details.length){
-  ctx.fillStyle='#fff';
-  ctx.fillRect(126,406,617,70);
-  fitNotes(details,130,408,608,65,11);
- }
- // Allocate the note panes by text volume while reserving room for both.
- const textLength=items=>items.reduce((length,{value})=>length+Math.max(10,value.length),0);
- const deathLength=textLength(deaths),otherLength=textLength(other);
- const divider=363+Math.round(382*Math.min(.60,Math.max(.30,deathLength/(deathLength+otherLength))));
- ctx.strokeStyle='#aaa';
- ctx.lineWidth=.65;
- ctx.beginPath();ctx.moveTo(divider,795);ctx.lineTo(divider,1078);ctx.stroke();
- drawLines([model.death_title],370,798,divider-378,21,{bold:true,size:12});
- drawLines([model.shipping_title],divider+7,798,730-divider,21,{bold:true,size:12});
- fitNotes(deaths.slice(1),370,821,divider-378,257,11);
- fitNotes(other.slice(1),divider+7,821,730-divider,257,11);
+ const deathTop=sections[0].y.at(-1),metadataTop=sections[1].y.at(-1);
+ panel(125,deathTop,620,sections[0].notesBottom-deathTop);
+ panel(125,metadataTop,620,sections[1].notesBottom-metadataTop);
+ fitNotes(details.length?[...deaths,...details]:deaths,130,deathTop+4,610,sections[0].notesBottom-deathTop-8,12);
+ fitNotes(metadata,130,metadataTop+4,610,sections[1].notesBottom-metadataTop-8,12);
+
+ panel(363,762,382,30,'#f4f4f4');
+ drawLines([model.shipping_title],364,762,380,30,{bold:true,size:17,align:'center'});
+ panel(363,792,382,369);
+ fitNotes(model.shipping_notes.map(value=>({value})),370,801,367,351,14);
  return weeklyCanvasPdf(canvas);
 }

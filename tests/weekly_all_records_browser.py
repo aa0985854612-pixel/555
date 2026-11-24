@@ -28,6 +28,7 @@ with tempfile.TemporaryDirectory() as tmp,patch.dict(os.environ,{'FEED_ORDERS_AR
    bin=bins[name];original.append(add('feed_orders',date='2026-'+on,kg=tons*1000,display_unit='ton',vendor=vendor,item='仔豬料',feed_bin_id=bin['id'],target_batch_ids=[b['id'] for b in batches.values() if b['barn_id'] in bin['barn_ids']]))
  assert len(original)==24 and sum(r['kg'] for r in original)==78000
  for typ,on,q in [('cull','2026-10-24',2),('cull','2026-10-26',3),('death','2026-10-24',1)]:add('movements',date=on,batch_id=batches[13]['id'],type=typ,quantity=q)
+ add('movements',date='2026-10-25',batch_id=batches[13]['id'],type='sale',quantity=4,outgoing_destination='南投',note='上午出豬')
  before=s.export_backup()['records'];server=Server(('127.0.0.1',0),s);threading.Thread(target=server.serve_forever,daemon=True).start();url=f'http://127.0.0.1:{server.server_port}'
  try:
   with sync_playwright() as p:
@@ -55,7 +56,13 @@ with tempfile.TemporaryDirectory() as tmp,patch.dict(os.environ,{'FEED_ORDERS_AR
    assert len(red)==2 and all(d['text']=='1' for d in red)
    assert any(506<d['x']<554 and 585<d['y']<610 for d in red)
    assert any(268<d['x']<363 and 854<d['y']<884 for d in red)
-   assert next(d for d in colours if d['text']=='10/24 死亡1隻')['colour']=='#111111';assert any(d['colour']=='#111111' and '+' in d['text'] for d in colours)
+   death_note=next(d for d in colours if d['text']=='10/24 死亡1隻')
+   assert death_note['colour']=='#111111' and 424<death_note['y']<478
+   assert any(d['text']=='出豬備註' and 762<d['y']<792 for d in colours)
+   shipping_draws=[d['text'] for d in colours if d['x']>363 and 792<d['y']<1161]
+   assert shipping_draws==['10/25 南投4 · 上午出豬'],shipping_draws
+   assert any(d['text']=='起始日' and '17px' in d['font'] for d in colours)
+   assert any(d['text']=='10/24+4(13)' and '15px' in d['font'] and 610<d['y']<655 for d in colours)
    assert page.locator('#weekly-sheet-body .weekly-death td').first.evaluate('(e)=>getComputedStyle(e).color')=='rgb(180, 35, 50)';assert page.locator('#weekly-sheet-body .weekly-death-entry').first.evaluate('(e)=>getComputedStyle(e).color')=='rgb(17, 17, 17)';assert page.locator('#weekly-sheet-body .weekly-total-death strong').evaluate('(e)=>getComputedStyle(e).color')=='rgb(180, 35, 50)'
    preview=root/'artifacts/weekly-red-deaths-culls.jpg';preview.write_bytes(bytes(page.evaluate('async()=>Array.from(new Uint8Array(await renderedPDF.previewPages[0].arrayBuffer()))')))
    from PIL import Image
