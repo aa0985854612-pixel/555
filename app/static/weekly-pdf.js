@@ -244,23 +244,28 @@ async function renderNancyWeeklyPdf(model){
  ctx.fillStyle='#fff';
  ctx.fillRect(64,69,206,58);
  ctx.fillRect(510,69,236,58);
+ ctx.fillRect(64,69,682,5);
+ ctx.fillRect(64,126,5,34);
+ ctx.fillRect(742,126,5,34);
  ctx.fillRect(67,163,677,59);
- const headerLabels=['牧場','豬源','飼料','肉豬批號','入場頭數','入場日期','入場日齡','入場均重'];
- const headerWidth=(745-66)/4,headerHeight=30;
+ const headerRows=[
+  {top:163,bottom:193,columns:[['牧場',0,116],['豬源',1,110],['飼料',2,177],['肉豬批號',3,276]]},
+  {top:193,bottom:223,columns:[['入場頭數',4,160],['入場日期',5,191],['入場日齡',6,162],['入場均重',7,166]]}
+ ];
  ctx.strokeStyle=black;
  ctx.lineWidth=1.15;
  ctx.beginPath();
  ctx.moveTo(66,193);ctx.lineTo(745,193);
- for(let column=1;column<4;column++){
-  const x=66+column*headerWidth;
-  ctx.moveTo(x,162);ctx.lineTo(x,223);
+ for(const {top,bottom,columns} of headerRows){
+  let x=66;
+  for(const [label,index,width] of columns){
+   if(x>66){ctx.moveTo(x,top);ctx.lineTo(x,bottom);}
+   const value=model.basics[index]?.[1]||'—';
+   drawLines([label+'：'+value],x+7,top,width-14,bottom-top,{size:14});
+   x+=width;
+  }
  }
  ctx.stroke();
- headerLabels.forEach((label,i)=>{
-  const value=model.basics[i]?.[1]||'—';
-  const x=66+(i%4)*headerWidth,y=163+Math.floor(i/4)*headerHeight;
-  drawLines([label+'：'+value],x+6,y,headerWidth-12,headerHeight,{size:13});
- });
 
  const sections=[
   {week:4,x:[125,172,220,268,315,363,411,459,506,554,602,650,698,745],y:[283,307,331,355,379,478]},
@@ -356,7 +361,16 @@ async function renderNancyWeeklyPdf(model){
   ctx.fillRect(126,406,617,70);
   fitNotes(details,130,408,608,65,11);
  }
- fitNotes(deaths,366,797,181,283,11);
- fitNotes(other,551,797,189,283,11);
+ // Allocate the note panes by text volume while reserving room for both.
+ const textLength=items=>items.reduce((length,{value})=>length+Math.max(10,value.length),0);
+ const deathLength=textLength(deaths),otherLength=textLength(other);
+ const divider=363+Math.round(382*Math.min(.60,Math.max(.30,deathLength/(deathLength+otherLength))));
+ ctx.strokeStyle='#aaa';
+ ctx.lineWidth=.65;
+ ctx.beginPath();ctx.moveTo(divider,795);ctx.lineTo(divider,1078);ctx.stroke();
+ drawLines([model.death_title],370,798,divider-378,21,{bold:true,size:12});
+ drawLines([model.shipping_title],divider+7,798,730-divider,21,{bold:true,size:12});
+ fitNotes(deaths.slice(1),370,821,divider-378,257,11);
+ fitNotes(other.slice(1),divider+7,821,730-divider,257,11);
  return weeklyCanvasPdf(canvas);
 }
