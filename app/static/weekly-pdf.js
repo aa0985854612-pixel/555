@@ -275,7 +275,23 @@ async function renderNancyWeeklyPdf(model){
   for(const [label,index,width] of columns){
    if(x>66){ctx.moveTo(x,top);ctx.lineTo(x,bottom);}
    const value=model.basics[index]?.[1]||'—';
-   drawLines([label+'：'+value],x+7,top,width-14,bottom-top,{size:14});
+   const entries=model.headerEntries||[];
+   if(entries.length>1&&[4,5,7].includes(index)){
+    const shortDate=date=>date?Number(date.slice(5,7))+'/'+Number(date.slice(8,10)):'—';
+    const lines=entries.map(entry=>{
+     const date=shortDate(entry.date);
+     if(index===4)return date+' '+(entry.count==null?'—':entry.count+'頭');
+     if(index===5)return entry.date||'—';
+     const weightDate=entry.meanDate||entry.date;
+     return shortDate(weightDate)+' '+(entry.mean==null?'—':entry.mean+' kg');
+    });
+    ctx.font=`600 13px ${family}`;
+    const labelWidth=ctx.measureText(label+'：').width+2;
+    drawLines([label+'：'],x+5,top,labelWidth,bottom-top,{size:13,bold:true});
+    drawLines(lines,x+5+labelWidth,top,width-labelWidth-12,bottom-top,{size:12});
+   }else{
+    drawLines([label+'：'+value],x+7,top,width-14,bottom-top,{size:14});
+   }
    x+=width;
   }
  }
