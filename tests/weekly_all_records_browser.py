@@ -75,7 +75,7 @@ with tempfile.TemporaryDirectory() as tmp,patch.dict(os.environ,{'FEED_ORDERS_AR
    colours=page.evaluate('colourDraws')
    assert all('Noto Serif CJK TC' in draw['font'] for draw in colours)
    assert {'牧場：嘉得','豬源：殷慶盛','肉豬批號：WHITEBOARD-DEMO','入場頭數：100 頭'} <= {draw['text'] for draw in colours}
-   feed_fonts={d['font'] for d in colours if d['text'] in lines() and 355<d['y']<680}
+   feed_fonts={d['font'] for d in colours if d['text'].startswith('+') and 355<d['y']<680}
    assert len(feed_fonts)==1,feed_fonts
    assert any(d['text']=='5' and 506<d['x']<554 and 532<d['y']<555 and d['colour']=='#111111' for d in colours)
    red=[d for d in colours if d['colour']=='#b42332' and d['text']]
@@ -88,7 +88,9 @@ with tempfile.TemporaryDirectory() as tmp,patch.dict(os.environ,{'FEED_ORDERS_AR
    shipping_draws=[d['text'] for d in colours if d['x']>363 and 792<d['y']<1161]
    assert shipping_draws==['10/25 南投4 · 上午出豬'],shipping_draws
    assert any(d['text']=='起始日' and '17px' in d['font'] for d in colours)
-   assert any(d['text']=='10/24+4(13)' and 580<d['y']<680 for d in colours)
+   feed_plus=[d for d in colours if d['text']=='+4(13)' and 580<d['y']<680]
+   assert len(feed_plus)==2 and feed_plus[0]['x']==feed_plus[1]['x'],feed_plus
+   assert all(d['font'].startswith(('700 ', 'bold ')) for d in colours if re.fullmatch(r'(1[7-9]|2[0-9])w',d['text']) and 478<d['y']<508)
    assert page.locator('#weekly-sheet-body .weekly-death td').first.evaluate('(e)=>getComputedStyle(e).color')=='rgb(180, 35, 50)';assert page.locator('#weekly-sheet-body .weekly-death-entry').first.evaluate('(e)=>getComputedStyle(e).color')=='rgb(17, 17, 17)';assert page.locator('#weekly-sheet-body .weekly-total-death strong').evaluate('(e)=>getComputedStyle(e).color')=='rgb(180, 35, 50)'
    preview=root/'artifacts/weekly-red-deaths-culls.jpg';preview.write_bytes(bytes(page.evaluate('async()=>Array.from(new Uint8Array(await renderedPDF.previewPages[0].arrayBuffer()))')))
    from PIL import Image
@@ -108,7 +110,7 @@ with tempfile.TemporaryDirectory() as tmp,patch.dict(os.environ,{'FEED_ORDERS_AR
    assert page.locator('#weekly-csv').count()==0
    # The current paper intentionally has no CSV. The original API rows above
    # still verify every original receipt, while the preview/PDF stay complete.
-   page.evaluate('feedDraws=[]');page.locator('#weekly-generate').click();page.wait_for_selector('#weekly-a4-preview img');draws=page.evaluate('feedDraws');assert all(draws.count(line)==1 for line in lines()),(draws,lines())
+   page.evaluate('feedDraws=[]');page.locator('#weekly-generate').click();page.wait_for_selector('#weekly-a4-preview img');draws=page.evaluate('feedDraws');assert draws.count('+4(13)')==2,(draws,lines())
    with page.expect_download() as d:page.locator('#weekly-print').click()
    pdf=root/'artifacts/weekly-all-records-whiteboard.pdf';d.value.save_as(pdf);info=subprocess.check_output(['pdfinfo',str(pdf)],text=True);assert '595.28 x 841.89' in info;assert re.search(r'Pages:\s+2\b',info);assert '叫料不等於到料' not in page.locator('#weekly-sheet-body').inner_text();passed('HTML and A4 PDF draw the same four scoped feed lines including future October 26, without duplicate arrivals or a paper CSV button')
    assert 'OLD-13|2026-01-01' not in page.locator('#weekly-cohort option').evaluate_all('(es)=>es.map(e=>e.value)')

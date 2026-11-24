@@ -245,7 +245,7 @@ async function renderNancyWeeklyPdf(model){
  function drawLines(lines,x,y,width,height,{size=12,align='left',color=black,bold=false}={}){
   if(!lines.length)return;
   size=Math.min(size,(height-2)/(lines.length*1.22));
-  ctx.font=`${bold?600:400} ${size}px ${family}`;
+  ctx.font=`${bold?700:400} ${size}px ${family}`;
   ctx.fillStyle=color;
   ctx.textAlign=align;
   ctx.textBaseline='top';
@@ -337,10 +337,13 @@ async function renderNancyWeeklyPdf(model){
    if(!value)return;
    const lines=value.split('\n'),width=x[column+1]-x[column]-4;
    feedSize=Math.min(feedSize,(height-2)/(lines.length*1.22));
-   for(const line of lines){
-    const measured=ctx.measureText(line).width;
-    if(measured>0)feedSize=Math.min(feedSize,15*width/measured);
-   }
+   const split=lines.map(line=>{
+    const plus=line.indexOf('+');
+    return plus<0?{date:'',amount:line}:{date:line.slice(0,plus).trim(),amount:line.slice(plus)};
+   });
+   const dateWidth=Math.max(0,...split.map(line=>ctx.measureText(line.date).width));
+   const amountWidth=Math.max(0,...split.map(line=>ctx.measureText(line.amount).width));
+   if(dateWidth+amountWidth>0)feedSize=Math.min(feedSize,15*width/(dateWidth+amountWidth));
   });
  }
 
@@ -365,9 +368,23 @@ async function renderNancyWeeklyPdf(model){
     panel(x[column],top,width,height);
     if(!value)continue;
     const parts=value.split('\n'),feed=rowIndex===3;
-    drawLines(parts,x[column],top,width,height,{
-     size:feed?feedSize:12,align:feed?'left':'center',color:row.color,bold:row.bold
-    });
+    if(feed&&parts.some(line=>line.includes('+'))){
+     ctx.font=`400 ${feedSize}px ${family}`;
+     ctx.fillStyle=black;ctx.textBaseline='top';
+     const dateWidth=Math.max(0,...parts.map(line=>ctx.measureText(line.split('+')[0].trim()).width));
+     const plusX=x[column]+2+dateWidth;
+     const startY=top+(height-parts.length*feedSize*1.22)/2;
+     parts.forEach((line,index)=>{
+      const plus=line.indexOf('+'),lineY=startY+index*feedSize*1.22;
+      if(plus<0){ctx.textAlign='left';ctx.fillText(line,x[column]+2,lineY);return;}
+      ctx.textAlign='right';ctx.fillText(line.slice(0,plus).trim(),plusX,lineY);
+      ctx.textAlign='left';ctx.fillText(line.slice(plus),plusX,lineY);
+     });
+    }else{
+     drawLines(parts,x[column],top,width,height,{
+      size:feed?feedSize:12,align:feed?'left':'center',color:row.color,bold:row.bold
+     });
+    }
    }
   }
   leftLabel(['備註'],y.at(-1),notesBottom);
@@ -404,7 +421,7 @@ async function renderNancyWeeklyPdf(model){
   function flow(size,columns){
    const lines=[],columnWidth=width/columns;
    for(const {value,bold,color} of items){
-    ctx.font=`${bold?600:400} ${size}px ${family}`;
+    ctx.font=`${bold?700:400} ${size}px ${family}`;
     let line='';
     for(const char of value){
      if(line&&ctx.measureText(line+char).width>columnWidth-5){
