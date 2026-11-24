@@ -19,6 +19,8 @@ with tempfile.TemporaryDirectory() as tmp,patch.dict(os.environ,{'FEED_ORDERS_AR
  barns={n:add('barns',name=f'{n}棟') for n in (1,2,3,4,5,6,7,8,12,13,14,15,16,17,18,19,20,21,22)}
  group={n:'WHITEBOARD-DEMO' if n in (13,22) else 'GROUP-'+str(next(i for i,g in enumerate(((1,2,3,4),(5,6,7),(8,12,14),(15,16,17),(18,19,20,21))) if n in g)) for n in barns}
  batches={n:add('batches',name=group[n],barn_id=b['id'],entry_date='2026-07-17',entry_count=100,entry_age_days=71,status='active') for n,b in barns.items()}
+ lots=[{'date':'2026-07-17','count':60,'mean_kg':21.36},{'date':'2026-07-24','count':40,'mean_kg':22.2}]
+ batches[15]=s.mutate(u,'batches',batches[15]|{'report_entry_lots':lots,'report_entry_lots_source':'verified'},str(uuid.uuid4()),batches[15]['id'])
  bins={b['name']:add('feed_bins',**b) for b in initial_bins(list(barns.values()))}
  old=add('batches',name='OLD-13',barn_id=barns[13]['id'],entry_date='2026-01-01',entry_count=100,status='ended')
  photo=[('養全','10-22',[('8',2),('12',8),('18',2),('21',2)]),('養全','10-27',[('8',4),('12',4),('14-1',8),('1、2',4),('3、4',4),('18',2),('21',2)]),('新農科','10-22',[('20',2),('7',2),('15-1',4),('22',2)]),('新農科','10-24',[('13',4)]),('新農科','10-26',[('5、6',2),('16、17',2),('20',2),('7',2),('13',4),('15-1',6),('19',2),('22',2)])]
@@ -39,6 +41,13 @@ with tempfile.TemporaryDirectory() as tmp,patch.dict(os.environ,{'FEED_ORDERS_AR
    page.evaluate('()=>{window.models=[];window.feedDraws=[];window.colourDraws=[];const pdf=weeklyPdf;window.weeklyPdf=async m=>{models.push(m);const result=await pdf(m);window.renderedPDF=result;return result};const draw=CanvasRenderingContext2D.prototype.fillText;CanvasRenderingContext2D.prototype.fillText=function(...args){if(String(args[0]).includes("+"))feedDraws.push(args[0]);colourDraws.push({text:String(args[0]),colour:this.fillStyle,font:this.font,x:args[1],y:args[2]});return draw.apply(this,args)};}')
    page.locator('nav [href="#stats"]').click();page.locator('#stats-filter [name=from]').fill('2026-10-01');page.locator('#stats-filter [name=to]').fill('2026-10-20');page.locator('#stats-filter [name=barn_id]').select_option(barns[13]['id'],force=True)
    page.locator('#open-weekly-report').click();page.wait_for_selector('#weekly-a4-preview img');assert page.locator('#weekly-report-form input[type=date]').count()==0;assert page.locator('#weekly-barn').input_value()==barns[13]['id'];assert page.locator('#weekly-cohort').input_value()=='WHITEBOARD-DEMO|2026-07-17';assert page.locator('#weekly-report-form label').all_text_contents()[0].startswith('批號')
+   page.locator('#weekly-cohort').select_option('GROUP-3|2026-07-17');page.wait_for_selector('#weekly-a4-preview img')
+   page.locator('#weekly-barn').select_option(barns[15]['id']);page.wait_for_selector('#weekly-a4-preview img')
+   entry_model=page.evaluate('models.at(-1)')
+   assert [(e['date'],e['count'],e['mean']) for e in entry_model['headerEntries']]==[('2026-07-17',60,21.36),('2026-07-24',40,22.2)]
+   page.wait_for_function("()=>colourDraws.some(d=>d.text==='7/24 40頭')")
+   entry_draws=page.evaluate('colourDraws')
+   assert {'7/17 60頭','7/24 40頭','2026-07-17','2026-07-24','7/17 21.36 kg','7/24 22.2 kg'} <= {d['text'] for d in entry_draws if 193<d['y']<223}, [d for d in entry_draws if 193<d['y']<223]
    page.locator('#weekly-cohort').select_option('SOURCE-TEST|2026-07-17');page.wait_for_selector('#weekly-a4-preview img')
    assert dict(page.evaluate('models.at(-1).basics'))['豬源']=='曾勝誠、殷慶盛'
    for barn in source_barns[:2]:

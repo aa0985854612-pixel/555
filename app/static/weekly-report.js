@@ -232,6 +232,7 @@ function pdfModel(){
  return {
   preentry:preentryRows().length?{title:t('weeklyPreentry'),summary:preentryTotal(),entries:preentryLines()}:null,
   title:t('weeklyFormTitle'),basics:formBasics,basicColumns:4,
+  headerEntries:(r.entry_details||[]).map(e=>({barn:e.barn,date:e.date,count:e.count,mean:e.mean_kg,meanDate:e.mean_date})),
   nancyTemplate:lang==='zh',survival:r.cumulative.survival==null?'':fmt(r.cumulative.survival),
   entryHeaders:['barn','reportEntryDate','reportEntryCount','weeklyEntryAge','reportEntryMean'].map(t),
   entries:(r.entry_details||[]).map(e=>[e.barn,e.date,e.count==null?'':fmt(e.count,0),e.age_days==null?'':e.age_days+' '+t('days'),e.mean_kg==null?'':fmt(e.mean_kg)+' kg'+(e.mean_date&&e.mean_date!==e.date?'\n'+e.mean_date:'')]),
