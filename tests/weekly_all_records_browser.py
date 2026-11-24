@@ -19,6 +19,7 @@ with tempfile.TemporaryDirectory() as tmp,patch.dict(os.environ,{'FEED_ORDERS_AR
  barns={n:add('barns',name=f'{n}棟') for n in (1,2,3,4,5,6,7,8,12,13,14,15,16,17,18,19,20,21,22)}
  group={n:'WHITEBOARD-DEMO' if n in (13,22) else 'GROUP-'+str(next(i for i,g in enumerate(((1,2,3,4),(5,6,7),(8,12,14),(15,16,17),(18,19,20,21))) if n in g)) for n in barns}
  batches={n:add('batches',name=group[n],barn_id=b['id'],entry_date='2026-07-17',entry_count=100,entry_age_days=71,status='active') for n,b in barns.items()}
+ for n in (13,22):batches[n]=s.mutate(u,'batches',batches[n]|{'entry_mean_kg':22.56},str(uuid.uuid4()),batches[n]['id'])
  lots=[{'date':'2026-07-17','count':60,'mean_kg':21.36},{'date':'2026-07-24','count':40,'mean_kg':22.2}]
  batches[15]=s.mutate(u,'batches',batches[15]|{'report_entry_lots':lots,'report_entry_lots_source':'verified'},str(uuid.uuid4()),batches[15]['id'])
  bins={b['name']:add('feed_bins',**b) for b in initial_bins(list(barns.values()))}
@@ -54,6 +55,10 @@ with tempfile.TemporaryDirectory() as tmp,patch.dict(os.environ,{'FEED_ORDERS_AR
     page.locator('#weekly-barn').select_option(barn['id']);page.wait_for_selector('#weekly-a4-preview img')
     assert dict(page.evaluate('models.at(-1).basics'))['豬源']=='曾勝誠'
    page.locator('#weekly-cohort').select_option('WHITEBOARD-DEMO|2026-07-17');page.wait_for_selector('#weekly-a4-preview img')
+   page.locator('#weekly-barn').select_option('');page.wait_for_selector('#weekly-a4-preview img')
+   page.evaluate('colourDraws=[]');page.locator('#weekly-generate').click();page.wait_for_function("()=>colourDraws.some(d=>d.text==='入場均重：22.56 kg')")
+   header_draws=page.evaluate("colourDraws.filter(d=>d.y>=193&&d.y<223).map(d=>d.text)")
+   assert header_draws.count('入場日期：2026-07-17')==1 and header_draws.count('入場均重：22.56 kg')==1,header_draws
    page.locator('#weekly-barn').select_option(barns[13]['id']);page.wait_for_selector('#weekly-a4-preview img')
    labels=page.locator('#weekly-cohort option').all_text_contents();assert all('｜' in label and not re.search(r'2026-\d{2}-\d{2}',label) for label in labels);assert 'WHITEBOARD-DEMO｜13棟、22棟' in labels,labels
    assert page.locator('#weekly-barn option').all_text_contents()==['同批全部棟舍','13棟','22棟']
@@ -70,6 +75,8 @@ with tempfile.TemporaryDirectory() as tmp,patch.dict(os.environ,{'FEED_ORDERS_AR
    colours=page.evaluate('colourDraws')
    assert all('Noto Serif CJK TC' in draw['font'] for draw in colours)
    assert {'牧場：嘉得','豬源：殷慶盛','肉豬批號：WHITEBOARD-DEMO','入場頭數：100 頭'} <= {draw['text'] for draw in colours}
+   feed_fonts={d['font'] for d in colours if d['text'] in lines() and 355<d['y']<655}
+   assert len(feed_fonts)==1,feed_fonts
    assert any(d['text']=='5' and 506<d['x']<554 and 562<d['y']<585 and d['colour']=='#111111' for d in colours)
    red=[d for d in colours if d['colour']=='#b42332' and d['text']]
    assert len(red)==2 and all(d['text']=='1' for d in red)
@@ -81,7 +88,7 @@ with tempfile.TemporaryDirectory() as tmp,patch.dict(os.environ,{'FEED_ORDERS_AR
    shipping_draws=[d['text'] for d in colours if d['x']>363 and 792<d['y']<1161]
    assert shipping_draws==['10/25 南投4 · 上午出豬'],shipping_draws
    assert any(d['text']=='起始日' and '17px' in d['font'] for d in colours)
-   assert any(d['text']=='10/24+4(13)' and '15px' in d['font'] and 610<d['y']<655 for d in colours)
+   assert any(d['text']=='10/24+4(13)' and 610<d['y']<655 for d in colours)
    assert page.locator('#weekly-sheet-body .weekly-death td').first.evaluate('(e)=>getComputedStyle(e).color')=='rgb(180, 35, 50)';assert page.locator('#weekly-sheet-body .weekly-death-entry').first.evaluate('(e)=>getComputedStyle(e).color')=='rgb(17, 17, 17)';assert page.locator('#weekly-sheet-body .weekly-total-death strong').evaluate('(e)=>getComputedStyle(e).color')=='rgb(180, 35, 50)'
    preview=root/'artifacts/weekly-red-deaths-culls.jpg';preview.write_bytes(bytes(page.evaluate('async()=>Array.from(new Uint8Array(await renderedPDF.previewPages[0].arrayBuffer()))')))
    from PIL import Image
