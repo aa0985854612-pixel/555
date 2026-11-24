@@ -313,7 +313,7 @@ async function renderNancyWeeklyPdf(model){
  const weekColumns=[125,172,220,268,315,363,411,459,506,554,602,650,698,745];
  const sections=[
   {week:4,x:weekColumns,y:[283,307,331,355,425,449],headerTop:223,notesBottom:478},
-  {week:17,x:weekColumns,y:[538,562,585,610,680,704],headerTop:478,notesBottom:734},
+  {week:17,x:weekColumns,y:[508,532,555,580,680,704],headerTop:478,notesBottom:734},
   {week:30,x:weekColumns.slice(0,4),y:[792,823,854,884,926,952],headerTop:762,notesBottom:1007}
  ];
  function panel(x,y,width,height,fill='#fff'){
@@ -348,6 +348,13 @@ async function renderNancyWeeklyPdf(model){
  for(const {week,x,y,headerTop,notesBottom} of sections){
   const band=bands.find(band=>band.firstWeek===week);
   leftLabel(['週期'],headerTop,y[0]);
+  if(week===17){
+   for(let column=0;column<x.length-1;column++){
+    const width=x[column+1]-x[column];
+    panel(x[column],headerTop,width,y[0]-headerTop);
+    drawLines([String(week+column)+'w'],x[column],headerTop,width,y[0]-headerTop,{size:15,bold:true,align:'center'});
+   }
+  }
   for(const [rowIndex,label] of rowLabels.entries()){
    if(week===4&&rowIndex===4)continue;
    const top=y[rowIndex],height=week===4&&rowIndex===3?y[5]-top:y[rowIndex+1]-top;
