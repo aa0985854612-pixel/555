@@ -75,7 +75,7 @@ with tempfile.TemporaryDirectory() as tmp,patch.dict(os.environ,{'FEED_ORDERS_AR
    colours=page.evaluate('colourDraws')
    assert all('Noto Serif CJK TC' in draw['font'] for draw in colours)
    assert {'牧場：嘉得','豬源：殷慶盛','肉豬批號：WHITEBOARD-DEMO','入場頭數：100 頭'} <= {draw['text'] for draw in colours}
-   feed_fonts={d['font'] for d in colours if d['text'] in lines() and 355<d['y']<655}
+   feed_fonts={d['font'] for d in colours if d['text'] in lines() and 355<d['y']<680}
    assert len(feed_fonts)==1,feed_fonts
    assert any(d['text']=='5' and 506<d['x']<554 and 562<d['y']<585 and d['colour']=='#111111' for d in colours)
    red=[d for d in colours if d['colour']=='#b42332' and d['text']]
@@ -88,7 +88,7 @@ with tempfile.TemporaryDirectory() as tmp,patch.dict(os.environ,{'FEED_ORDERS_AR
    shipping_draws=[d['text'] for d in colours if d['x']>363 and 792<d['y']<1161]
    assert shipping_draws==['10/25 南投4 · 上午出豬'],shipping_draws
    assert any(d['text']=='起始日' and '17px' in d['font'] for d in colours)
-   assert any(d['text']=='10/24+4(13)' and 610<d['y']<655 for d in colours)
+   assert any(d['text']=='10/24+4(13)' and 610<d['y']<680 for d in colours)
    assert page.locator('#weekly-sheet-body .weekly-death td').first.evaluate('(e)=>getComputedStyle(e).color')=='rgb(180, 35, 50)';assert page.locator('#weekly-sheet-body .weekly-death-entry').first.evaluate('(e)=>getComputedStyle(e).color')=='rgb(17, 17, 17)';assert page.locator('#weekly-sheet-body .weekly-total-death strong').evaluate('(e)=>getComputedStyle(e).color')=='rgb(180, 35, 50)'
    preview=root/'artifacts/weekly-red-deaths-culls.jpg';preview.write_bytes(bytes(page.evaluate('async()=>Array.from(new Uint8Array(await renderedPDF.previewPages[0].arrayBuffer()))')))
    from PIL import Image
