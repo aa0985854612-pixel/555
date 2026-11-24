@@ -165,7 +165,7 @@ function blankWeek(w){return !w||(w.future&&!w.has_records);}
 function saleValues(events){return outgoingGroups(events.filter(e=>e.type==='sale')).map(e=>fmt(e.quantity,0)).join('、');}
 function feedText(w){return blankWeek(w)?'':feedLines(w.feed_details,w.feed_shared_details).join('\n');}
 
-function shippingNotes(){return outgoingGroups(report.weeks.flatMap(w=>w.events).filter(e=>e.type==='sale')).map(outgoingNotation);}
+function shippingNotes(){return outgoingGroups(report.weeks.flatMap(w=>w.events).filter(e=>e.type==='sale')).map(e=>outgoingNotation(e)+(e.note?' · '+e.note:''));}
 Object.assign(words,{weeklyDeathNotes:['死亡備註','Ghi chú heo chết'],weeklyDeathMore:['另有{n}筆死亡備註，完整內容詳App。','Còn {n} ghi chú heo chết; xem đầy đủ trong App.']});
 Object.assign(words,{weeklyBarnDeathMore:['另{n}筆，詳App','Còn {n}, xem App'],weeklyBarnGroupsMore:['另有{n}棟，完整內容詳App。','Còn {n} chuồng; xem đầy đủ trong App.']});
 function deathNotation(e){const d=e.date.split('-');return `${Number(d[1])}/${Number(d[2])} ${e.barn||t('unassigned')} ${t('death')}${fmt(e.quantity,0)}${t('periodHeads')}${e.note?' · '+e.note:''}`;}
