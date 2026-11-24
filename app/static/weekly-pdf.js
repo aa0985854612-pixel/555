@@ -276,15 +276,23 @@ async function renderNancyWeeklyPdf(model){
    if(x>66){ctx.moveTo(x,top);ctx.lineTo(x,bottom);}
    const value=model.basics[index]?.[1]||'—';
    const entries=model.headerEntries||[];
-   if(entries.length>1&&[4,5,7].includes(index)){
+   const dates=[...new Set(entries.map(entry=>entry.date||'—'))];
+   const weights=[...new Set(entries.map(entry=>entry.mean==null?null:entry.mean))];
+   const separate=(index===4||index===5)?dates.length>1:index===7&&weights.length>1;
+   if(separate){
     const shortDate=date=>date?Number(date.slice(5,7))+'/'+Number(date.slice(8,10)):'—';
-    const lines=entries.map(entry=>{
-     const date=shortDate(entry.date);
-     if(index===4)return date+' '+(entry.count==null?'—':entry.count+'頭');
-     if(index===5)return entry.date||'—';
-     const weightDate=entry.meanDate||entry.date;
-     return shortDate(weightDate)+' '+(entry.mean==null?'—':entry.mean+' kg');
-    });
+    let lines;
+    if(index===4){
+     lines=dates.map(date=>{
+      const counts=entries.filter(entry=>entry.date===date).map(entry=>entry.count);
+      const total=counts.every(count=>count!=null)?counts.reduce((sum,count)=>sum+count,0)+'頭':'—';
+      return shortDate(date)+' '+total;
+     });
+    }else if(index===5){
+     lines=dates;
+    }else{
+     lines=[...new Set(entries.map(entry=>shortDate(entry.meanDate||entry.date)+' '+(entry.mean==null?'—':entry.mean+' kg')))];
+    }
     ctx.font=`600 13px ${family}`;
     const labelWidth=ctx.measureText(label+'：').width+2;
     drawLines([label+'：'],x+5,top,labelWidth,bottom-top,{size:13,bold:true});
@@ -301,7 +309,7 @@ async function renderNancyWeeklyPdf(model){
  const barnNames=model.basics[8]?.[1]||'';
  ctx.fillStyle='#fff';ctx.fillRect(508,224,235,28);
  drawLines(['肉豬段棟舍：'+barnNames],510,224,232,28,{size:13,align:'center'});
- drawLines([barnNames],555,478,180,30,{size:13,bold:true});
+
  const weekColumns=[125,172,220,268,315,363,411,459,506,554,602,650,698,745];
  const sections=[
   {week:4,x:weekColumns,y:[283,307,331,355,400,424],headerTop:223,notesBottom:478},
@@ -318,6 +326,24 @@ async function renderNancyWeeklyPdf(model){
  }
  const rowLabels=[['起始日'],['淘汰數'],['死亡數'],['飼料量','（噸）'],['售出數']];
  const bands=model.pages.flat(),extraWeeks=bands.filter(band=>band.firstWeek==null);
+ // One size across every feed cell, accounting for both height and line width.
+ let feedSize=15;
+ ctx.font=`400 15px ${family}`;
+ for(const {week,x,y} of sections){
+  const row=bands.find(band=>band.firstWeek===week)?.rows[3];
+  if(!row)continue;
+  const height=week===4?y[5]-y[3]:y[4]-y[3];
+  row.cells.forEach((value,column)=>{
+   if(!value)return;
+   const lines=value.split('\n'),width=x[column+1]-x[column]-4;
+   feedSize=Math.min(feedSize,(height-2)/(lines.length*1.22));
+   for(const line of lines){
+    const measured=ctx.measureText(line).width;
+    if(measured>0)feedSize=Math.min(feedSize,15*width/measured);
+   }
+  });
+ }
+
 
  for(const {week,x,y,headerTop,notesBottom} of sections){
   const band=bands.find(band=>band.firstWeek===week);
@@ -333,7 +359,7 @@ async function renderNancyWeeklyPdf(model){
     if(!value)continue;
     const parts=value.split('\n'),feed=rowIndex===3;
     drawLines(parts,x[column],top,width,height,{
-     size:feed?15:12,align:feed?'left':'center',color:row.color,bold:row.bold
+     size:feed?feedSize:12,align:feed?'left':'center',color:row.color,bold:row.bold
     });
    }
   }
