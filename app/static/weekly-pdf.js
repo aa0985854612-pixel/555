@@ -1,7 +1,9 @@
 'use strict';
 /* One A4: keep the weekly tables readable; use one shared note font and rhythm. */
+const WEEKLY_PDF_WIDTH=595.28,WEEKLY_PDF_HEIGHT=841.89,WEEKLY_PDF_SCALE=4;
 window.weeklyPdf = async function(model) {
- const PW=595.28,PH=841.89,SCALE=4,M=24,W=PW-2*M,images=[];
+ const PW=WEEKLY_PDF_WIDTH,PH=WEEKLY_PDF_HEIGHT,SCALE=WEEKLY_PDF_SCALE,M=24,W=PW-2*M;
+ if(model.nancyTemplate)return renderNancyWeeklyPdf(model);
  const family='-apple-system, BlinkMacSystemFont, "Noto Sans CJK TC", "Noto Sans TC", sans-serif';
  await document.fonts.ready;
  const measure=document.createElement('canvas').getContext('2d');
@@ -13,7 +15,9 @@ window.weeklyPdf = async function(model) {
  if(!groups.length&&(model.death_notes||[]).length)groups.push({title:model.death_title,notes:model.death_notes.slice()});
  const shipping=(model.shipping_notes||[]).slice();
  const rowFont=(n,scale)=>(n>16?7:8)*scale;
- const footerFont=7.5,footerH=15+36+wrap(model.cumulative,W,8.5,true).length*10.625+5+wrap(model.legend,W,footerFont).length*9.375;
+ const basicColumns=model.basicColumns||3,basicHeight=model.basicColumns?22:26;
+ const inlineTotals=model.pages.some(page=>page.some(band=>band.summary));
+ const footerFont=7.5,footerH=(inlineTotals?0:51)+wrap(model.cumulative,W,8.5,true).length*10.625+5+wrap(model.legend,W,footerFont).length*9.375;
  // Each barn owns its own pane. Long lists use the empty space to its right,
  // rather than pushing the next barn below the previous barn's remaining dates.
  const NOTE_SIZE=8,NOTE_LINE=1.25,NOTE_GAP=.25;
@@ -48,7 +52,7 @@ window.weeklyPdf = async function(model) {
   return {size,cols,rows,height:Math.max(44,18+deathH,39+ship.height)};
  }
  function upperPlan(scale){
-  const titleH=26,basicsH=Math.ceil(model.basics.length/3)*26;
+  const titleH=26,basicsH=Math.ceil(model.basics.length/basicColumns)*basicHeight;
   const entryFont=8*scale,entryLH=entryFont*1.25,padding=5*scale;
   const widths=[.12,.24,.19,.20,.25].map(n=>W*n);
   const entryRows=[model.entryHeaders,...model.entries].map((row,index)=>({values:row,height:Math.max(12*scale,padding+Math.max(1,...row.map((v,i)=>wrap(v,widths[i]-6,entryFont,index===0).length))*entryLH)}));
@@ -60,13 +64,13 @@ window.weeklyPdf = async function(model) {
   }
   const bands=[];
   for(const inputPage of model.pages)for(const input of inputPage){
-   const size=rowFont(input.headers.length,scale),lh=size*1.25,cw=(W-58)/input.headers.length;
+   const size=rowFont(input.headers.length,scale),lh=size*1.25,cw=(W-58)/(model.weekColumns||input.headers.length);
    const rows=input.rows.map(row=>{
     const cells=row.cells.map(value=>row.singleLine||row.left?String(value??'').split('\n'):wrap(value,cw-4,size,row.bold));
     const lines=Math.max(1,...cells.map(parts=>parts.length)),minimum=row.left?18*scale:12*scale;
     return {...row,cells,height:Math.max(minimum,(row.height||0)*scale,lines*lh+5*scale)};
    });
-   const band={...input,rows,size,headerH:14*scale,cw};height+=band.headerH+rows.reduce((n,row)=>n+row.height,0)+5*scale;bands.push(band);
+   const band={...input,rows,size,headerH:14*scale,stageH:input.stages?.length?15*scale:0,cw};height+=band.stageH+band.headerH+rows.reduce((n,row)=>n+row.height,0)+5*scale;bands.push(band);
   }
   return {scale,height,entryRows,entryFont,entryLH,widths,preentry,bands};
  }
@@ -101,16 +105,64 @@ window.weeklyPdf = async function(model) {
  }
  function box(x,y,w,h,shade=false){if(shade){c.fillStyle='#f0f0f0';c.fillRect(x,y,w,h);}c.strokeRect(x,y,w,h);}
  text(model.title,M,M,W,16,true,'center',true);let y=M+26;
- for(let i=0;i<model.basics.length;i+=3){for(let j=0;j<3;j++){const pair=model.basics[i+j]||['',''],x=M+j*W/3;box(x,y,W/3,26);text(pair[0],x+4,y+2,W/3-8,6.8,false,'left',true);text(pair[1],x+4,y+12,W/3-8,9,true,'left',true);}y+=26;}
+ const basicWidth=W/basicColumns;
+ for(let i=0;i<model.basics.length;i+=basicColumns){
+  for(let j=0;j<basicColumns;j++){
+   const pair=model.basics[i+j]||['',''],x=M+j*basicWidth;
+   box(x,y,basicWidth,basicHeight);
+   text(pair[0],x+4,y+2,basicWidth-8,6.8,false,'left',true);
+   text(pair[1],x+4,y+10,basicWidth-8,9,true,'left',true);
+  }
+  y+=basicHeight;
+ }
  y+=4;
  for(let index=0;index<upper.entryRows.length;index++){const row=upper.entryRows[index];let x=M;row.values.forEach((v,j)=>{box(x,y,upper.widths[j],row.height,index===0);text(v,x+3,y+2*upper.scale,upper.widths[j]-6,upper.entryFont,index===0,'center');x+=upper.widths[j];});y+=row.height;}
  text(model.period,M,y+2*upper.scale,W,7*upper.scale,false,'left',true);y+=14*upper.scale;
  const pre=upper.preentry;
  if(pre){box(M,y,W,pre.height);text(model.preentry.title+' · '+model.preentry.summary,M+3,y+2*upper.scale,W-6,8*upper.scale,true,'left',true);model.preentry.entries.forEach((entry,index)=>text(entry,M+3+Math.floor(index/pre.perColumn)*W/pre.columns,y+16*upper.scale+index%pre.perColumn*pre.lh,W/pre.columns-6,pre.font,false,'left',true,true));y+=pre.height+4*upper.scale;}
  for(const band of upper.bands){
-  box(M,y,58,band.headerH,true);text(model.cycle,M+2,y+2*upper.scale,54,7.5*upper.scale,true,'center',true);
-  band.headers.forEach((value,j)=>{const x=M+58+j*band.cw;box(x,y,band.cw,band.headerH,true);text(value,x+2,y+2*upper.scale,band.cw-4,band.size,true,'center',true);});y+=band.headerH;
-  for(const row of band.rows){box(M,y,58,row.height);text(row.label,M+2,y+2*upper.scale,54,7.5*upper.scale,true,'left',true);row.cells.forEach((parts,j)=>{const x=M+58+j*band.cw;box(x,y,band.cw,row.height);text(parts,x+2,y+2*upper.scale,band.cw-4,band.size,row.bold,row.left?'left':'center',true,row.monospace,row.color);});y+=row.height;}
+  const summaryX=M+58+band.headers.length*band.cw,summaryW=M+W-summaryX;
+  box(M,y,58,band.headerH+band.stageH,true);
+  text(model.cycle,M+2,y+2*upper.scale,54,7.5*upper.scale,true,'center',true);
+  if(band.stageH){
+   let x=M+58;
+   for(const [label,count] of band.stages){
+    const width=count*band.cw;
+    box(x,y,width,band.stageH,true);
+    text(label,x+3,y+2*upper.scale,width-6,band.size,true,'center',true);
+    x+=width;
+   }
+   y+=band.stageH;
+  }
+  band.headers.forEach((value,j)=>{
+   const x=M+58+j*band.cw;
+   box(x,y,band.cw,band.headerH,true);
+   text(value,x+2,y+2*upper.scale,band.cw-4,band.size,true,'center',true);
+  });
+  if(band.summary){
+   box(summaryX,y,summaryW,band.headerH,true);
+   text(model.formTotalLabel,summaryX+4,y+2*upper.scale,summaryW-8,band.size,true,'center',true);
+  }
+  y+=band.headerH;
+  for(const row of band.rows){
+   const on=y+2*upper.scale;
+   box(M,y,58,row.height);
+   text(row.label,M+2,on,54,7.5*upper.scale,true,'left',true);
+   row.cells.forEach((parts,j)=>{
+    const x=M+58+j*band.cw;
+    box(x,y,band.cw,row.height);
+    text(parts,x+2,on,band.cw-4,band.size,row.bold,row.left?'left':'center',true,row.monospace,row.color);
+   });
+   if(band.summary){
+    box(summaryX,y,summaryW,row.height);
+    const total=model.totals[row.totalIndex];
+    if(total){
+     text(total[0],summaryX+4,on,summaryW/2-8,band.size,false,'left',true);
+     text(total[1],summaryX+summaryW/2,on,summaryW/2-4,band.size,true,'center',true,false,model.total_colors?.[row.totalIndex]);
+    }
+   }
+   y+=row.height;
+  }
   y+=5*upper.scale;
  }
  const noteH=PH-M-footerH-y-6,half=W/2;
@@ -127,12 +179,20 @@ window.weeklyPdf = async function(model) {
   });barnY+=rowH;
  }
  drawPane(fillPane(shipping,half,noteH-39),M+half,y+35,half);
- y+=noteH+6;text(model.totalLabel,M,y,W,8.5,true,'left',true);y+=15;
- const totalW=W/Math.max(1,model.totals.length);
- model.totals.forEach((pair,i)=>{const x=M+i*totalW;box(x,y,totalW,30);text(pair[0],x+4,y+3,totalW-8,7,false,'left',true);text(pair[1],x+4,y+15,totalW-8,10,true,'left',true,false,model.total_colors?.[i]);});y+=36;
+ y+=noteH+6;
+ if(!inlineTotals){
+  text(model.totalLabel,M,y,W,8.5,true,'left',true);y+=15;
+  const totalW=W/Math.max(1,model.totals.length);
+  model.totals.forEach((pair,i)=>{const x=M+i*totalW;box(x,y,totalW,30);text(pair[0],x+4,y+3,totalW-8,7,false,'left',true);text(pair[1],x+4,y+15,totalW-8,10,true,'left',true,false,model.total_colors?.[i]);});y+=36;
+ }
  text(model.cumulative,M,y,W,8.5,true);y+=wrap(model.cumulative,W,8.5,true).length*10.625+5;text(model.legend,M,y,W,footerFont);
+ return weeklyCanvasPdf(canvas);
+};
+
+async function weeklyCanvasPdf(canvas){
+ const PW=WEEKLY_PDF_WIDTH,PH=WEEKLY_PDF_HEIGHT;
  const blob=await new Promise((resolve,reject)=>canvas.toBlob(b=>b?resolve(b):reject(new Error('weekly_pdf_image_failed')),'image/jpeg',.96));
- images.push({bytes:new Uint8Array(await blob.arrayBuffer()),width:canvas.width,height:canvas.height});canvas.width=canvas.height=1;
+ const images=[{bytes:new Uint8Array(await blob.arrayBuffer()),width:canvas.width,height:canvas.height}];canvas.width=canvas.height=1;
  const enc=new TextEncoder(),parts=[],offsets=[0];let length=0;
  const append=part=>{const bytes=typeof part==='string'?enc.encode(part):part;parts.push(bytes);length+=bytes.length;};
  const object=(id,body)=>{offsets[id]=length;append(`${id} 0 obj\n`);for(const piece of body)append(piece);append('\nendobj\n');};
@@ -148,4 +208,155 @@ window.weeklyPdf = async function(model) {
  // These exact JPEG bytes are embedded in the PDF, so preview and download agree.
  pdf.previewPages=images.map(im=>new Blob([im.bytes],{type:'image/jpeg'}));
  return pdf;
-};
+}
+
+// Coordinates follow the original print grid with the two source pages joined.
+async function renderNancyWeeklyPdf(model){
+ const template=new Image();
+ template.src='/weekly-nancy-template.png';
+ await Promise.all([template.decode(),document.fonts.ready]);
+ const canvas=document.createElement('canvas'),scale=WEEKLY_PDF_SCALE;
+ canvas.width=Math.ceil(WEEKLY_PDF_WIDTH*scale);
+ canvas.height=Math.ceil(WEEKLY_PDF_HEIGHT*scale);
+ const ctx=canvas.getContext('2d');
+ ctx.fillStyle='#fff';
+ ctx.fillRect(0,0,canvas.width,canvas.height);
+ const formScale=.72*scale;
+ ctx.translate((canvas.width-690*formScale)/2,21*scale);
+ ctx.scale(formScale,formScale);
+ ctx.translate(-62,-69);
+ ctx.drawImage(template,62,69,690,1094);
+
+ const black='#111111',family='"Noto Serif CJK TC", "Noto Serif TC", "PMingLiU", serif';
+ function drawLines(lines,x,y,width,height,{size=12,align='left',color=black,bold=false}={}){
+  if(!lines.length)return;
+  size=Math.min(size,(height-2)/(lines.length*1.22));
+  ctx.font=`${bold?600:400} ${size}px ${family}`;
+  ctx.fillStyle=color;
+  ctx.textAlign=align;
+  ctx.textBaseline='top';
+  const left=align==='center'?x+width/2:x+2;
+  const top=y+(height-lines.length*size*1.22)/2;
+  lines.forEach((line,index)=>ctx.fillText(line,left,top+index*size*1.22,width-4));
+ }
+ // Preserve the logo and title from the source sheet while removing the
+ // spreadsheet's unused cells around the logo and inside the heading fields.
+ ctx.fillStyle='#fff';
+ ctx.fillRect(64,69,206,58);
+ ctx.fillRect(510,69,236,58);
+ ctx.fillRect(67,163,677,59);
+ const headerLabels=['牧場','豬源','飼料','肉豬批號','入場頭數','入場日期','入場日齡','入場均重'];
+ const headerWidth=(745-66)/4,headerHeight=30;
+ ctx.strokeStyle=black;
+ ctx.lineWidth=1.15;
+ ctx.beginPath();
+ ctx.moveTo(66,193);ctx.lineTo(745,193);
+ for(let column=1;column<4;column++){
+  const x=66+column*headerWidth;
+  ctx.moveTo(x,162);ctx.lineTo(x,223);
+ }
+ ctx.stroke();
+ headerLabels.forEach((label,i)=>{
+  const value=model.basics[i]?.[1]||'—';
+  const x=66+(i%4)*headerWidth,y=163+Math.floor(i/4)*headerHeight;
+  drawLines([label+'：'+value],x+6,y,headerWidth-12,headerHeight,{size:13});
+ });
+
+ const sections=[
+  {week:4,x:[125,172,220,268,315,363,411,459,506,554,602,650,698,745],y:[283,307,331,355,379,478]},
+  {week:17,x:[125,172,220,268,315,363,411,459,506,554,602,650,698,745],y:[538,562,585,610,639,663]},
+  {week:30,x:[125,172,220,268],y:[792,823,854,884,914,943]}
+ ];
+ const bands=model.pages.flat(),extraWeeks=bands.filter(band=>band.firstWeek==null);
+ const extraFeed=[];
+ for(const {week,x,y} of sections){
+  const band=bands.find(band=>band.firstWeek===week);
+  if(!band)continue;
+  if(week===4&&band.rows[0].cells[0]){
+   ctx.strokeStyle=black;ctx.lineWidth=.7;ctx.beginPath();
+   for(const boundary of y.slice(1,5)){ctx.moveTo(x[0],boundary);ctx.lineTo(x[1],boundary);}
+   ctx.stroke();
+  }
+  for(const [rowIndex,row] of band.rows.entries()){
+   row.cells.forEach((value,column)=>{
+    if(!value)return;
+    const parts=value.split('\n');
+    const detail=week===4&&rowIndex===4;
+    const top=detail?y[4]:y[rowIndex];
+    const height=detail?24:y[rowIndex+1]-top;
+    // Crowded feed cells point to a continuation in the form's notes area.
+    let shown=parts;
+    if(row.monospace&&parts.length>3){
+     shown=parts.slice(0,2).concat('↓');
+     extraFeed.push({value:`${week+column}w 飼料`,bold:true},...parts.slice(2).map(value=>({value})));
+    }
+    drawLines(shown,x[column],top,x[column+1]-x[column],height,{
+     align:row.left?'left':'center',color:row.color,bold:row.bold
+    });
+   });
+  }
+ }
+ const totalRows=[[854,884],[884,914],[914,943]];
+ model.totals.forEach(([,value],index)=>{
+  if(!value)return;
+  const [top,bottom]=totalRows[index];
+  drawLines([value],269,top,72,bottom-top,{align:'center',bold:true,color:model.total_colors[index]});
+ });
+ if(model.survival)drawLines([model.survival],269,975,75,31,{align:'center',bold:true});
+
+ // The source PDF splits this label at the page break.
+ ctx.fillStyle='#fff';
+ ctx.fillRect(69,946,53,57);
+ ctx.fillRect(365,974,377,5);
+ drawLines(['備註'],69,946,53,57,{align:'center',size:14});
+
+ const deaths=[{value:model.death_title,bold:true},...model.death_groups.flatMap(group=>[
+  {value:group.title,bold:true},...group.notes.map(value=>({value}))
+ ])];
+ const other=[{value:model.shipping_title,bold:true},...model.shipping_notes.map(value=>({value})),
+  ...model.basics.slice(8).filter(([,value])=>value).map(([label,value])=>({value:label+' '+value})),
+  ...model.entries.map(entry=>({value:entry.filter(Boolean).join(' · ').replace(/\n/g,' · ')})),
+  {value:model.period},{value:model.cumulative},
+  ...(model.preentry?[{value:model.preentry.title+' '+model.preentry.summary,bold:true},...model.preentry.entries.map(value=>({value}))]:[]),
+  ...extraFeed,{value:model.legend}
+ ];
+ function fitNotes(items,x,top,width,height,sizeLimit){
+  function flow(size,columns){
+   const lines=[],columnWidth=width/columns;
+   for(const {value,bold,color} of items){
+    ctx.font=`${bold?600:400} ${size}px ${family}`;
+    let line='';
+    for(const char of value){
+     if(line&&ctx.measureText(line+char).width>columnWidth-5){
+      lines.push({line,bold,color});line='';
+     }
+     line+=char;
+    }
+    if(line)lines.push({line,bold,color});
+   }
+   const perColumn=Math.floor(height/(size*1.22));
+   return {lines,columnWidth,perColumn,fits:perColumn*columns>=lines.length};
+  }
+  let low=.01,high=sizeLimit,best;
+  for(let attempt=0;attempt<24;attempt++){
+   const size=(low+high)/2;
+   const layout=[1,2,3].map(columns=>flow(size,columns)).find(plan=>plan.fits);
+   if(layout){low=size;best=layout;}else high=size;
+  }
+  best?.lines.forEach(({line,bold,color},i)=>drawLines([line],
+   x+Math.floor(i/best.perColumn)*best.columnWidth,top+(i%best.perColumn)*low*1.22,
+   best.columnWidth,low*1.22+2,{size:low,bold,color}));
+ }
+ const details=extraWeeks.flatMap(band=>band.headers.flatMap((heading,i)=>{
+  const items=band.rows.flatMap(row=>row.cells[i]?row.cells[i].split('\n').map(value=>({value:row.label+' '+value,color:row.color})):[]);
+  return items.length?[{value:heading,bold:true},...items]:[];
+ }));
+ if(details.length){
+  ctx.fillStyle='#fff';
+  ctx.fillRect(126,406,617,70);
+  fitNotes(details,130,408,608,65,11);
+ }
+ fitNotes(deaths,366,797,181,283,11);
+ fitNotes(other,551,797,189,283,11);
+ return weeklyCanvasPdf(canvas);
+}
