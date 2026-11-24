@@ -33,25 +33,40 @@ with tempfile.TemporaryDirectory() as tmp,patch.dict(os.environ,{'FEED_ORDERS_AR
   with sync_playwright() as p:
    browser=p.chromium.launch(executable_path='/usr/bin/chromium',args=['--no-sandbox']);page=browser.new_page(viewport={'width':390,'height':844},timezone_id='Asia/Taipei');errors=[];page.on('pageerror',lambda e:(errors.append(str(e)),print('BROWSER ERROR',e,flush=True)));page.on('response',lambda r: print('REPORT ERROR',r.status,r.text(),flush=True) if '/api/weekly-report?' in r.url and r.status!=200 else None)
    page.goto(url);page.locator('#login-form [name=username]').fill('owner');page.locator('#login-form [name=password]').fill('83000011');page.locator('#login-form button').click();page.wait_for_selector('#workspace:not([hidden])')
-   page.evaluate('()=>{window.models=[];window.feedDraws=[];window.colourDraws=[];const pdf=weeklyPdf;window.weeklyPdf=async m=>{models.push(m);const result=await pdf(m);window.renderedPDF=result;return result};const draw=CanvasRenderingContext2D.prototype.fillText;CanvasRenderingContext2D.prototype.fillText=function(...args){if(String(args[0]).includes("+"))feedDraws.push(args[0]);colourDraws.push({text:String(args[0]),colour:this.fillStyle,x:args[1],y:args[2]});return draw.apply(this,args)};}')
+   page.evaluate('()=>{window.models=[];window.feedDraws=[];window.colourDraws=[];const pdf=weeklyPdf;window.weeklyPdf=async m=>{models.push(m);const result=await pdf(m);window.renderedPDF=result;return result};const draw=CanvasRenderingContext2D.prototype.fillText;CanvasRenderingContext2D.prototype.fillText=function(...args){if(String(args[0]).includes("+"))feedDraws.push(args[0]);colourDraws.push({text:String(args[0]),colour:this.fillStyle,font:this.font,x:args[1],y:args[2]});return draw.apply(this,args)};}')
    page.locator('nav [href="#stats"]').click();page.locator('#stats-filter [name=from]').fill('2026-10-01');page.locator('#stats-filter [name=to]').fill('2026-10-20');page.locator('#stats-filter [name=barn_id]').select_option(barns[13]['id'],force=True)
    page.locator('#open-weekly-report').click();page.wait_for_selector('#weekly-a4-preview img');assert page.locator('#weekly-report-form input[type=date]').count()==0;assert page.locator('#weekly-barn').input_value()==barns[13]['id'];assert page.locator('#weekly-cohort').input_value()=='WHITEBOARD-DEMO|2026-07-17';assert page.locator('#weekly-report-form label').all_text_contents()[0].startswith('批號')
    labels=page.locator('#weekly-cohort option').all_text_contents();assert all('｜' in label and not re.search(r'2026-\d{2}-\d{2}',label) for label in labels);assert 'WHITEBOARD-DEMO｜13棟、22棟' in labels,labels
    assert page.locator('#weekly-barn option').all_text_contents()==['同批全部棟舍','13棟','22棟']
    def lines():return page.locator('#weekly-sheet-body .weekly-feed-entry').all_text_contents()
    assert lines()==['10/24+4(13)','10/26+4(13)'],lines();assert dict(page.evaluate('models.at(-1).totals'))['飼料到料（噸）']=='8';passed('batch-first selector shows batch and barns without entry dates; only matching barns are offered; old stats end date cannot hide the saved October 24/26 feed')
-   model=page.evaluate('models.at(-1)');rows=[row for pp in model['pages'] for band in pp for row in band['rows']];culls=[row for row in rows if row['label']=='淘汰數（隻）'];assert len(culls)==2 and sum(int(v) for row in culls for v in row['cells'] if v)==5
+   model=page.evaluate('models.at(-1)');bands=model['pages'][0]
+   assert [band['headers'] for band in bands]==[[f'{week}週' for week in range(start,end+1)] for start,end in [(4,16),(17,29),(30,32)]]
+   assert bands[0]['stages']==[['保育段棟舍',8],['肉豬段棟舍',5]] and bands[2]['summary']
+   assert bands[0]['rows'][0]['cells'][:7]==['']*7
+   rows=[row for band in bands for row in band['rows']];culls=[row for row in rows if row['label']=='淘汰數（隻）'];assert len(culls)==3 and sum(int(v) for row in culls for v in row['cells'] if v)==5
    assert all('淘汰' not in pair[0] for pair in model['totals']) and not any('淘汰' in note for note in model['shipping_notes']+model['death_notes'])
-   colours=page.evaluate('colourDraws');death_rows=[d for d in colours if d['text']=='死亡數（隻）' and d['x']==26];assert death_rows
-   for heading in death_rows:
-    values=[d for d in colours if d['y']==heading['y'] and d['x']>80 and d['text']];assert all(d['colour']=='#b42332' for d in values)
-   total_heading=next(d for d in colours if d['text']=='死亡數（隻）' and d['x']==28);assert next(d for d in colours if d['x']==28 and d['y']==total_heading['y']+12)['colour']=='#b42332'
+   assert model['nancyTemplate']
+   colours=page.evaluate('colourDraws')
+   assert all('Noto Serif CJK TC' in draw['font'] for draw in colours)
+   assert {'牧場：嘉得','豬源：—','肉豬批號：WHITEBOARD-DEMO','入場頭數：100 頭'} <= {draw['text'] for draw in colours}
+   assert any(d['text']=='5' and 506<d['x']<554 and 562<d['y']<585 and d['colour']=='#111111' for d in colours)
+   red=[d for d in colours if d['colour']=='#b42332' and d['text']]
+   assert len(red)==2 and all(d['text']=='1' for d in red)
+   assert any(506<d['x']<554 and 585<d['y']<610 for d in red)
+   assert any(268<d['x']<363 and 854<d['y']<884 for d in red)
    assert next(d for d in colours if d['text']=='10/24 死亡1隻')['colour']=='#111111';assert any(d['colour']=='#111111' and '+' in d['text'] for d in colours)
    assert page.locator('#weekly-sheet-body .weekly-death td').first.evaluate('(e)=>getComputedStyle(e).color')=='rgb(180, 35, 50)';assert page.locator('#weekly-sheet-body .weekly-death-entry').first.evaluate('(e)=>getComputedStyle(e).color')=='rgb(17, 17, 17)';assert page.locator('#weekly-sheet-body .weekly-total-death strong').evaluate('(e)=>getComputedStyle(e).color')=='rgb(180, 35, 50)'
    preview=root/'artifacts/weekly-red-deaths-culls.jpg';preview.write_bytes(bytes(page.evaluate('async()=>Array.from(new Uint8Array(await renderedPDF.previewPages[0].arrayBuffer()))')))
    from PIL import Image
-   image=Image.open(preview).convert('RGB');assert sum(red>100 and red>green*1.6 and red>blue*1.4 for red,green,blue in image.getdata())>200
-   page.evaluate('window.print=()=>{window.printInvoked=true}');page.click('#weekly-browser-print');page.wait_for_function('()=>window.printInvoked===true');assert page.locator('#weekly-print-root img').count()==1;assert page.locator('#weekly-print-root img').get_attribute('src')==page.locator('#weekly-a4-preview img').get_attribute('src');page.evaluate('dispatchEvent(new Event("afterprint"))')
+   image=Image.open(preview).convert('RGB')
+   # Template's yellow 17w header occupies its original grid cell.
+   red,green,blue=image.getpixel((round((image.width-690*2.88)/2+(166-62)*2.88),round(84+(527-69)*2.88)))
+   assert red>230 and green>230 and blue<60,(red,green,blue)
+   page.evaluate('window.print=()=>{window.printInvoked=true}');page.click('#weekly-browser-print');page.wait_for_function('()=>window.printInvoked===true');assert page.locator('#weekly-print-root img').count()==1;assert page.locator('#weekly-print-root img').get_attribute('src')==page.locator('#weekly-a4-preview img').get_attribute('src')
+   printed=Path(tmp)/'browser-print.pdf';page.pdf(path=printed,prefer_css_page_size=True,print_background=True)
+   printed_info=subprocess.check_output(['pdfinfo',str(printed)],text=True);assert re.search(r'Pages:\s+1\b',printed_info) and '(A4)' in printed_info,printed_info
+   page.evaluate('dispatchEvent(new Event("afterprint"))')
    passed('saved and future culls appear only in upper weekly rows; death values and total stay red while notes are black in HTML and actual embedded PDF image; browser printing uses the identical one-page preview')
 
    page.locator('#weekly-barn').select_option('');page.wait_for_selector('#weekly-a4-preview img');assert len(lines())==4,lines();assert dict(page.evaluate('models.at(-1).totals'))['飼料到料（噸）']=='12'

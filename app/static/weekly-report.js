@@ -181,9 +181,68 @@ function notesBlock(compact){
  const deaths=`<section class="weekly-death-notes"><h2>${t('weeklyDeathNotes')}</h2><div class="weekly-death-groups" data-barn-columns="${Math.max(1,Math.min(3,shownGroups.length))}">${shownGroups.map(g=>{const shown=g.notes;return `<div class="weekly-death-barn" data-barn="${safe(g.barn)}"><h3>${safe(g.title)}</h3><div>${shown.map(n=>`<p class="weekly-death-entry">${safe(n)}</p>`).join('')}${shown.length<g.notes.length?`<p class="weekly-death-more">${safe(label('weeklyBarnDeathMore',g.notes.length-shown.length))}</p>`:''}</div></div>`;}).join('')}${shownGroups.length<groups.length?`<p class="weekly-death-more">${safe(label('weeklyBarnGroupsMore',groups.length-shownGroups.length))}</p>`:''}</div></section>`;
  return `<div class="weekly-notes-pair">${deaths}${column(shippingNotes(),'weeklyOutgoingNotes','shipping','weeklyShippingMore')}</div>`;
 }
+Object.assign(words,{
+ weeklyFormTitle:['肉豬場紀錄表','Bảng ghi chép trại heo thịt'],
+ weeklyFarm:['牧場','Trại'],weeklyPigSource:['豬源','Nguồn heo'],
+ weeklyNursery:['保育段棟舍','Chuồng giai đoạn cai sữa'],
+ weeklyFinishing:['肉豬段棟舍','Chuồng giai đoạn nuôi thịt'],
+ weeklyFormTotal:['總數量','Tổng số']
+});
+function paperBands(){
+ const weeks=sheetWeeks(),first=shownWeek(weeks[0]);
+ const bands=[];
+ function addWeeks(selected,stages=[],summary=false,firstWeek=null){
+  if(!selected.length)return;
+  bands.push({
+   headers:selected.map(w=>weekHeading(w,true)),stages,summary,firstWeek,
+   rows:[
+    {label:t('weeklyPaperStart'),cells:selected.map(w=>w?.anchor?shortDate(w):''),height:16},
+    ...metrics.map(k=>({
+     label:t(paperMetricKey[k]),totalIndex:summaryMetrics.indexOf(k),
+     cells:selected.map(w=>blankWeek(w)?'':k==='feed_orders'?(feedText(w)||amount(w.values[k],k)):k==='sale'?saleValues(w.events):amount(w.values[k],k)),
+     height:k==='feed_orders'?Math.max(28,...selected.map(w=>feedText(w).split('\n').length*10+8)):18,
+     bold:k==='death',color:k==='death'?deathColor:undefined,
+     left:k==='feed_orders',singleLine:k==='feed_orders',monospace:k==='feed_orders'
+    }))
+   ]
+  });
+ }
+ function addChunks(selected){for(let start=0;start<selected.length;start+=13)addWeeks(selected.slice(start,start+13));}
+ if(first==null||first>32){addChunks(weeks);return bands;}
+ const byAge=new Map(weeks.map(w=>[shownWeek(w),w]));
+ const range=(start,end)=>Array.from({length:end-start+1},(_,i)=>byAge.get(start+i)??{age_week:start+i,planned:true,future:true});
+ addChunks(weeks.filter(w=>shownWeek(w)<4));
+ addWeeks(range(4,16),[[t('weeklyNursery'),8],[t('weeklyFinishing'),5]],false,4);
+ addWeeks(range(17,29),[[t('weeklyFinishing'),13]],false,17);
+ addWeeks(range(30,32),[],true,30);
+ addChunks(weeks.filter(w=>shownWeek(w)>32));
+ return bands;
+}
 function pdfModel(){
  const r=report;
- return {continued:t('weeklyContinue'),preentry:preentryRows().length?{title:t('weeklyPreentry'),summary:preentryTotal(),entries:preentryLines(),hint:t('weeklyPreentryHint'),more:t('weeklyPreentryMore')}:null,title:'嘉得 · '+t('weeklyReport'),basics:paperBasics().map(([key,value])=>[t(key),value]),entryHeaders:['barn','reportEntryDate','reportEntryCount','weeklyEntryAge','reportEntryMean'].map(t),entries:(r.entry_details||[]).map(e=>[e.barn,e.date,e.count==null?'':fmt(e.count,0),e.age_days==null?'':e.age_days+' '+t('days'),e.mean_kg==null?'':fmt(e.mean_kg)+' kg'+(e.mean_date&&e.mean_date!==e.date?'\n'+e.mean_date:'')]),period:r.from+' → '+r.to+' · '+t('weeklyPaperPeriod'),cycle:cycleTitle(),pages:panels().map(page=>page.map(ws=>({headers:ws.map(w=>weekHeading(w,true)),rows:[{label:t('weeklyPaperStart'),cells:ws.map(shortDate),height:18},...metrics.map(k=>({label:t(paperMetricKey[k]),cells:ws.map(w=>blankWeek(w)?'':k==='feed_orders'?feedText(w):k==='sale'?saleValues(w.events):amount(w.values[k],k)),height:k==='feed_orders'?Math.max(46,...ws.map(w=>feedText(w).split('\n').length*10+8)):k==='death'?23:20,bold:k==='death',color:k==='death'?deathColor:undefined,complete:k==='sale',left:k==='feed_orders',singleLine:k==='feed_orders',monospace:k==='feed_orders'}))]}))),death_title:t('weeklyDeathNotes'),death_notes:deathNotes(),death_groups:deathGroups(),death_more:t('weeklyBarnDeathMore'),death_groups_more:t('weeklyBarnGroupsMore'),shipping_title:t('weeklyOutgoingNotes'),shipping_notes:shippingNotes(),shipping_more:t('weeklyShippingMore'),totalLabel:t('weeklyTotal'),total_colors:summaryMetrics.map(k=>k==='death'?deathColor:undefined),totals:summaryMetrics.map(k=>[t(metricKey[k]),r.totals[k]==null&&r.known_totals[k]>0?t('weeklyKnown')+' '+amount(r.known_totals[k],k):amount(r.totals[k],k)]),cumulative:t('weeklyCurrent')+' · '+r.observed_to+'  '+t('remaining')+' '+(r.cumulative.remaining==null?'':fmt(r.cumulative.remaining,0))+'  '+t('survival')+' '+(r.cumulative.survival==null?'':fmt(r.cumulative.survival)+'%'),legend:[t('weeklyPDFLegend'),planningHint(),t('weeklyShippingBasis')].filter(Boolean).join(' ')+(r.pending.length?' '+label('weeklyPendingCount',r.pending.length):'')};
+ const formBasics=[
+  [t('weeklyFarm'),'嘉得'],[t('weeklyPigSource'),''],[t('weeklyLatestFeedType'),r.feed_setup?.latest_type||''],[t('weeklyBatch'),r.name],
+  [t('reportEntryCount'),fmt(r.cumulative.entry,0)+' '+t('heads')],[t('reportEntryDate'),r.entry_date],
+  [t('weeklyEntryAge'),r.entry_age_days==null?t(r.age_mixed?'mixedAges':'insufficient'):fmt(r.entry_age_days,0)+' '+t('days')],
+  [t('reportEntryMean'),r.entry_mean_kg==null?'':fmt(r.entry_mean_kg)+' kg'],
+  [t('barn'),r.barns.join('、')],[t('feedDefaultVendor'),(r.feed_setup?.configured_vendors||[]).join('、')],
+  [t('weeklyCycle'),paperBasics().find(([key])=>key==='weeklyCycle')[1]]
+ ];
+ return {
+  preentry:preentryRows().length?{title:t('weeklyPreentry'),summary:preentryTotal(),entries:preentryLines()}:null,
+  title:t('weeklyFormTitle'),basics:formBasics,basicColumns:4,
+  nancyTemplate:lang==='zh',survival:r.cumulative.survival==null?'':fmt(r.cumulative.survival),
+  entryHeaders:['barn','reportEntryDate','reportEntryCount','weeklyEntryAge','reportEntryMean'].map(t),
+  entries:(r.entry_details||[]).map(e=>[e.barn,e.date,e.count==null?'':fmt(e.count,0),e.age_days==null?'':e.age_days+' '+t('days'),e.mean_kg==null?'':fmt(e.mean_kg)+' kg'+(e.mean_date&&e.mean_date!==e.date?'\n'+e.mean_date:'')]),
+  period:r.from+' → '+r.to+' · '+t('weeklyPaperPeriod'),cycle:cycleTitle(),pages:[paperBands()],weekColumns:13,
+  death_title:t('weeklyDeathNotes'),death_notes:deathNotes(),death_groups:deathGroups(),
+  shipping_title:t('weeklyOutgoingNotes'),shipping_notes:shippingNotes(),
+  totalLabel:t('weeklyTotal'),formTotalLabel:t('weeklyFormTotal'),
+  total_colors:summaryMetrics.map(k=>k==='death'?deathColor:undefined),
+  totals:summaryMetrics.map(k=>[t(metricKey[k]),r.totals[k]==null&&r.known_totals[k]>0?t('weeklyKnown')+' '+amount(r.known_totals[k],k):amount(r.totals[k],k)]),
+  cumulative:t('weeklyCurrent')+' · '+r.observed_to+'  '+t('remaining')+' '+(r.cumulative.remaining==null?'':fmt(r.cumulative.remaining,0))+'  '+t('survival')+' '+(r.cumulative.survival==null?'':fmt(r.cumulative.survival)+'%'),
+  legend:[t('weeklyPDFLegend'),planningHint(),t('weeklyShippingBasis')].filter(Boolean).join(' ')+(r.pending.length?' '+label('weeklyPendingCount',r.pending.length):'')
+ };
 }
 async function downloadPDF(){
  if(!report||reportUser!==me?.id)return;const user=me.id,original=report,button=el('weekly-print'),name=filename();button.disabled=true;el('weekly-error').textContent=t('weeklyPDFMaking');
