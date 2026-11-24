@@ -220,8 +220,9 @@ function paperBands(){
 }
 function pdfModel(){
  const r=report;
+ const pigSources=[...new Set(r.barns.map(barn=>/^(?:第)?(?:23|24)(?:棟)?$/.test(barn.trim())?'曾勝誠':'殷慶盛'))].join('、');
  const formBasics=[
-  [t('weeklyFarm'),'嘉得'],[t('weeklyPigSource'),''],[t('weeklyLatestFeedType'),(r.feed_setup?.configured_vendors||[]).join('、')||r.feed_setup?.latest_type||''],[t('weeklyBatch'),r.name],
+  [t('weeklyFarm'),'嘉得'],[t('weeklyPigSource'),pigSources],[t('weeklyLatestFeedType'),(r.feed_setup?.configured_vendors||[]).join('、')||r.feed_setup?.latest_type||''],[t('weeklyBatch'),r.name],
   [t('reportEntryCount'),fmt(r.cumulative.entry,0)+' '+t('heads')],[t('reportEntryDate'),r.entry_date],
   [t('weeklyEntryAge'),r.entry_age_days==null?t(r.age_mixed?'mixedAges':'insufficient'):fmt(r.entry_age_days,0)+' '+t('days')],
   [t('reportEntryMean'),r.entry_mean_kg==null?'':fmt(r.entry_mean_kg)+' kg'],

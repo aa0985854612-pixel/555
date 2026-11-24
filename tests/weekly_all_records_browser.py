@@ -29,6 +29,8 @@ with tempfile.TemporaryDirectory() as tmp,patch.dict(os.environ,{'FEED_ORDERS_AR
  assert len(original)==24 and sum(r['kg'] for r in original)==78000
  for typ,on,q in [('cull','2026-10-24',2),('cull','2026-10-26',3),('death','2026-10-24',1)]:add('movements',date=on,batch_id=batches[13]['id'],type=typ,quantity=q)
  add('movements',date='2026-10-25',batch_id=batches[13]['id'],type='sale',quantity=4,outgoing_destination='南投',note='上午出豬')
+ source_barns=[add('barns',name=name) for name in ('23棟','24棟','第25棟')]
+ for barn in source_barns:add('batches',name='SOURCE-TEST',barn_id=barn['id'],entry_date='2026-07-17',entry_count=10,entry_age_days=71,status='active')
  before=s.export_backup()['records'];server=Server(('127.0.0.1',0),s);threading.Thread(target=server.serve_forever,daemon=True).start();url=f'http://127.0.0.1:{server.server_port}'
  try:
   with sync_playwright() as p:
@@ -37,10 +39,18 @@ with tempfile.TemporaryDirectory() as tmp,patch.dict(os.environ,{'FEED_ORDERS_AR
    page.evaluate('()=>{window.models=[];window.feedDraws=[];window.colourDraws=[];const pdf=weeklyPdf;window.weeklyPdf=async m=>{models.push(m);const result=await pdf(m);window.renderedPDF=result;return result};const draw=CanvasRenderingContext2D.prototype.fillText;CanvasRenderingContext2D.prototype.fillText=function(...args){if(String(args[0]).includes("+"))feedDraws.push(args[0]);colourDraws.push({text:String(args[0]),colour:this.fillStyle,font:this.font,x:args[1],y:args[2]});return draw.apply(this,args)};}')
    page.locator('nav [href="#stats"]').click();page.locator('#stats-filter [name=from]').fill('2026-10-01');page.locator('#stats-filter [name=to]').fill('2026-10-20');page.locator('#stats-filter [name=barn_id]').select_option(barns[13]['id'],force=True)
    page.locator('#open-weekly-report').click();page.wait_for_selector('#weekly-a4-preview img');assert page.locator('#weekly-report-form input[type=date]').count()==0;assert page.locator('#weekly-barn').input_value()==barns[13]['id'];assert page.locator('#weekly-cohort').input_value()=='WHITEBOARD-DEMO|2026-07-17';assert page.locator('#weekly-report-form label').all_text_contents()[0].startswith('批號')
+   page.locator('#weekly-cohort').select_option('SOURCE-TEST|2026-07-17');page.wait_for_selector('#weekly-a4-preview img')
+   assert dict(page.evaluate('models.at(-1).basics'))['豬源']=='曾勝誠、殷慶盛'
+   for barn in source_barns[:2]:
+    page.locator('#weekly-barn').select_option(barn['id']);page.wait_for_selector('#weekly-a4-preview img')
+    assert dict(page.evaluate('models.at(-1).basics'))['豬源']=='曾勝誠'
+   page.locator('#weekly-cohort').select_option('WHITEBOARD-DEMO|2026-07-17');page.wait_for_selector('#weekly-a4-preview img')
+   page.locator('#weekly-barn').select_option(barns[13]['id']);page.wait_for_selector('#weekly-a4-preview img')
    labels=page.locator('#weekly-cohort option').all_text_contents();assert all('｜' in label and not re.search(r'2026-\d{2}-\d{2}',label) for label in labels);assert 'WHITEBOARD-DEMO｜13棟、22棟' in labels,labels
    assert page.locator('#weekly-barn option').all_text_contents()==['同批全部棟舍','13棟','22棟']
    def lines():return page.locator('#weekly-sheet-body .weekly-feed-entry').all_text_contents()
    assert lines()==['10/24+4(13)','10/26+4(13)'],lines();assert dict(page.evaluate('models.at(-1).totals'))['飼料到料（噸）']=='8';passed('batch-first selector shows batch and barns without entry dates; only matching barns are offered; old stats end date cannot hide the saved October 24/26 feed')
+   page.evaluate('colourDraws=[]');page.locator('#weekly-generate').click();page.wait_for_function('()=>colourDraws.length>0');page.wait_for_selector('#weekly-a4-preview img')
    model=page.evaluate('models.at(-1)');bands=model['pages'][0]
    assert [band['headers'] for band in bands]==[[f'{week}週' for week in range(start,end+1)] for start,end in [(4,16),(17,29),(30,32)]]
    assert bands[0]['stages']==[['保育段棟舍',8],['肉豬段棟舍',5]] and bands[2]['summary']
@@ -50,7 +60,7 @@ with tempfile.TemporaryDirectory() as tmp,patch.dict(os.environ,{'FEED_ORDERS_AR
    assert model['nancyTemplate']
    colours=page.evaluate('colourDraws')
    assert all('Noto Serif CJK TC' in draw['font'] for draw in colours)
-   assert {'牧場：嘉得','豬源：—','肉豬批號：WHITEBOARD-DEMO','入場頭數：100 頭'} <= {draw['text'] for draw in colours}
+   assert {'牧場：嘉得','豬源：殷慶盛','肉豬批號：WHITEBOARD-DEMO','入場頭數：100 頭'} <= {draw['text'] for draw in colours}
    assert any(d['text']=='5' and 506<d['x']<554 and 562<d['y']<585 and d['colour']=='#111111' for d in colours)
    red=[d for d in colours if d['colour']=='#b42332' and d['text']]
    assert len(red)==2 and all(d['text']=='1' for d in red)
