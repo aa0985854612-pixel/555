@@ -190,9 +190,14 @@ window.weeklyPdf = async function(model) {
 };
 
 async function weeklyCanvasPdf(canvas){
+ const canvases=Array.isArray(canvas)?canvas:[canvas];
  const PW=WEEKLY_PDF_WIDTH,PH=WEEKLY_PDF_HEIGHT;
- const blob=await new Promise((resolve,reject)=>canvas.toBlob(b=>b?resolve(b):reject(new Error('weekly_pdf_image_failed')),'image/jpeg',.96));
- const images=[{bytes:new Uint8Array(await blob.arrayBuffer()),width:canvas.width,height:canvas.height}];canvas.width=canvas.height=1;
+ const images=[];
+ for(const page of canvases){
+  const blob=await new Promise((resolve,reject)=>page.toBlob(b=>b?resolve(b):reject(new Error('weekly_pdf_image_failed')),'image/jpeg',.96));
+  images.push({bytes:new Uint8Array(await blob.arrayBuffer()),width:page.width,height:page.height});
+  page.width=page.height=1;
+ }
  const enc=new TextEncoder(),parts=[],offsets=[0];let length=0;
  const append=part=>{const bytes=typeof part==='string'?enc.encode(part):part;parts.push(bytes);length+=bytes.length;};
  const object=(id,body)=>{offsets[id]=length;append(`${id} 0 obj\n`);for(const piece of body)append(piece);append('\nendobj\n');};
@@ -225,7 +230,16 @@ async function renderNancyWeeklyPdf(model){
  ctx.translate((canvas.width-690*formScale)/2,21*scale);
  ctx.scale(formScale,formScale);
  ctx.translate(-62,-69);
- ctx.drawImage(template,62,69,690,1094);
+ const cleanTemplate=document.createElement('canvas');
+ cleanTemplate.width=template.naturalWidth;cleanTemplate.height=template.naturalHeight;
+ const templateCtx=cleanTemplate.getContext('2d');
+ templateCtx.drawImage(template,0,0);
+ const pixels=templateCtx.getImageData(0,0,cleanTemplate.width,cleanTemplate.height);
+ for(let i=0;i<pixels.data.length;i+=4){
+  if(pixels.data[i]>210&&pixels.data[i+1]>210&&pixels.data[i+2]<100)pixels.data[i+2]=255;
+ }
+ templateCtx.putImageData(pixels,0,0);
+ ctx.drawImage(cleanTemplate,62,69,690,1094);
 
  const black='#111111',family='"Noto Serif CJK TC", "Noto Serif TC", "PMingLiU", serif';
  function drawLines(lines,x,y,width,height,{size=12,align='left',color=black,bold=false}={}){
@@ -269,7 +283,8 @@ async function renderNancyWeeklyPdf(model){
 
  // The source places the selected barns in the finishing-stage header.
  const barnNames=model.basics[8]?.[1]||'';
- drawLines([barnNames],625,223,110,30,{size:13,bold:true});
+ ctx.fillStyle='#fff';ctx.fillRect(508,224,235,28);
+ drawLines(['肉豬段棟舍：'+barnNames],510,224,232,28,{size:13,align:'center'});
  drawLines([barnNames],555,478,180,30,{size:13,bold:true});
  const weekColumns=[125,172,220,268,315,363,411,459,506,554,602,650,698,745];
  const sections=[
@@ -292,7 +307,8 @@ async function renderNancyWeeklyPdf(model){
   const band=bands.find(band=>band.firstWeek===week);
   leftLabel(['週期'],headerTop,y[0]);
   for(const [rowIndex,label] of rowLabels.entries()){
-   const top=y[rowIndex],height=y[rowIndex+1]-top;
+   if(week===4&&rowIndex===4)continue;
+   const top=y[rowIndex],height=week===4&&rowIndex===3?y[5]-top:y[rowIndex+1]-top;
    leftLabel(label,top,top+height);
    const row=band?.rows[rowIndex];
    for(let column=0;column<x.length-1;column++){
@@ -305,8 +321,8 @@ async function renderNancyWeeklyPdf(model){
     });
    }
   }
-  const label=week===4?['死亡','備註']:week===17?['資料','明細']:[];
-  leftLabel(label,y.at(-1),notesBottom);
+  leftLabel(['備註'],y.at(-1),notesBottom);
+  for(let column=0;column<x.length-1;column++)panel(x[column],y.at(-1),x[column+1]-x[column],notesBottom-y.at(-1));
  }
  const totalRows=[[854,884],[884,926],[926,952]];
  panel(268,823,95,31);
@@ -366,15 +382,59 @@ async function renderNancyWeeklyPdf(model){
   const items=band.rows.flatMap(row=>row.cells[i]?row.cells[i].split('\n').map(value=>({value:row.label+' '+value,color:row.color})):[]);
   return items.length?[{value:heading,bold:true},...items]:[];
  }));
- const deathTop=sections[0].y.at(-1),metadataTop=sections[1].y.at(-1);
- panel(125,deathTop,620,sections[0].notesBottom-deathTop);
- panel(125,metadataTop,620,sections[1].notesBottom-metadataTop);
- fitNotes(details.length?[...deaths,...details]:deaths,130,deathTop+4,610,sections[0].notesBottom-deathTop-8,12);
- fitNotes(metadata,130,metadataTop+4,610,sections[1].notesBottom-metadataTop-8,12);
-
  panel(363,762,382,30,'#f4f4f4');
  drawLines([model.shipping_title],364,762,380,30,{bold:true,size:17,align:'center'});
- panel(363,792,382,369);
- fitNotes(model.shipping_notes.map(value=>({value})),370,801,367,351,14);
- return weeklyCanvasPdf(canvas);
+ panel(363,792,382,285);
+ fitNotes(model.shipping_notes.map(value=>({value})),370,801,367,268,14);
+
+ // A second A4 carries the supporting entries, including records beyond 32 weeks.
+ const detailCanvas=document.createElement('canvas');
+ detailCanvas.width=canvas.width;detailCanvas.height=canvas.height;
+ const detailCtx=detailCanvas.getContext('2d');
+ detailCtx.fillStyle='#fff';detailCtx.fillRect(0,0,detailCanvas.width,detailCanvas.height);
+ detailCtx.scale(scale,scale);
+ detailCtx.fillStyle=black;detailCtx.textBaseline='top';
+ const pageItems=[
+  {value:model.title+' · 明細',bold:true},
+  ...model.basics.filter(([,value])=>value).map(([label,value])=>({value:label+'：'+value})),
+  {value:'各棟進場資料',bold:true},
+  ...model.entries.map(entry=>({value:entry.filter(Boolean).join(' · ').replace(/\n/g,' · ')})),
+  {value:model.death_title,bold:true},...deaths,
+  {value:model.shipping_title,bold:true},...model.shipping_notes.map(value=>({value})),
+  {value:'每週飼料明細',bold:true},
+  ...bands.flatMap(band=>band.headers.flatMap((heading,i)=>{
+   const feed=band.rows[3]?.cells[i];
+   return feed?[{value:heading+'  '+feed.replace(/\n/g,'  ')}]:[];
+  })),
+  ...details,
+  ...bands.flatMap(band=>band.headers.flatMap((heading,i)=>{
+   const sale=band.rows[4]?.cells[i];
+   return sale?[{value:heading+' 售出數 '+sale}]:[];
+  })),
+  ...(model.preentry?[{value:model.preentry.title+' '+model.preentry.summary,bold:true},...model.preentry.entries.map(value=>({value}))]:[]),
+  {value:model.period},{value:model.cumulative}
+ ];
+ function detailLayout(size){
+  const lines=[],width=(WEEKLY_PDF_WIDTH-64)/2-12;
+  for(const item of pageItems){
+   detailCtx.font=`${item.bold?600:400} ${size}px ${family}`;
+   let line='';
+   for(const char of item.value){
+    if(line&&detailCtx.measureText(line+char).width>width){lines.push({...item,value:line});line='';}
+    line+=char;
+   }
+   if(line)lines.push({...item,value:line});
+  }
+  return {lines,width,perColumn:Math.floor((WEEKLY_PDF_HEIGHT-64)/(size*1.35))};
+ }
+ let low=.1,high=11,plan;
+ for(let i=0;i<24;i++){
+  const size=(low+high)/2,candidate=detailLayout(size);
+  if(candidate.lines.length<=candidate.perColumn*2){low=size;plan=candidate;}else high=size;
+ }
+ for(const [index,item] of plan.lines.entries()){
+  detailCtx.font=`${item.bold?600:400} ${low}px ${family}`;
+  detailCtx.fillText(item.value,32+Math.floor(index/plan.perColumn)*(plan.width+24),32+(index%plan.perColumn)*low*1.35,plan.width);
+ }
+ return weeklyCanvasPdf([canvas,detailCanvas]);
 }
