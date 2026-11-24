@@ -267,6 +267,10 @@ async function renderNancyWeeklyPdf(model){
  }
  ctx.stroke();
 
+ // The source places the selected barns in the finishing-stage header.
+ const barnNames=model.basics[8]?.[1]||'';
+ drawLines([barnNames],625,223,110,30,{size:13,bold:true});
+ drawLines([barnNames],555,478,180,30,{size:13,bold:true});
  const weekColumns=[125,172,220,268,315,363,411,459,506,554,602,650,698,745];
  const sections=[
   {week:4,x:weekColumns,y:[283,307,331,355,400,424],headerTop:223,notesBottom:478},
@@ -283,7 +287,7 @@ async function renderNancyWeeklyPdf(model){
  }
  const rowLabels=[['起始日'],['淘汰數'],['死亡數'],['飼料量','（噸）'],['售出數']];
  const bands=model.pages.flat(),extraWeeks=bands.filter(band=>band.firstWeek==null);
- const extraFeed=[];
+
  for(const {week,x,y,headerTop,notesBottom} of sections){
   const band=bands.find(band=>band.firstWeek===week);
   leftLabel(['週期'],headerTop,y[0]);
@@ -296,12 +300,7 @@ async function renderNancyWeeklyPdf(model){
     panel(x[column],top,width,height);
     if(!value)continue;
     const parts=value.split('\n'),feed=rowIndex===3;
-    let shown=parts;
-    if(feed&&parts.length>3){
-     shown=parts.slice(0,2).concat('↓');
-     extraFeed.push({value:`${week+column}w 飼料`,bold:true},...parts.slice(2).map(value=>({value})));
-    }
-    drawLines(shown,x[column],top,width,height,{
+    drawLines(parts,x[column],top,width,height,{
      size:feed?15:12,align:feed?'left':'center',color:row.color,bold:row.bold
     });
    }
@@ -334,7 +333,7 @@ async function renderNancyWeeklyPdf(model){
   ...model.entries.map(entry=>({value:entry.filter(Boolean).join(' · ').replace(/\n/g,' · ')})),
   {value:model.period},{value:model.cumulative},
   ...(model.preentry?[{value:model.preentry.title+' '+model.preentry.summary,bold:true},...model.preentry.entries.map(value=>({value}))]:[]),
-  ...extraFeed,{value:model.legend}
+  {value:model.legend}
  ];
  function fitNotes(items,x,top,width,height,sizeLimit){
   function flow(size,columns){
