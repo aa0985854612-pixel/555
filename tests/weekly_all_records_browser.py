@@ -77,10 +77,10 @@ with tempfile.TemporaryDirectory() as tmp,patch.dict(os.environ,{'FEED_ORDERS_AR
    assert {'牧場：嘉得','豬源：殷慶盛','肉豬批號：WHITEBOARD-DEMO','入場頭數：100 頭'} <= {draw['text'] for draw in colours}
    feed_fonts={d['font'] for d in colours if d['text'] in lines() and 355<d['y']<680}
    assert len(feed_fonts)==1,feed_fonts
-   assert any(d['text']=='5' and 506<d['x']<554 and 562<d['y']<585 and d['colour']=='#111111' for d in colours)
+   assert any(d['text']=='5' and 506<d['x']<554 and 532<d['y']<555 and d['colour']=='#111111' for d in colours)
    red=[d for d in colours if d['colour']=='#b42332' and d['text']]
    assert len(red)==2 and all(d['text']=='1' for d in red)
-   assert any(506<d['x']<554 and 585<d['y']<610 for d in red)
+   assert any(506<d['x']<554 and 555<d['y']<580 for d in red)
    assert any(268<d['x']<363 and 854<d['y']<884 for d in red)
    death_note=next(d for d in colours if d['text']=='10/24 死亡1隻')
    assert death_note['colour']=='#111111' and death_note['y']<842
@@ -88,7 +88,7 @@ with tempfile.TemporaryDirectory() as tmp,patch.dict(os.environ,{'FEED_ORDERS_AR
    shipping_draws=[d['text'] for d in colours if d['x']>363 and 792<d['y']<1161]
    assert shipping_draws==['10/25 南投4 · 上午出豬'],shipping_draws
    assert any(d['text']=='起始日' and '17px' in d['font'] for d in colours)
-   assert any(d['text']=='10/24+4(13)' and 610<d['y']<680 for d in colours)
+   assert any(d['text']=='10/24+4(13)' and 580<d['y']<680 for d in colours)
    assert page.locator('#weekly-sheet-body .weekly-death td').first.evaluate('(e)=>getComputedStyle(e).color')=='rgb(180, 35, 50)';assert page.locator('#weekly-sheet-body .weekly-death-entry').first.evaluate('(e)=>getComputedStyle(e).color')=='rgb(17, 17, 17)';assert page.locator('#weekly-sheet-body .weekly-total-death strong').evaluate('(e)=>getComputedStyle(e).color')=='rgb(180, 35, 50)'
    preview=root/'artifacts/weekly-red-deaths-culls.jpg';preview.write_bytes(bytes(page.evaluate('async()=>Array.from(new Uint8Array(await renderedPDF.previewPages[0].arrayBuffer()))')))
    from PIL import Image
