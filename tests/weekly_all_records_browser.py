@@ -84,7 +84,7 @@ with tempfile.TemporaryDirectory() as tmp,patch.dict(os.environ,{'FEED_ORDERS_AR
    assert all('Noto Serif CJK TC' in draw['font'] for draw in colours)
    assert {'牧場：嘉得','豬源：殷慶盛','肉豬批號：WHITEBOARD-DEMO','入場頭數：100 頭'} <= {draw['text'] for draw in colours}
    feed_fonts={d['font'] for d in colours if d['text'].startswith('+') and 355<d['y']<680}
-   assert len(feed_fonts)==1,feed_fonts
+   assert len(feed_fonts)==1 and next(iter(feed_fonts)).startswith(('700 ', 'bold ')),feed_fonts
    assert any(d['text']=='5' and 506<d['x']<554 and 532<d['y']<555 and d['colour']=='#111111' for d in colours)
    red=[d for d in colours if d['colour']=='#b42332' and d['text']]
    assert len(red)==2 and all(d['text']=='1' for d in red)
