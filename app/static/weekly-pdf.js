@@ -496,7 +496,8 @@ async function renderNancyWeeklyPdf(model){
  for(const [round,top] of [[1,1063],[2,1113]]){
   const pr=vaccineStatus['pr'+round],app=vaccineStatus['app'+round];
   if(pr==='complete'&&app==='complete'){
-   vaccineCheck(331,top+8);
+   vaccineCheck(323,top+8);
+   vaccineCheck(342,top+8);
    continue;
   }
   const states=[['PR',pr],['APP',app]].filter(([,status])=>status);

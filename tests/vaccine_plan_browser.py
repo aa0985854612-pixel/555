@@ -120,9 +120,9 @@ with tempfile.TemporaryDirectory() as folder:
             page.evaluate("(id)=>document.dispatchEvent(new CustomEvent('pigledger:weekly-open',{detail:{batch_id:id}}))",batches[0]['id'])
             page.wait_for_selector('#weekly-a4-preview img')
             assert page.evaluate('vaccineModels.at(-1).vaccinePlans[0].doses.app2.done')
-            assert page.evaluate('vaccineTicks')==1, page.evaluate('vaccineTicks')
+            assert page.evaluate('vaccineTicks')==2, page.evaluate('vaccineTicks')
             positions=page.evaluate('vaccineTickPositions')
-            assert len(positions)==1 and all(315<d['x']<363 and d['color']=='#b42332' for d in positions),positions
+            assert len(positions)==2 and positions[0]['x'] != positions[1]['x'] and all(315<d['x']<363 and d['color']=='#b42332' for d in positions),positions
             drawn=page.evaluate('vaccineDraws')
             assert any(d['text']=='08/08' and 220<d['x']<268 and 1063<d['y']<1089 for d in drawn)
             assert any(d['text']=='08/08' and 268<d['x']<315 and 1063<d['y']<1089 for d in drawn)
@@ -137,18 +137,18 @@ with tempfile.TemporaryDirectory() as folder:
             page.evaluate('vaccineTicks=0')
             page.evaluate("(id)=>document.dispatchEvent(new CustomEvent('pigledger:weekly-open',{detail:{batch_id:id}}))",batches[0]['id'])
             page.wait_for_selector('#weekly-a4-preview img')
-            assert page.evaluate('vaccineTicks')==2, page.evaluate('vaccineTicks')
+            assert page.evaluate('vaccineTicks')==4, page.evaluate('vaccineTicks')
             page.evaluate('vaccineTicks=0')
             page.locator('#weekly-barn').select_option('')
             page.wait_for_selector('#weekly-a4-preview img')
             assert len(page.evaluate('vaccineModels.at(-1).vaccineBatchIds'))==2
             assert len(page.evaluate('vaccineModels.at(-1).vaccinePlans'))==1
-            assert page.evaluate('vaccineTicks')==2
+            assert page.evaluate('vaccineTicks')==4
             page.evaluate('vaccineTicks=0')
             second_barn=store.snapshot()['batches'][1]['barn_id']
             page.locator('#weekly-barn').select_option(second_barn)
             page.wait_for_selector('#weekly-a4-preview img')
-            assert page.evaluate('vaccineTicks')==2
+            assert page.evaluate('vaccineTicks')==4
             assert page.evaluate('vaccineModels.at(-1).vaccinePlans[0].scope')=='cohort'
             page.locator('#weekly-close').click()
             page.locator('nav [href="#settings"]').click()
