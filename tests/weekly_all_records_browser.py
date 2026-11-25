@@ -100,6 +100,14 @@ with tempfile.TemporaryDirectory() as tmp,patch.dict(os.environ,{'FEED_ORDERS_AR
    preview=root/'artifacts/weekly-red-deaths-culls.jpg';preview.write_bytes(bytes(page.evaluate('async()=>Array.from(new Uint8Array(await renderedPDF.previewPages[0].arrayBuffer()))')))
    from PIL import Image
    image=Image.open(preview).convert('RGB')
+   assert page.locator('#weekly-image').inner_text()=='下載第一張圖片'
+   with page.expect_download() as image_download:page.locator('#weekly-image').click()
+   downloaded=Path(tmp)/'first-page.jpg';image_download.value.save_as(downloaded)
+   assert image_download.value.suggested_filename.endswith('.jpg')
+   assert downloaded.read_bytes()==preview.read_bytes()
+   assert len(page.evaluate('renderedPDF.previewPages'))==2
+   from PIL import Image
+   with Image.open(downloaded) as exported:assert exported.format=='JPEG' and exported.width>2000 and exported.height>3000
    page.evaluate('window.print=()=>{window.printInvoked=true}');page.click('#weekly-browser-print');page.wait_for_function('()=>window.printInvoked===true');assert page.locator('#weekly-print-root img').count()==2;assert page.locator('#weekly-print-root img').first.get_attribute('src')==page.locator('#weekly-a4-preview img').first.get_attribute('src')
    printed=Path(tmp)/'browser-print.pdf';page.pdf(path=printed,prefer_css_page_size=True,print_background=True)
    printed_info=subprocess.check_output(['pdfinfo',str(printed)],text=True);assert re.search(r'Pages:\s+2\b',printed_info) and '(A4)' in printed_info,printed_info

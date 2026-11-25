@@ -25,6 +25,7 @@ const base={build,clickAction,translate,enter,refresh,selections};
 let selectionStatus='active',selectionData=null,selectionTask=null;
 let report=null,reportUser=null,serial=0,printing=false,title=null,pdfCache=null,pdfTask=null,previewURLs=[];
 Object.assign(words,{weeklyContinue:['續','tiếp'],weeklyActualPreview:['A4列印預覽（與下載PDF相同）','Xem trước in A4 (giống PDF tải xuống)'],weeklyScreenDetails:['查看完整畫面明細','Xem chi tiết trên màn hình']});
+Object.assign(words,{weeklyDownloadImage:['下載第一張圖片','Tải ảnh trang đầu'],weeklyImageMaking:['正在產生圖片…','Đang tạo ảnh…']});
 Object.assign(words,{weeklyLatestFeedType:['料別','Loại cám'],weeklySales:['售出數（隻）','Số xuất bán (con)'],weeklyPaperSale:['售出數','Số xuất bán']});
 function clearPDF(){pdfCache=null;pdfTask=null;previewURLs.forEach(u=>URL.revokeObjectURL(u));previewURLs=[];el('weekly-a4-preview')?.replaceChildren();}
 async function ensurePDF(){
@@ -251,6 +252,23 @@ async function downloadPDF(){
  try{const blob=await ensurePDF();if(!blob||me?.id!==user||report!==original||!el('weekly-report-dialog').open)return;const url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download=name+'.pdf';document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);el('weekly-error').textContent='';}
  catch(err){if(me?.id===user&&report===original)el('weekly-error').textContent=t('weeklyFailure');}finally{button.disabled=false;}
 }
+async function downloadFirstImage(){
+ if(!report||reportUser!==me?.id)return;
+ const original=report,user=me.id,language=lang,button=el('weekly-image'),name=filename();
+ button.disabled=true;el('weekly-error').textContent=t('weeklyImageMaking');
+ try{
+  const pdf=await ensurePDF();
+  if(!pdf||report!==original||me?.id!==user||lang!==language||!el('weekly-report-dialog').open)return;
+  const image=pdf.previewPages?.[0];
+  if(!image)throw new Error('weekly_image_unavailable');
+  const url=URL.createObjectURL(image),link=document.createElement('a');
+  link.href=url;link.download=name+'.jpg';document.body.append(link);link.click();link.remove();
+  setTimeout(()=>URL.revokeObjectURL(url),60000);
+  el('weekly-error').textContent='';
+ }catch(err){
+  if(me?.id===user&&report===original)el('weekly-error').textContent=t('weeklyFailure');
+ }finally{button.disabled=false;}
+}
 function markup(compact=false){
  const r=report,blocks=[];
  for(const page of panels())for(const ws of page){blocks.push(`<section class="weekly-block"><div class="weekly-table-wrap"><table class="weekly-table"><thead><tr><th>${safe(cycleTitle())}</th>${ws.map(w=>`<th>${safe(weekHeading(w,compact))}</th>`).join('')}</tr></thead><tbody><tr class="weekly-starts"><th>${t('weeklyStarts')}</th>${ws.map(w=>`<td>${safe(shortDate(w))}</td>`).join('')}</tr>${metrics.map(k=>`<tr class="weekly-${k}"><th>${t(compact?paperMetricKey[k]:metricKey[k])}</th>${ws.map(w=>`<td>${blankWeek(w)?'':k==='feed_orders'?feedCell(w):k==='sale'?saleValues(w.events):amount(w.values[k],k)}</td>`).join('')}</tr>`).join('')}</tbody></table></div></section>`);}
@@ -281,8 +299,8 @@ async function printSheet(){
 build=()=>{
  base.build();el('stats-filter').closest('.card').insertAdjacentHTML('beforeend',`<div class="weekly-entry"><button type="button" id="open-weekly-report">${txt('weeklyOpen')}</button><p class="hint">${txt('weeklyBasis')}</p></div>`);
  el('movement-form').insertAdjacentHTML('afterend',`<div class="weekly-entry"><button type="button" id="open-daily-weekly-report">${txt('weeklyOpen')}</button></div>`);
- document.body.insertAdjacentHTML('beforeend',`<dialog id="weekly-report-dialog" aria-labelledby="weekly-title"><div class="weekly-toolbar"><div class="section-row"><h2 id="weekly-title">${txt('weeklyReport')}</h2><button type="button" id="weekly-close">${txt('reportClose')}</button></div><form id="weekly-report-form"><div class="grid"><label>${txt('weeklyBatch')}<select id="weekly-cohort" required></select></label><label>${txt('barn')}<select id="weekly-barn"></select></label></div><p class="hint">${txt('weeklyBasis')}</p><button type="submit" id="weekly-generate" class="primary">${txt('weeklyMake')}</button><p id="weekly-error" role="status"></p></form><div id="weekly-export-actions" class="actions" hidden><button type="button" id="weekly-print" class="primary">${txt('weeklyDownloadPDF')}</button><button type="button" id="weekly-browser-print">${txt('weeklyBrowserPrint')}</button></div></div><p class="weekly-archive-link"><button type="button" id="weekly-ended-records">${txt('endedRecords')}</button></p><p class="weekly-export-hint hint">${txt('weeklyPDFHint')}</p><div id="weekly-a4-preview" aria-live="polite"></div><div id="weekly-sheet-body"></div></dialog><div id="weekly-print-root"></div>`);
- el('open-weekly-report').onclick=openWeekly;el('weekly-cohort').onchange=()=>syncBarns();el('weekly-report-form').onsubmit=generate;el('weekly-print').onclick=downloadPDF;el('weekly-browser-print').onclick=printSheet;el('weekly-close').onclick=()=>el('weekly-report-dialog').close();el('weekly-report-dialog').addEventListener('close',()=>{serial++;clearPDF();report=null;reportUser=null;el('weekly-generate').disabled=false;resetPrint();});
+ document.body.insertAdjacentHTML('beforeend',`<dialog id="weekly-report-dialog" aria-labelledby="weekly-title"><div class="weekly-toolbar"><div class="section-row"><h2 id="weekly-title">${txt('weeklyReport')}</h2><button type="button" id="weekly-close">${txt('reportClose')}</button></div><form id="weekly-report-form"><div class="grid"><label>${txt('weeklyBatch')}<select id="weekly-cohort" required></select></label><label>${txt('barn')}<select id="weekly-barn"></select></label></div><p class="hint">${txt('weeklyBasis')}</p><button type="submit" id="weekly-generate" class="primary">${txt('weeklyMake')}</button><p id="weekly-error" role="status"></p></form><div id="weekly-export-actions" class="actions" hidden><button type="button" id="weekly-image" class="primary">${txt('weeklyDownloadImage')}</button><button type="button" id="weekly-print">${txt('weeklyDownloadPDF')}</button><button type="button" id="weekly-browser-print">${txt('weeklyBrowserPrint')}</button></div></div><p class="weekly-archive-link"><button type="button" id="weekly-ended-records">${txt('endedRecords')}</button></p><p class="weekly-export-hint hint">${txt('weeklyPDFHint')}</p><div id="weekly-a4-preview" aria-live="polite"></div><div id="weekly-sheet-body"></div></dialog><div id="weekly-print-root"></div>`);
+ el('open-weekly-report').onclick=openWeekly;el('weekly-cohort').onchange=()=>syncBarns();el('weekly-report-form').onsubmit=generate;el('weekly-image').onclick=downloadFirstImage;el('weekly-print').onclick=downloadPDF;el('weekly-browser-print').onclick=printSheet;el('weekly-close').onclick=()=>el('weekly-report-dialog').close();el('weekly-report-dialog').addEventListener('close',()=>{serial++;clearPDF();report=null;reportUser=null;el('weekly-generate').disabled=false;resetPrint();});
  el('open-daily-weekly-report').onclick=openWeekly;
  el('weekly-ended-records').onclick=()=>{el('weekly-report-dialog').close();document.dispatchEvent(new CustomEvent('pigledger:ended-open'));};
  for(const event of ['input','change'])el('weekly-report-form').addEventListener(event,()=>{serial++;clearPDF();report=null;reportUser=null;el('weekly-sheet-body').replaceChildren();el('weekly-export-actions').hidden=true;el('weekly-generate').disabled=false;el('weekly-error').textContent='';if(event==='change'&&chosen())queueMicrotask(()=>generate({preventDefault(){}}));});
