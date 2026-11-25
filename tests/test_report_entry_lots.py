@@ -22,8 +22,23 @@ class EntryLotReportTests(unittest.TestCase):
  def test_dates_counts_weights_and_source_are_validated(self):
   for lot,field in [({'date':'2026-10-09','count':350,'mean_kg':None},'date'),({'date':'2026-10-16','count':0,'mean_kg':None},'count'),({'date':'2026-10-16','count':350,'mean_kg':-1},'weight')]:
    with self.subTest(field=field),self.assertRaises(Problem):self.save(report_entry_lots=[self.lots[0],lot],report_entry_lots_source='verified')
-  with self.assertRaisesRegex(Problem,'entry_source_required'):self.save(report_entry_lots=self.lots,report_entry_lots_source='')
+  self.batch=self.save(report_entry_lots=self.lots,report_entry_lots_source='')
   with self.assertRaisesRegex(Problem,'before_entry'):self.save(weekly_start_date='2026-10-08')
+ def test_later_entry_date_is_week_anchor_and_earlier_lot_is_preserved(self):
+  lots=[{'date':'2026-10-02','count':702,'mean_kg':21.36},{'date':'2026-10-09','count':350,'mean_kg':22.2}]
+  self.save(report_entry_lots=lots,report_entry_lots_source='')
+  data=self.store.snapshot()
+  report=weekly_report(data,{'batch_id':[self.batch['id']],'all_records':['1']},today='2026-10-19')
+  self.assertEqual(report['from'],'2026-10-02')
+  self.assertEqual([e['date'] for e in report['entry_details']],['2026-10-02','2026-10-09'])
+  self.assertEqual([w['anchor'] for w in report['weeks'][:2]],['2026-10-02','2026-10-09'])
+  self.assertEqual([w['age_week'] for w in report['weeks'][:2]],[10,11])
+  self.assertEqual(report['cumulative']['entry'],1052)
+ def test_later_lot_anchors_existing_earliest_entry(self):
+  self.save(report_entry_lots=self.lots,report_entry_lots_source='verified')
+  report=weekly_report(self.store.snapshot(),{'batch_id':[self.batch['id']],'all_records':['1']},today='2026-10-19')
+  later=next(w for w in report['weeks'] if w['anchor']=='2026-10-16')
+  self.assertEqual(later['age_week'],12)
  def test_older_batch_editor_preserves_report_fields(self):
   self.batch=self.save(report_entry_lots=self.lots,report_entry_lots_source='verified',weekly_start_date='2026-10-16');payload={k:v for k,v in self.batch.items() if k not in ('report_entry_lots','report_entry_lots_source','weekly_start_date')};updated=self.store.mutate(self.user,'batches',payload|{'note':'other edit'},str(uuid.uuid4()),self.batch['id']);self.assertEqual(updated['report_entry_lots'],self.lots);self.assertEqual(updated['weekly_start_date'],'2026-10-16')
  def test_unlink_keeps_all_records_attached_to_their_original_batch(self):
