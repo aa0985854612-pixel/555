@@ -25,6 +25,12 @@ with tempfile.TemporaryDirectory() as folder:
     other_barn=add('barns',name='23棟')
     add('batches',barn_id=other_barn['id'],name='OTHER',entry_date='2026-07-01',
         entry_count=100,entry_age_days=71,status='active')
+    mismatch_barn=add('barns',name='38棟')
+    mismatch=add('batches',barn_id=mismatch_barn['id'],name='MISMATCH',entry_date='2026-07-01',entry_count=100,status='active')
+    old_doses={key:{'date':'','bottles':None,'done':False} for key in ('pr1','app1','pr2','app2')}
+    old_doses['pr1']={'date':'2026-08-01','bottles':2,'done':True}
+    old_doses['app1']={'date':'2026-08-02','bottles':3,'done':True}
+    add('vaccine_plans',batch_id=mismatch['id'],scope='cohort',doses=old_doses)
     archived_barn=add('barns',name='39棟')
     add('batches',barn_id=archived_barn['id'],name='ARCHIVED',
         entry_date='2026-07-01',entry_count=100,status='ended')
@@ -65,36 +71,41 @@ with tempfile.TemporaryDirectory() as folder:
             assert not any('41棟' in option for option in options),options
             form.locator('#vaccine-batch').select_option('LEGACY|2026-07-01')
             assert '各棟原有資料不同' in form.locator('.form-error').inner_text()
-            assert form.locator('[name=pr1_date]').input_value()==''
+            assert form.locator('[name=dose1_date]').input_value()==''
             assert '2026-08-01' in form.locator('#vaccine-previous').text_content()
             assert '2026-08-02' in form.locator('#vaccine-previous').text_content()
+            form.locator('#vaccine-batch').select_option('MISMATCH|2026-07-01')
+            assert '原有 PR、APP 資料不同' in form.locator('.form-error').inner_text()
+            assert '2026-08-01' in form.locator('#vaccine-previous').text_content() and '2026-08-02' in form.locator('#vaccine-previous').text_content()
+            form.locator('[name=dose2_date]').fill('2026-09-01')
+            form.locator('button[type=submit]').click()
+            page.wait_for_function("()=>data.vaccine_plans.some(p=>p.scope==='cohort'&&p.revision===2) && pending===null")
+            preserved=next(p for p in store.snapshot()['vaccine_plans'] if p['batch_id']==mismatch['id'])
+            assert preserved['doses']['pr1']==old_doses['pr1'] and preserved['doses']['app1']==old_doses['app1']
+            assert preserved['doses']['pr2']==preserved['doses']['app2']
             form.locator('#vaccine-batch').select_option('VACCINE-DEMO|2026-07-01')
-            form.locator('[name=pr1_done]').check()
+            form.locator('[name=dose1_done]').check()
             form.locator('button[type=submit]').click()
             assert '請先填寫' in form.locator('.form-error').inner_text()
-            assert len(store.snapshot()['vaccine_plans'])==2
-            form.locator('[name=pr1_done]').uncheck()
-            form.locator('[name=pr1_date]').fill('2026-08-08')
-            form.locator('[name=pr1_bottles]').fill('2')
+            assert len(store.snapshot()['vaccine_plans'])==3
+            form.locator('[name=dose1_done]').uncheck()
+            form.locator('[name=dose1_date]').fill('2026-08-08')
+            form.locator('[name=dose1_bottles]').fill('2')
             form.locator('#vaccine-batch').select_option('OTHER|2026-07-01')
-            assert form.locator('[name=pr1_date]').input_value()==''
+            assert form.locator('[name=dose1_date]').input_value()==''
             form.locator('#vaccine-batch').select_option('VACCINE-DEMO|2026-07-01')
-            assert form.locator('[name=pr1_date]').input_value()=='2026-08-08'
-            assert form.locator('[name=pr1_bottles]').input_value()=='2'
-            form.locator('[name=app1_date]').fill('2026-08-09')
-            form.locator('[name=app1_bottles]').fill('3')
-            form.locator('[name=app1_done]').check()
-            form.locator('[name=pr2_date]').fill('2026-09-08')
-            form.locator('[name=pr2_bottles]').fill('4')
-            form.locator('[name=pr2_done]').check()
+            assert form.locator('[name=dose1_date]').input_value()=='2026-08-08'
+            assert form.locator('[name=dose1_bottles]').input_value()=='2'
+            form.locator('[name=dose2_date]').fill('2026-09-08')
+            form.locator('[name=dose2_bottles]').fill('4')
+            form.locator('[name=dose2_done]').check()
             form.locator('button[type=submit]').click()
-            page.wait_for_function("()=>data.vaccine_plans?.length===3 && pending===null")
-            plan=next(item for item in store.snapshot()['vaccine_plans'] if item.get('scope')=='cohort')
+            page.wait_for_function("()=>data.vaccine_plans?.length===4 && pending===null")
+            plan=next(item for item in store.snapshot()['vaccine_plans'] if item.get('scope')=='cohort' and item['batch_id'] in [b['id'] for b in batches])
             assert plan['scope']=='cohort'
             assert plan['doses']['pr1']=={'date':'2026-08-08','bottles':2,'done':False}
-            assert plan['doses']['app1']=={'date':'2026-08-09','bottles':3,'done':True}
-            assert not form.locator('[name=pr1_done]').is_checked()
-            assert form.locator('[name=app1_done]').is_checked()
+            assert plan['doses']['app1']==plan['doses']['pr1']
+            assert not form.locator('[name=dose1_done]').is_checked()
             page.evaluate("""()=>{
                 window.vaccineModels=[];window.vaccineDraws=[];window.vaccineTicks=0;window.vaccineTickPositions=[];
                 const pdf=weeklyPdf;
@@ -108,22 +119,21 @@ with tempfile.TemporaryDirectory() as folder:
             }""")
             page.evaluate("(id)=>document.dispatchEvent(new CustomEvent('pigledger:weekly-open',{detail:{batch_id:id}}))",batches[0]['id'])
             page.wait_for_selector('#weekly-a4-preview img')
-            assert page.evaluate('vaccineModels.at(-1).vaccinePlans[0].doses.app1.done')
-            assert page.evaluate('vaccineTicks')==2, page.evaluate('vaccineTicks')
+            assert page.evaluate('vaccineModels.at(-1).vaccinePlans[0].doses.app2.done')
+            assert page.evaluate('vaccineTicks')==1, page.evaluate('vaccineTicks')
             positions=page.evaluate('vaccineTickPositions')
-            assert len(positions)==2 and all(315<d['x']<363 and d['color']=='#b42332' for d in positions),positions
+            assert len(positions)==1 and all(315<d['x']<363 and d['color']=='#b42332' for d in positions),positions
             drawn=page.evaluate('vaccineDraws')
-            assert any(d['text']=='APP' and 315<d['x']<363 and 1063<d['y']<1089 for d in drawn)
-            assert any(d['text']=='PR' and 315<d['x']<363 and 1113<d['y']<1137 for d in drawn)
             assert any(d['text']=='08/08' and 220<d['x']<268 and 1063<d['y']<1089 for d in drawn)
-            assert any(d['text']=='08/09' and 268<d['x']<315 and 1063<d['y']<1089 for d in drawn)
+            assert any(d['text']=='08/08' and 268<d['x']<315 and 1063<d['y']<1089 for d in drawn)
             assert any(d['text']=='2' and 220<d['x']<268 and 1089<d['y']<1113 for d in drawn)
             page.locator('#weekly-close').click()
             page.locator('nav [href="#settings"]').click()
-            form.locator('[name=pr1_done]').check()
+            form.locator('[name=dose1_done]').check()
             form.locator('button[type=submit]').click()
-            page.wait_for_function("()=>data.vaccine_plans.some(p=>p.scope==='cohort'&&p.revision===2) && pending===null")
-            assert next(item for item in store.snapshot()['vaccine_plans'] if item.get('scope')=='cohort')['doses']['pr1']['done']
+            page.wait_for_function("()=>data.vaccine_plans.some(p=>p.scope==='cohort'&&p.revision===2&&p.doses.pr1.date==='2026-08-08') && pending===null")
+            saved=next(item for item in store.snapshot()['vaccine_plans'] if item.get('scope')=='cohort' and item['batch_id'] in [b['id'] for b in batches])
+            assert saved['doses']['pr1']['done'] and saved['doses']['pr1']==saved['doses']['app1']
             page.evaluate('vaccineTicks=0')
             page.evaluate("(id)=>document.dispatchEvent(new CustomEvent('pigledger:weekly-open',{detail:{batch_id:id}}))",batches[0]['id'])
             page.wait_for_selector('#weekly-a4-preview img')
@@ -143,7 +153,7 @@ with tempfile.TemporaryDirectory() as folder:
             page.locator('#weekly-close').click()
             page.locator('nav [href="#settings"]').click()
             form.locator('#vaccine-batch').select_option('MIXED|2026-07-01')
-            form.locator('[name=pr1_date]').fill('2026-09-12')
+            form.locator('[name=dose1_date]').fill('2026-09-12')
             ended=store.mutate(admin,'batches',mixed[0]|{'status':'ended'},str(uuid.uuid4()),mixed[0]['id'])
             page.evaluate('async()=>await refresh()')
             assert form.locator('#vaccine-batch').input_value()==''
@@ -152,8 +162,8 @@ with tempfile.TemporaryDirectory() as folder:
             store.mutate(admin,'batches',ended|{'status':'active'},str(uuid.uuid4()),ended['id'])
             page.evaluate('async()=>await refresh()')
             form.locator('#vaccine-batch').select_option('MIXED|2026-07-01')
-            assert form.locator('[name=pr1_date]').input_value()=='2026-09-12'
-            assert next(item for item in store.snapshot()['vaccine_plans'] if item.get('scope')=='cohort')['doses']['pr1']['done']
+            assert form.locator('[name=dose1_date]').input_value()=='2026-09-12'
+            assert next(item for item in store.snapshot()['vaccine_plans'] if item.get('scope')=='cohort' and item['batch_id'] in [b['id'] for b in batches])['doses']['pr1']['done']
             for batch in batches:
                 current=next(item for item in store.snapshot()['batches'] if item['id']==batch['id'])
                 store.mutate(admin,'batches',current|{'status':'ended'},str(uuid.uuid4()),current['id'])
