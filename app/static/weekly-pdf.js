@@ -493,11 +493,11 @@ async function renderNancyWeeklyPdf(model){
   ctx.save();ctx.strokeStyle='#b42332';ctx.lineWidth=1.7;
   ctx.beginPath();ctx.moveTo(x,y+5);ctx.lineTo(x+4,y+9);ctx.lineTo(x+12,y);ctx.stroke();ctx.restore();
  }
- for(const [round,top] of [[1,1063],[2,1113]]){
+ for(const [round,top,bottleTop] of [[1,1063,1089],[2,1113,1137]]){
   const pr=vaccineStatus['pr'+round],app=vaccineStatus['app'+round];
   if(pr==='complete'&&app==='complete'){
-   vaccineCheck(323,top+8);
-   vaccineCheck(342,top+8);
+   vaccineCheck(331,top+8);
+   vaccineCheck(331,bottleTop+7);
    continue;
   }
   const states=[['PR',pr],['APP',app]].filter(([,status])=>status);
