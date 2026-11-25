@@ -187,4 +187,4 @@ class WorkbookUpdateTests(unittest.TestCase):
         self.store.mutate(self.admin,'batches',a|{'entry_count':50,'entry_count_source':'verified arrival sheet'},str(uuid.uuid4()),a['id'])
         with self.assertRaises(Problem):self.store.mutate(self.admin,'batches',b|{'entry_count':49,'entry_count_source':'verified arrival sheet'},str(uuid.uuid4()),b['id'])
         self.store.mutate(self.admin,'batches',b|{'entry_count':50,'entry_count_source':'verified arrival sheet'},str(uuid.uuid4()),b['id'])
-        self.assertEqual(herd(self.store.snapshot()['batches'],[], '2026-10-14',[a['id']])['survival'],98)
+        self.assertEqual(herd(self.store.snapshot()['batches'],[], '2026-10-14',[a['id']])['survival'],96)

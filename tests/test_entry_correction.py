@@ -34,7 +34,7 @@ class EntryCorrectionTests(unittest.TestCase):
  def test_correction_recalculates_entry_balance_survival_and_keeps_exits(self):
   before=self.stats();self.change(120);after=self.stats()
   self.assertEqual(after['entry'],120);self.assertEqual(after['remaining'],before['remaining']+20)
-  self.assertAlmostEqual(after['survival'],(120-after['dead'])/120*100)
+  self.assertAlmostEqual(after['survival'],(120-after['dead']-after['culled'])/120*100)
   for k in ('sold','culled','dead','added','adjustment'):self.assertEqual(before[k],after[k])
   self.change(95);self.assertEqual(self.stats()['remaining'],before['remaining']-5)
  def test_repeated_enrichment_and_history_dates_apply_delta_once(self):

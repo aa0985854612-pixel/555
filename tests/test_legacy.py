@@ -33,7 +33,7 @@ class LegacyTests(unittest.TestCase):
         self.assertEqual(herd(data['batches'],data['movements'],'2026-10-14')['remaining'],90)
     def test_group_survival_real_barn_denominator_unknown_and_historical_unknown(self):
         self.apply();d=self.store.snapshot();whole=herd(d['batches'],d['movements'],'2026-10-14')
-        self.assertEqual(whole['survival'],96);self.assertEqual(whole['outgoing'],6)
+        self.assertEqual(whole['survival'],95);self.assertEqual(whole['outgoing'],6)
         partial=herd(d['batches'],d['movements'],'2026-10-14',[d['batches'][0]['id']]);self.assertIsNone(partial['entry']);self.assertIsNone(partial['survival']);self.assertIsNotNone(partial['remaining']);self.assertEqual(partial['dead'],1);self.assertEqual(partial['culled'],1);self.assertIsNone(partial['sold'])
         self.assertEqual(herd(d['batches'],d['movements'],'2026-10-12')['remaining'],99)
         self.assertIsNone(herd(d['batches'],d['movements'],'2026-10-13')['remaining'])

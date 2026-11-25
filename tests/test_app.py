@@ -25,7 +25,7 @@ class AppTests(unittest.TestCase):
         d=self.store.snapshot();return herd(d['batches'],d['movements'],on,ids)
     def test_01_basic_herd_rule(self):
         self.move('sale',150);self.move('cull',20);self.move('death',5)
-        h=self.balance();self.assertEqual(h['remaining'],825);self.assertEqual(h['outgoing'],170);self.assertEqual(h['survival'],99.5)
+        h=self.balance();self.assertEqual(h['remaining'],825);self.assertEqual(h['outgoing'],170);self.assertEqual(h['survival'],97.5)
     def test_02_old_new_batch_isolation(self):
         new=self.batch_new('B2',100);self.move('death',5)
         self.assertEqual(self.balance(ids=[new['id']])['remaining'],100)

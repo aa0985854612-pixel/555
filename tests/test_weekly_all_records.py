@@ -32,8 +32,9 @@ class WeeklyAllRecordsTests(unittest.TestCase):
   bin=self.add('feed_bins',name='13',barn_ids=[self.barns[0]['id']],vendor='新農科',active=True,inventory_enabled=True,capacity_kg=10000,safe_fill_percent=85,inventory_date='2026-10-01',inventory_opening_kg=0)
   self.add('feed_orders',date='2026-11-03',kg=2000,display_unit='ton',vendor='新農科',item='大豬料',feed_bin_id=bin['id'],target_batch_ids=[self.batches[0]['id']])
   self.add('movements',date='2026-11-03',type='death',quantity=3,batch_id=self.batches[0]['id'])
+  self.add('movements',date='2026-11-03',type='cull',quantity=2,batch_id=self.batches[0]['id'])
   d=self.s.snapshot();before=copy.deepcopy(d);r=weekly_report(d,{'batch_id':[self.batches[0]['id']],'all_records':['1']},today='2026-10-25')
-  self.assertEqual(r['totals']['death'],3);self.assertEqual(r['cumulative']['dead'],0);self.assertEqual(r['cumulative']['remaining'],100);self.assertEqual(r['observed_to'],'2026-10-25');self.assertEqual(stock(d,bin,'2026-10-25')['kg'],0);self.assertEqual(statistics(d,{'to':['2026-10-25']})['delivery_kg'],0);self.assertEqual(d,before)
+  self.assertEqual(r['totals']['death'],3);self.assertEqual(r['totals']['cull'],2);self.assertEqual(r['cumulative']['dead'],0);self.assertEqual(r['cumulative']['culled'],0);self.assertEqual(r['cumulative']['survival'],100);self.assertEqual(r['cumulative']['remaining'],100);self.assertEqual(r['observed_to'],'2026-10-25');self.assertEqual(stock(d,bin,'2026-10-25')['kg'],0);self.assertEqual(statistics(d,{'to':['2026-10-25']})['delivery_kg'],0);self.assertEqual(d,before)
  def test_same_physical_shared_bin_prints_reference_once_without_guessing_allocation(self):
   bin=self.add('feed_bins',name='13、22',barn_ids=[b['id'] for b in self.barns],vendor='新農科',active=True)
   o=self.add('feed_orders',date='2026-11-03',kg=4000,display_unit='ton',vendor='新農科',item='大豬料',feed_bin_id=bin['id'],target_batch_ids=[b['id'] for b in self.batches])
