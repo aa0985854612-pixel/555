@@ -25,6 +25,14 @@ with tempfile.TemporaryDirectory() as folder:
     other_barn=add('barns',name='23棟')
     add('batches',barn_id=other_barn['id'],name='OTHER',entry_date='2026-07-01',
         entry_count=100,entry_age_days=71,status='active')
+    archived_barn=add('barns',name='39棟')
+    add('batches',barn_id=archived_barn['id'],name='ARCHIVED',
+        entry_date='2026-07-01',entry_count=100,status='ended')
+    mixed=[]
+    for number,status in ((40,'active'),(41,'ended')):
+        barn=add('barns',name=f'{number}棟')
+        mixed.append(add('batches',barn_id=barn['id'],name='MIXED',
+                         entry_date='2026-07-01',entry_count=100,status=status))
     legacy=[]
     for index in (30,31):
         barn=add('barns',name=f'{index}棟')
@@ -52,6 +60,9 @@ with tempfile.TemporaryDirectory() as folder:
             form=page.locator('#vaccine-form')
             options=form.locator('#vaccine-batch option').all_text_contents()
             assert options.count('VACCINE-DEMO｜15棟、21棟')==1,options
+            assert not any('ARCHIVED' in option for option in options),options
+            assert 'MIXED｜40棟' in options,options
+            assert not any('41棟' in option for option in options),options
             form.locator('#vaccine-batch').select_option('LEGACY|2026-07-01')
             assert '各棟原有資料不同' in form.locator('.form-error').inner_text()
             assert form.locator('[name=pr1_date]').input_value()==''
@@ -123,6 +134,27 @@ with tempfile.TemporaryDirectory() as folder:
             page.wait_for_selector('#weekly-a4-preview img')
             assert page.evaluate('vaccineTicks')==3
             assert page.evaluate('vaccineModels.at(-1).vaccinePlans[0].scope')=='cohort'
+            page.locator('#weekly-close').click()
+            page.locator('nav [href="#settings"]').click()
+            form.locator('#vaccine-batch').select_option('MIXED|2026-07-01')
+            form.locator('[name=pr1_date]').fill('2026-09-12')
+            ended=store.mutate(admin,'batches',mixed[0]|{'status':'ended'},str(uuid.uuid4()),mixed[0]['id'])
+            page.evaluate('async()=>await refresh()')
+            assert form.locator('#vaccine-batch').input_value()==''
+            page.wait_for_function("()=>document.querySelector('#vaccine-form fieldset').disabled")
+            assert 'MIXED|2026-07-01' not in form.locator('#vaccine-batch option').evaluate_all('(items)=>items.map(i=>i.value)')
+            store.mutate(admin,'batches',ended|{'status':'active'},str(uuid.uuid4()),ended['id'])
+            page.evaluate('async()=>await refresh()')
+            form.locator('#vaccine-batch').select_option('MIXED|2026-07-01')
+            assert form.locator('[name=pr1_date]').input_value()=='2026-09-12'
+            assert next(item for item in store.snapshot()['vaccine_plans'] if item.get('scope')=='cohort')['doses']['pr1']['done']
+            for batch in batches:
+                current=next(item for item in store.snapshot()['batches'] if item['id']==batch['id'])
+                store.mutate(admin,'batches',current|{'status':'ended'},str(uuid.uuid4()),current['id'])
+            page.evaluate('async()=>await refresh()')
+            page.wait_for_function("()=>!Array.from(document.querySelector('#vaccine-batch').options).some(o=>o.value==='VACCINE-DEMO|2026-07-01')")
+            historical=page.request.get(url+'/api/weekly-report?batch_id='+batches[0]['id']+'&batch_status=ended&all_records=1').json()
+            assert historical['vaccine_plans'][0]['doses']['pr1']['done']
             assert not errors,errors
             browser.close()
     finally:
