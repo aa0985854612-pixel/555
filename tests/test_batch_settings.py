@@ -62,6 +62,20 @@ class BatchSettingsTests(unittest.TestCase):
         self.assertEqual([r['after']-r['before'] for r in p['rows']], [10, -10])
         self.apply(body);self.assertEqual([b['entry_count'] for b in self.store.snapshot()['batches']], [469, 235])
 
+    def test_review_and_save_earlier_lot_with_later_entry_as_week_origin(self):
+        body = self.request()
+        lots = [{'date':'2026-06-05','count':259,'mean_kg':20.1},
+                {'date':'2026-06-12','count':200,'mean_kg':21.2}]
+        body['rows'][0]['fields'].update(report_entry_lots=lots, report_entry_lots_source='')
+        before = self.stored()
+        result = preview(self.store, self.user, body)
+        self.assertEqual(self.stored(), before)
+        save(self.store, self.user, body | {'preview_token':result['preview_token']}, str(uuid.uuid4()))
+        batch = next(b for b in self.store.snapshot()['batches'] if b['id']==self.a['id'])
+        self.assertEqual(batch['report_entry_lots'], lots)
+        self.assertEqual(batch['entry_date'], '2026-06-12')
+        self.assertEqual(batch['entry_count'], 459)
+
     def test_counted_stock_preserves_entry_and_other_exit_totals(self):
         body = self.request('stock');body['rows'][1]['remaining'] = 80
         before = self.store.snapshot();p = preview(self.store, self.user, body)

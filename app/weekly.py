@@ -32,9 +32,12 @@ def weekly_report(data,query,today=None):
     keys={cohort_key(b) for b in members}
     if not members or len(keys)!=1 or not (get('cohort') or get('batch_id')):raise Invalid('weekly_choose_batch')
     entry=min(b['entry_date'] for b in members)
+    lot_dates=[lot['date'] for b in members for lot in b.get('report_entry_lots',[])]
+    earliest_entry=min([entry]+lot_dates)
+    anchor_date=max(lot_dates+[b['entry_date'] for b in members]) if lot_dates else entry
     all_records=get('all_records')=='1'
     default_start=entry if all_records else min(b.get('weekly_start_date') or b['entry_date'] for b in members)
-    start=entry if all_records else max(get('from') or default_start,entry)
+    start=earliest_entry if all_records else max(get('from') or default_start,earliest_entry)
     end=max(today,entry) if all_records else get('to') or today
     day(start);day(end)
     if start>end:raise Invalid('invalid_period')
@@ -90,18 +93,20 @@ def weekly_report(data,query,today=None):
     pending.extend({'id':o['id'],'type':'feed_orders','date':o['date'],'kg':o['kg'],'bin':o['feed_bin_snapshot']['name'],'reason':'shared_bin_unallocated' if len(o['feed_bin_snapshot']['barn_ids'])>1 else 'bin_batch_unknown'} for o in bin_pending)
     pending.extend({'id':o['id'],'type':'feed_orders','date':o['date'],'kg':o['kg'],'reason':'unassigned_order'} for o in unassigned)
     age_values={age(b,entry) for b in members};entry_age=next(iter(age_values)) if len(age_values)==1 else None
+    grid_ages={age(b,anchor_date) for b in members}
+    grid_age=next(iter(grid_ages)) if len(grid_ages)==1 else None
     # A named earliest-entry barn supplies grid labels, never a fake cohort age.
     week_reference=None
-    if entry_age is None:
+    if grid_age is None:
         from .feed import barn_number
         candidates=[b for b in members if b['entry_date']==entry and age(b,entry) is not None]
         if candidates:
             ref=min(candidates,key=lambda b:(barn_number(barns[b['barn_id']]) or 10**9,barns[b['barn_id']],b['id']))
-            ref_age=age(ref,entry)
+            ref_age=age(ref,anchor_date)
             week_reference={'batch_id':ref['id'],'barn':barns[ref['barn_id']],'entry_date':entry,'age_days':ref_age,'start_week':int(ref_age//7)+1,'basis':'named_earliest_entry_barn_only'}
-    weeks=[];first=(day(start)-day(entry)).days//7;last=(day(end)-day(entry)).days//7
+    weeks=[];first=(day(start)-day(anchor_date)).days//7;last=(day(end)-day(anchor_date)).days//7
     for index in range(first,last+1):
-        anchor=day(entry)+timedelta(days=index*7);lo=max(anchor,day(start));hi=min(anchor+timedelta(days=6),day(end));future=lo>day(today);hi_observed=min(hi,day(today))
+        anchor=day(anchor_date)+timedelta(days=index*7);lo=max(anchor,day(start));hi=min(anchor+timedelta(days=6),day(end));future=lo>day(today);hi_observed=min(hi,day(today))
         recorded_to=hi if all_records else hi_observed
         dated=[r for r in events if r.get('date') and lo.isoformat()<=r['date']<=recorded_to.isoformat()]
         selected=[r for r in dated if r.get('batch_id') in ids or set(r.get('legacy_members',[]))<=ids]
@@ -118,7 +123,7 @@ def weekly_report(data,query,today=None):
                 for a in o['allocations']:
                     if a['batch_id'] in ids:feed_details.append(order_detail(o,data,a['batch_id']))
         unknown_orders=bool(feed_shared_details) or any(lo.isoformat()<=o['date']<=recorded_to.isoformat() for o in unassigned)
-        weeks.append({'index':index+1,'age_week':None if entry_age is None else int(entry_age//7)+index+1,'start':lo.isoformat(),'anchor':anchor.isoformat(),'end':hi.isoformat(),'observed_to':hi_observed.isoformat() if not future else None,'future':future,'partial':lo!=anchor or hi!=anchor+timedelta(days=6) or hi>day(today),
+        weeks.append({'index':index+1,'age_week':None if grid_age is None else int(grid_age//7)+index+1,'start':lo.isoformat(),'anchor':anchor.isoformat(),'end':hi.isoformat(),'observed_to':hi_observed.isoformat() if not future else None,'future':future,'partial':lo!=anchor or hi!=anchor+timedelta(days=6) or hi>day(today),
             'has_records':bool(selected or period_orders),'missing_types':sorted(missing|({'feed_orders'} if unknown_orders else set())),
             'values':{typ:None if typ in missing or (future and (not all_records or not any(r['type']==typ for r in selected))) else n for typ,n in values.items()}|{'feed_orders':None if unknown_orders or (future and (not all_records or not period_orders)) else allocated},'known':values|{'feed_orders':allocated},
             'feed_details':feed_details,'feed_shared_details':feed_shared_details,'events':[{'id':r['id'],'date':r['date'],'type':r['type'],'quantity':r['quantity'],'barn':barns.get(batches.get(r.get('batch_id'),{}).get('barn_id'),''),'note':r.get('note','') if not r.get('legacy_source') else '', 'source_cell':r.get('source_cell',''),'outgoing_destination':r.get('outgoing_destination',''),'outgoing_trip':r.get('outgoing_trip','')} for r in selected]})
@@ -135,7 +140,7 @@ def weekly_report(data,query,today=None):
     entry_details=[{'batch_id':b['id'],'barn':barns[b['barn_id']],'date':b['entry_date'],
         'count':herd(data['batches'],data['movements'],until,[b['id']])['entry'] if b.get('legacy_group') else b['entry_count'],
         'age_days':age(b,b['entry_date']),'mean_kg':b.get('entry_mean_kg'),'mean_date':b.get('entry_mean_date')} for b in members]
-    entry_details=[detail for b,original in zip(members,entry_details) for detail in ([original|{'date':lot['date'],'count':lot['count'],'mean_kg':lot['mean_kg'],'mean_date':lot['date'] if lot['mean_kg'] is not None else None,'age_days':original['age_days'] if index==0 and lot['date']==b['entry_date'] else None} for index,lot in enumerate(b.get('report_entry_lots',[]))] or [original])]
+    entry_details=[detail for b,original in zip(members,entry_details) for detail in ([original|{'date':lot['date'],'count':lot['count'],'mean_kg':lot['mean_kg'],'mean_date':lot['date'] if lot['mean_kg'] is not None else None,'age_days':original['age_days'] if lot['date']==b['entry_date'] else None} for index,lot in enumerate(b.get('report_entry_lots',[]))] or [original])]
     means={d['mean_kg'] for d in entry_details};mean=next(iter(means)) if len(means)==1 else None
     from .feed_receipts import orders_are_arrivals
     from .feed_allocation import allocation_policy
