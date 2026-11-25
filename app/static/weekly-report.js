@@ -222,7 +222,7 @@ function paperBands(){
 function pdfModel(){
  const r=report;
  const vaccineLegend=lang==='vi'?(r.vaccine_plans||[]).flatMap(plan=>{
-  const barn=(r.entry_details||[]).find(entry=>entry.batch_id===plan.batch_id)?.barn||'';
+  const barn=plan.scope==='cohort'?t('cohort'):(r.entry_details||[]).find(entry=>entry.batch_id===plan.batch_id)?.barn||'';
   return Object.entries(plan.doses).filter(([,dose])=>dose.date||dose.bottles!=null||dose.done)
    .map(([key,dose])=>[barn,key.slice(0,-1).toUpperCase(),key.slice(-1),dose.date||'—',dose.bottles==null?'':dose.bottles+' '+t('vaccineBottles'),dose.done?t('vaccineDone'):''].filter(Boolean).join(' '));
  }):[];

@@ -22,6 +22,18 @@ with tempfile.TemporaryDirectory() as folder:
         barn=add('barns',name=barn_name)
         batches.append(add('batches',barn_id=barn['id'],name='VACCINE-DEMO',
                            entry_date='2026-07-01',entry_count=100,entry_age_days=71,status='active'))
+    other_barn=add('barns',name='23棟')
+    add('batches',barn_id=other_barn['id'],name='OTHER',entry_date='2026-07-01',
+        entry_count=100,entry_age_days=71,status='active')
+    legacy=[]
+    for index in (30,31):
+        barn=add('barns',name=f'{index}棟')
+        legacy.append(add('batches',barn_id=barn['id'],name='LEGACY',
+                          entry_date='2026-07-01',entry_count=100,entry_age_days=71,status='active'))
+    for batch,date in zip(legacy,('2026-08-01','2026-08-02')):
+        doses={key:{'date':'','bottles':None,'done':False} for key in ('pr1','app1','pr2','app2')}
+        doses['pr1']={'date':date,'bottles':1,'done':True}
+        add('vaccine_plans',batch_id=batch['id'],doses=doses)
     server=Server(('127.0.0.1',0),store)
     threading.Thread(target=server.serve_forever,daemon=True).start()
     url='http://127.0.0.1:'+str(server.server_port)
@@ -38,17 +50,24 @@ with tempfile.TemporaryDirectory() as folder:
             page.wait_for_selector('#workspace:not([hidden])')
             page.locator('nav [href="#settings"]').click()
             form=page.locator('#vaccine-form')
-            form.locator('#vaccine-batch').select_option(batches[0]['id'])
+            options=form.locator('#vaccine-batch option').all_text_contents()
+            assert options.count('VACCINE-DEMO｜15棟、21棟')==1,options
+            form.locator('#vaccine-batch').select_option('LEGACY|2026-07-01')
+            assert '各棟原有資料不同' in form.locator('.form-error').inner_text()
+            assert form.locator('[name=pr1_date]').input_value()==''
+            assert '2026-08-01' in form.locator('#vaccine-previous').text_content()
+            assert '2026-08-02' in form.locator('#vaccine-previous').text_content()
+            form.locator('#vaccine-batch').select_option('VACCINE-DEMO|2026-07-01')
             form.locator('[name=pr1_done]').check()
             form.locator('button[type=submit]').click()
             assert '請先填寫' in form.locator('.form-error').inner_text()
-            assert store.snapshot()['vaccine_plans']==[]
+            assert len(store.snapshot()['vaccine_plans'])==2
             form.locator('[name=pr1_done]').uncheck()
             form.locator('[name=pr1_date]').fill('2026-08-08')
             form.locator('[name=pr1_bottles]').fill('2')
-            form.locator('#vaccine-batch').select_option(batches[1]['id'])
+            form.locator('#vaccine-batch').select_option('OTHER|2026-07-01')
             assert form.locator('[name=pr1_date]').input_value()==''
-            form.locator('#vaccine-batch').select_option(batches[0]['id'])
+            form.locator('#vaccine-batch').select_option('VACCINE-DEMO|2026-07-01')
             assert form.locator('[name=pr1_date]').input_value()=='2026-08-08'
             assert form.locator('[name=pr1_bottles]').input_value()=='2'
             form.locator('[name=app1_date]').fill('2026-08-09')
@@ -58,8 +77,9 @@ with tempfile.TemporaryDirectory() as folder:
             form.locator('[name=pr2_bottles]').fill('4')
             form.locator('[name=pr2_done]').check()
             form.locator('button[type=submit]').click()
-            page.wait_for_function("()=>data.vaccine_plans?.length===1 && pending===null")
-            plan=store.snapshot()['vaccine_plans'][0]
+            page.wait_for_function("()=>data.vaccine_plans?.length===3 && pending===null")
+            plan=next(item for item in store.snapshot()['vaccine_plans'] if item.get('scope')=='cohort')
+            assert plan['scope']=='cohort'
             assert plan['doses']['pr1']=={'date':'2026-08-08','bottles':2,'done':False}
             assert plan['doses']['app1']=={'date':'2026-08-09','bottles':3,'done':True}
             assert not form.locator('[name=pr1_done]').is_checked()
@@ -85,8 +105,8 @@ with tempfile.TemporaryDirectory() as folder:
             page.locator('nav [href="#settings"]').click()
             form.locator('[name=pr1_done]').check()
             form.locator('button[type=submit]').click()
-            page.wait_for_function("()=>data.vaccine_plans[0].revision===2 && pending===null")
-            assert store.snapshot()['vaccine_plans'][0]['doses']['pr1']['done']
+            page.wait_for_function("()=>data.vaccine_plans.some(p=>p.scope==='cohort'&&p.revision===2) && pending===null")
+            assert next(item for item in store.snapshot()['vaccine_plans'] if item.get('scope')=='cohort')['doses']['pr1']['done']
             page.evaluate('vaccineTicks=0')
             page.evaluate("(id)=>document.dispatchEvent(new CustomEvent('pigledger:weekly-open',{detail:{batch_id:id}}))",batches[0]['id'])
             page.wait_for_selector('#weekly-a4-preview img')
@@ -96,10 +116,16 @@ with tempfile.TemporaryDirectory() as folder:
             page.wait_for_selector('#weekly-a4-preview img')
             assert len(page.evaluate('vaccineModels.at(-1).vaccineBatchIds'))==2
             assert len(page.evaluate('vaccineModels.at(-1).vaccinePlans'))==1
-            assert page.evaluate('vaccineTicks')==0
+            assert page.evaluate('vaccineTicks')==3
+            page.evaluate('vaccineTicks=0')
+            second_barn=store.snapshot()['batches'][1]['barn_id']
+            page.locator('#weekly-barn').select_option(second_barn)
+            page.wait_for_selector('#weekly-a4-preview img')
+            assert page.evaluate('vaccineTicks')==3
+            assert page.evaluate('vaccineModels.at(-1).vaccinePlans[0].scope')=='cohort'
             assert not errors,errors
             browser.close()
     finally:
         server.shutdown()
         server.server_close()
-print('PASS vaccine settings save, completion and scoped A4 checks')
+print('PASS grouped vaccine selection, shared completion and single-barn A4 checks')

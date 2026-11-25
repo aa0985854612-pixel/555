@@ -227,7 +227,7 @@ class Store:
             'barns':{'name','group','feed_vendor'},
             'feed_drafts':{'title','source','sources','rows','status','confirmed_ids','confirmed_at','confirmed_by','cancelled_at','cancelled_by'},
             'work_tasks':{'title','mode','weekday','date','start_date','end_date','time','note','active'},
-            'vaccine_plans':{'batch_id','doses'},
+            'vaccine_plans':{'batch_id','doses','scope'},
             'batches':{'barn_id','name','group','entry_date','entry_date_override','entry_count','entry_age_days','age_date','status','cohort_id','same_batch_as','legacy_source','legacy_row','legacy_barn','note','entry_mean_kg','entry_mean_date','entry_mean_source','entry_mean_note','entry_count_source','entry_count_reason','source_assignments','stock_basis','quality_review','weekly_start_date','report_entry_lots','report_entry_lots_source'},
             'movements':{'date','batch_id','type','quantity','note','target_batch_id','total_weight_kg','outgoing_destination','outgoing_trip','quick_source'},
             'feed_orders':{'date','kg','display_unit','vendor','item','note','allocations','feed_bin_id','feed_bin_snapshot','target_batch_ids','bin_allocations','requested_barn_id','quick_source'},
@@ -262,9 +262,19 @@ class Store:
             from .work_calendar import validate_task
             d=validate_task(d)
         elif kind=='vaccine_plans':
-            lookup('batches',d.get('batch_id'))
+            batch=lookup('batches',d.get('batch_id'))
             if previous and previous['batch_id']!=d['batch_id']:raise Invalid('missing_reference')
-            if any(p['batch_id']==d['batch_id'] for p in data.get('vaccine_plans',[])):raise Problem('vaccine_plan_exists',409)
+            if previous and previous.get('scope')=='cohort' and 'scope' not in d:raise Problem('revision_conflict',409)
+            scope=d.get('scope','barn')
+            if scope not in ('barn','cohort') or previous and scope!=previous.get('scope','barn'):raise Invalid('invalid_vaccine_plan')
+            d['scope']=scope
+            if scope=='cohort':
+                from .history import cohort_key
+                members={b['id'] for b in data['batches'] if cohort_key(b)==cohort_key(batch)}
+                duplicate=any(p.get('scope')=='cohort' and p['batch_id'] in members for p in data.get('vaccine_plans',[]))
+            else:
+                duplicate=any(p.get('scope','barn')=='barn' and p['batch_id']==d['batch_id'] for p in data.get('vaccine_plans',[]))
+            if duplicate:raise Problem('vaccine_plan_exists',409)
             doses=d.get('doses')
             if not isinstance(doses,dict) or set(doses)!={'pr1','app1','pr2','app2'}:raise Invalid('invalid_vaccine_plan')
             if any(not isinstance(dose,dict) or set(dose)!={'date','bottles','done'} or type(dose['done']) is not bool or not isinstance(dose['date'],str) for dose in doses.values()):raise Invalid('invalid_vaccine_plan')
