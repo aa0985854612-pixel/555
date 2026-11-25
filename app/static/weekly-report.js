@@ -96,7 +96,8 @@ function feedLines(details=[],shared=[]){
  let previous='';
  return rows.map(({row,pending})=>{
   const parts=row.date.split('-'),date=`${Number(parts[1])}/${Number(parts[2])}`;
-  const barn=row.bin_label||row.barn?.match(/^(?:第)?(\d+)棟$/)?.[1]||row.barn||'';
+  const bin=row.bin_label||'';
+  const barn=bin.match(/^(\d+)-\d+$/)?.[1]||bin||row.barn?.match(/^(?:第)?(\d+)棟$/)?.[1]||row.barn||'';
   const prefix=row.date===previous?' '.repeat(date.length):date;previous=row.date;
   const tons=new Intl.NumberFormat('en-US',{useGrouping:false,maximumFractionDigits:12}).format(row.kg/1000);
   return `${prefix}+${tons}(${barn})${pending?' · '+t('sharedFeedPending'):''}`;

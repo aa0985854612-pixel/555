@@ -1,6 +1,6 @@
 'use strict';
 /* One A4: keep the weekly tables readable; use one shared note font and rhythm. */
-const WEEKLY_PDF_WIDTH=595.28,WEEKLY_PDF_HEIGHT=841.89,WEEKLY_PDF_SCALE=5;
+const WEEKLY_PDF_WIDTH=595.28,WEEKLY_PDF_HEIGHT=841.89,WEEKLY_PDF_SCALE=5.5;
 window.weeklyPdf = async function(model) {
  const PW=WEEKLY_PDF_WIDTH,PH=WEEKLY_PDF_HEIGHT,SCALE=WEEKLY_PDF_SCALE,M=24,W=PW-2*M;
  if(model.nancyTemplate)return renderNancyWeeklyPdf(model);
@@ -331,8 +331,8 @@ async function renderNancyWeeklyPdf(model){
  const rowLabels=[['起始日'],['淘汰數'],['死亡數'],['飼料量','（噸）'],['售出數']];
  const bands=model.pages.flat(),extraWeeks=bands.filter(band=>band.firstWeek==null);
  // One size across every feed cell, accounting for both height and line width.
- let feedSize=15;
- ctx.font=`700 15px ${family}`;
+ let feedSize=17;
+ ctx.font=`800 17px ${family}`;
  for(const {week,x,y} of sections){
   const row=bands.find(band=>band.firstWeek===week)?.rows[3];
   if(!row)continue;
@@ -347,7 +347,7 @@ async function renderNancyWeeklyPdf(model){
    });
    const dateWidth=Math.max(0,...split.map(line=>ctx.measureText(line.date).width));
    const amountWidth=Math.max(0,...split.map(line=>ctx.measureText(line.amount).width));
-   if(dateWidth+amountWidth>0)feedSize=Math.min(feedSize,15*width/(dateWidth+amountWidth));
+   if(dateWidth+amountWidth>0)feedSize=Math.min(feedSize,17*width/(dateWidth+amountWidth));
   });
  }
 
@@ -373,7 +373,7 @@ async function renderNancyWeeklyPdf(model){
     if(!value)continue;
     const parts=value.split('\n'),feed=rowIndex===3;
     if(feed&&parts.some(line=>line.includes('+'))){
-     ctx.font=`700 ${feedSize}px ${family}`;
+     ctx.font=`800 ${feedSize}px ${family}`;
      ctx.fillStyle=black;ctx.textBaseline='top';
      const dateWidth=Math.max(0,...parts.map(line=>ctx.measureText(line.split('+')[0].trim()).width));
      const plusX=x[column]+2+dateWidth;
