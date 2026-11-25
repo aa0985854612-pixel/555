@@ -26,13 +26,23 @@ class CohortSurvivalTests(unittest.TestCase):
  def test_same_name_different_entry_dates_remains_separate(self):
   self.batch(1,100);self.batch(2,900,entry_date='2025-01-01');result=self.summary();self.assertEqual(len(result['cohorts']),2);self.assertEqual({c['cohort'] for c in result['cohorts']},{'JD-SAME|2026-01-01','JD-SAME|2025-01-01'})
  def test_whole_source_known_even_when_barn_entry_counts_unknown(self):
-  self.source();result=self.summary();self.assertTrue(all(b['herd']['survival'] is None for b in result['batches']));h=result['cohorts'][0]['herd'];self.assertEqual(h['denominator'],100);self.assertEqual(h['dead'],4);self.assertEqual(h['survival'],96)
+  self.source();result=self.summary();self.assertTrue(all(b['herd']['survival'] is None for b in result['batches']));h=result['cohorts'][0]['herd'];self.assertEqual(h['denominator'],100);self.assertEqual(h['dead'],4);self.assertEqual(h['survival'],95)
  def test_finished_source_barn_deaths_remain_in_total(self):
-  a,b=self.source();self.move(b,'sale',45,date='2026-10-15');self.store.mutate(self.admin,'batches',b|{'status':'ended'},str(uuid.uuid4()),b['id']);result=self.summary();h=result['cohorts'][0]['herd'];self.assertEqual(h['remaining'],45);self.assertEqual(h['dead'],4);self.assertEqual(h['survival'],96);self.assertEqual(len(result['cohorts'][0]['ids']),2)
+  a,b=self.source();self.move(b,'sale',45,date='2026-10-15');self.store.mutate(self.admin,'batches',b|{'status':'ended'},str(uuid.uuid4()),b['id']);result=self.summary();h=result['cohorts'][0]['herd'];self.assertEqual(h['remaining'],45);self.assertEqual(h['dead'],4);self.assertEqual(h['survival'],95);self.assertEqual(len(result['cohorts'][0]['ids']),2)
  def test_internal_transfer_does_not_duplicate_cohort_entry(self):
   a=self.batch(1,100);b=self.batch(2,0,cohort_id=a['id']);self.move(a,'transfer',25,target_batch_id=b['id']);self.move(b,'death',3,date='2026-01-03');h=self.summary()['cohorts'][0]['herd'];self.assertEqual(h['denominator'],100);self.assertEqual(h['transfer_in'],0);self.assertEqual(h['survival'],97)
- def test_arrival_increases_denominator_but_cull_and_adjustment_do_not(self):
-  b=self.batch(1,100);self.move(b,'arrival',10);self.move(b,'death',11);self.move(b,'cull',20);self.move(b,'adjustment',5);h=self.summary()['cohorts'][0]['herd'];self.assertEqual(h['denominator'],110);self.assertEqual(h['survival'],90);self.assertEqual(h['remaining'],84)
+ def test_arrival_increases_denominator_and_cull_reduces_survival(self):
+  b=self.batch(1,100);self.move(b,'arrival',10);self.move(b,'death',11);self.move(b,'cull',20);self.move(b,'adjustment',5);h=self.summary()['cohorts'][0]['herd'];self.assertEqual(h['denominator'],110);self.assertAlmostEqual(h['survival'],79/110*100);self.assertEqual(h['remaining'],84)
+ def test_unknown_culls_do_not_produce_a_survival_percentage(self):
+  self.source();data=self.store.snapshot();barn=data['batches'][0]
+  barn['legacy_values']['2026-10-14']['entry']=50
+  barn['legacy_values']['2026-10-14']['culled']=None
+  from app.domain import herd
+  h=herd(data['batches'],data['movements'],'2026-10-14',[barn['id']])
+  self.assertEqual(h['denominator'],50)
+  self.assertIsNotNone(h['dead'])
+  self.assertIsNone(h['culled'])
+  self.assertIsNone(h['survival'])
  def test_zero_or_incomplete_source_denominator_has_no_percentage(self):
   self.batch(3,0);self.assertIsNone(self.summary()['cohorts'][0]['herd']['survival']);self.source();d=self.store.snapshot();d['batches']=[b for b in d['batches'] if b.get('legacy_barn')!=2];result=statistics(d,{'summary':['1'],'to':['2026-10-16']});cohort=next(c for c in result['cohorts'] if c['name']=='JD-TEST');self.assertIsNone(cohort['herd']['denominator']);self.assertIsNone(cohort['herd']['survival'])
  def test_snapshot_totals_respect_date_and_do_not_run_heavy_performance(self):

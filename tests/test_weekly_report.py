@@ -18,9 +18,9 @@ class WeeklyReportTests(unittest.TestCase):
  def test_seven_day_boundaries_and_ordinal_week_do_not_use_calendar_week(self):
   self.movement('2026-10-09','death',1);self.movement('2026-10-15','death',2);self.movement('2026-10-16','death',4)
   r=self.report();self.assertEqual([w['anchor'] for w in r['weeks']],['2026-10-09','2026-10-16']);self.assertEqual([w['age_week'] for w in r['weeks']],[11,12]);self.assertEqual([w['values']['death'] for w in r['weeks']],[3,4])
- def test_normal_sale_cull_death_are_separate_and_survival_death_only(self):
+ def test_normal_sale_cull_death_are_separate_and_survival_counts_losses(self):
   self.movement('2026-10-10','sale',15);self.movement('2026-10-10','death',1);self.movement('2026-10-12','cull',2)
-  r=self.report();self.assertEqual(r['totals'],{'death':1,'sale':15,'cull':2,'feed_orders':0});self.assertEqual(r['cumulative']['survival'],99.5);self.assertEqual(r['cumulative']['remaining'],182)
+  r=self.report();self.assertEqual(r['totals'],{'death':1,'sale':15,'cull':2,'feed_orders':0});self.assertEqual(r['cumulative']['survival'],98.5);self.assertEqual(r['cumulative']['remaining'],182)
  def test_scope_and_weighted_feed_allocations_exclude_other_barn(self):
   self.movement('2026-10-10','death',1);self.movement('2026-10-11','death',2,1)
   for b,kg in zip(self.batches,(1000,2000)):self.add('feed_orders',date='2026-10-12',kg=kg,display_unit='ton',vendor='',allocations=[{'batch_id':b['id'],'kg':kg}])

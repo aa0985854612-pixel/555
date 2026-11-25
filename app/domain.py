@@ -95,7 +95,7 @@ def herd(batches, movements, on, selected=None, before=False):
     result['legacy_source']=legacy;result['historical_unknown']=unknown_remaining or bool(unknown_fields)
     result['outgoing'] = result['sold'] + result['culled'] if result['sold'] is not None and result['culled'] is not None else None
     result['denominator'] = result['entry']+result['added']+result['transfer_in'] if result['entry'] is not None else None
-    result['survival'] = (result['denominator'] - result['dead']) / result['denominator'] * 100 if result['denominator'] and result['dead'] is not None else None
+    result['survival'] = (result['denominator'] - result['dead'] - result['culled']) / result['denominator'] * 100 if result['denominator'] and result['dead'] is not None and result['culled'] is not None else None
     return result
 
 

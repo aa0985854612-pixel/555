@@ -71,7 +71,10 @@ with tempfile.TemporaryDirectory() as tmp,patch.dict(os.environ,{'FEED_ORDERS_AR
    assert bands[0]['rows'][0]['cells'][:7]==['']*7
    rows=[row for band in bands for row in band['rows']];culls=[row for row in rows if row['label']=='淘汰數（隻）'];assert len(culls)==3 and sum(int(v) for row in culls for v in row['cells'] if v)==5
    assert all('淘汰' not in pair[0] for pair in model['totals']) and not any('淘汰' in note for note in model['shipping_notes']+model['death_notes'])
-   assert model['nancyTemplate']
+   assert model['nancyTemplate'] and model['survival']=='97.00'
+   stats=page.request.get(url+'/api/statistics?batch_id='+batches[13]['id']+'&to=2026-10-25').json()
+   assert stats['cumulative']['survival']==97
+   assert stats['cumulative']['dead']==1 and stats['cumulative']['culled']==2
    colours=page.evaluate('colourDraws')
    reminders=[d for d in colours if 704<d['y']<762 and d['text'] in ('安排棟舍','豬隻秤重','安排空白料','起始日','開始出豬')]
    assert [d['text'] for d in reminders].count('安排棟舍')==2
