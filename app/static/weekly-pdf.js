@@ -3,7 +3,12 @@
 const WEEKLY_PDF_WIDTH=595.28,WEEKLY_PDF_HEIGHT=841.89,WEEKLY_PDF_SCALE=5.5;
 window.weeklyPdf = async function(model) {
  const PW=WEEKLY_PDF_WIDTH,PH=WEEKLY_PDF_HEIGHT,SCALE=WEEKLY_PDF_SCALE,M=24,W=PW-2*M;
- if(model.nancyTemplate)return renderNancyWeeklyPdf(model);
+ if(model.nancyTemplate){
+  const ios=/iPad|iPhone|iPod/.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
+  const scale=ios?WEEKLY_PDF_SCALE:/Android/i.test(navigator.userAgent)?7:7.5;
+  try{return await renderNancyWeeklyPdf(model,scale);}
+  catch(error){if(scale===WEEKLY_PDF_SCALE)throw error;return renderNancyWeeklyPdf(model,WEEKLY_PDF_SCALE);}
+ }
  const family='-apple-system, BlinkMacSystemFont, "Noto Sans CJK TC", "Noto Sans TC", sans-serif';
  await document.fonts.ready;
  const measure=document.createElement('canvas').getContext('2d');
@@ -220,11 +225,11 @@ async function weeklyCanvasPdf(canvas){
 }
 
 // Coordinates follow the original print grid with the two source pages joined.
-async function renderNancyWeeklyPdf(model){
+async function renderNancyWeeklyPdf(model,scale){
  const template=new Image();
  template.src='/weekly-nancy-template.png';
  await Promise.all([template.decode(),document.fonts.ready]);
- const canvas=document.createElement('canvas'),scale=WEEKLY_PDF_SCALE;
+ const canvas=document.createElement('canvas');
  canvas.width=Math.ceil(WEEKLY_PDF_WIDTH*scale);
  canvas.height=Math.ceil(WEEKLY_PDF_HEIGHT*scale);
  const ctx=canvas.getContext('2d');
@@ -541,10 +546,11 @@ async function renderNancyWeeklyPdf(model){
 
  // A second A4 carries the supporting entries, including records beyond 32 weeks.
  const detailCanvas=document.createElement('canvas');
- detailCanvas.width=canvas.width;detailCanvas.height=canvas.height;
+ const detailScale=WEEKLY_PDF_SCALE;
+ detailCanvas.width=Math.ceil(WEEKLY_PDF_WIDTH*detailScale);detailCanvas.height=Math.ceil(WEEKLY_PDF_HEIGHT*detailScale);
  const detailCtx=detailCanvas.getContext('2d');
  detailCtx.fillStyle='#fff';detailCtx.fillRect(0,0,detailCanvas.width,detailCanvas.height);
- detailCtx.scale(scale,scale);
+ detailCtx.scale(detailScale,detailScale);
  detailCtx.fillStyle=black;detailCtx.textBaseline='top';
  const pageItems=[
   {value:model.title+' · 明細',bold:true},
