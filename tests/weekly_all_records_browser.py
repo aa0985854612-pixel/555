@@ -105,19 +105,23 @@ with tempfile.TemporaryDirectory() as tmp,patch.dict(os.environ,{'FEED_ORDERS_AR
    image=Image.open(preview).convert('RGB')
    # Main table, totals, and vaccine rows use the same single-width rule.
    gray=image.convert('L')
-   grid_x=round((image.width-690*.79*4)/2+(300-62)*.79*4)
+   grid_x=round((image.width-690*.79*5)/2+(300-62)*.79*5)
    for grid_y in (792,823,854,884,926,952,975,1007,1036,1063,1089):
-    line_y=round(84+(grid_y-69)*.72*4)
+    line_y=round(105+(grid_y-69)*.72*5)
     assert gray.getpixel((grid_x,line_y))<130
-    assert gray.getpixel((grid_x,line_y-6))>180 and gray.getpixel((grid_x,line_y+6))>180
-   assert page.locator('#weekly-image').inner_text()=='下載第一張圖片'
+    assert gray.getpixel((grid_x,line_y-8))>180 and gray.getpixel((grid_x,line_y+8))>180
+   assert page.locator('#weekly-image').inner_text()=='下載第一張 PNG 圖片'
    with page.expect_download() as image_download:page.locator('#weekly-image').click()
-   downloaded=Path(tmp)/'first-page.jpg';image_download.value.save_as(downloaded)
-   assert image_download.value.suggested_filename.endswith('.jpg')
-   assert downloaded.read_bytes()==preview.read_bytes()
+   downloaded=Path(tmp)/'first-page.png';image_download.value.save_as(downloaded)
+   assert image_download.value.suggested_filename.endswith('.png')
+   assert downloaded.read_bytes()==bytes(page.evaluate('async()=>Array.from(new Uint8Array(await renderedPDF.firstPageImage.arrayBuffer()))'))
+   from PIL import ImageChops, ImageStat
+   with Image.open(downloaded) as exported:
+    assert exported.format=='PNG' and exported.size==(2977,4210)
+    difference=ImageChops.difference(exported.convert('RGB'),image)
+    assert max(ImageStat.Stat(difference).mean)<2
    assert len(page.evaluate('renderedPDF.previewPages'))==2
    from PIL import Image
-   with Image.open(downloaded) as exported:assert exported.format=='JPEG' and exported.width>2000 and exported.height>3000
    page.evaluate('window.print=()=>{window.printInvoked=true}');page.click('#weekly-browser-print');page.wait_for_function('()=>window.printInvoked===true');assert page.locator('#weekly-print-root img').count()==2;assert page.locator('#weekly-print-root img').first.get_attribute('src')==page.locator('#weekly-a4-preview img').first.get_attribute('src')
    printed=Path(tmp)/'browser-print.pdf';page.pdf(path=printed,prefer_css_page_size=True,print_background=True)
    printed_info=subprocess.check_output(['pdfinfo',str(printed)],text=True);assert re.search(r'Pages:\s+2\b',printed_info) and '(A4)' in printed_info,printed_info

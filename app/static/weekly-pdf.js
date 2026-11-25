@@ -1,6 +1,6 @@
 'use strict';
 /* One A4: keep the weekly tables readable; use one shared note font and rhythm. */
-const WEEKLY_PDF_WIDTH=595.28,WEEKLY_PDF_HEIGHT=841.89,WEEKLY_PDF_SCALE=4;
+const WEEKLY_PDF_WIDTH=595.28,WEEKLY_PDF_HEIGHT=841.89,WEEKLY_PDF_SCALE=5;
 window.weeklyPdf = async function(model) {
  const PW=WEEKLY_PDF_WIDTH,PH=WEEKLY_PDF_HEIGHT,SCALE=WEEKLY_PDF_SCALE,M=24,W=PW-2*M;
  if(model.nancyTemplate)return renderNancyWeeklyPdf(model);
@@ -193,6 +193,9 @@ async function weeklyCanvasPdf(canvas){
  const canvases=Array.isArray(canvas)?canvas:[canvas];
  const PW=WEEKLY_PDF_WIDTH,PH=WEEKLY_PDF_HEIGHT;
  const images=[];
+ const firstPageImage=await new Promise((resolve,reject)=>canvases[0].toBlob(
+  blob=>blob?resolve(blob):reject(new Error('weekly_image_failed')),'image/png'
+ ));
  for(const page of canvases){
   const blob=await new Promise((resolve,reject)=>page.toBlob(b=>b?resolve(b):reject(new Error('weekly_pdf_image_failed')),'image/jpeg',.96));
   images.push({bytes:new Uint8Array(await blob.arrayBuffer()),width:page.width,height:page.height});
@@ -212,6 +215,7 @@ async function weeklyCanvasPdf(canvas){
  const pdf=new Blob(parts,{type:'application/pdf'});
  // These exact JPEG bytes are embedded in the PDF, so preview and download agree.
  pdf.previewPages=images.map(im=>new Blob([im.bytes],{type:'image/jpeg'}));
+ pdf.firstPageImage=firstPageImage;
  return pdf;
 }
 

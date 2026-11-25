@@ -25,7 +25,7 @@ const base={build,clickAction,translate,enter,refresh,selections};
 let selectionStatus='active',selectionData=null,selectionTask=null;
 let report=null,reportUser=null,serial=0,printing=false,title=null,pdfCache=null,pdfTask=null,previewURLs=[];
 Object.assign(words,{weeklyContinue:['續','tiếp'],weeklyActualPreview:['A4列印預覽（與下載PDF相同）','Xem trước in A4 (giống PDF tải xuống)'],weeklyScreenDetails:['查看完整畫面明細','Xem chi tiết trên màn hình']});
-Object.assign(words,{weeklyDownloadImage:['下載第一張圖片','Tải ảnh trang đầu'],weeklyImageMaking:['正在產生圖片…','Đang tạo ảnh…']});
+Object.assign(words,{weeklyDownloadImage:['下載第一張 PNG 圖片','Tải ảnh PNG trang đầu'],weeklyImageMaking:['正在產生圖片…','Đang tạo ảnh…']});
 Object.assign(words,{weeklyLatestFeedType:['料別','Loại cám'],weeklySales:['售出數（隻）','Số xuất bán (con)'],weeklyPaperSale:['售出數','Số xuất bán']});
 function clearPDF(){pdfCache=null;pdfTask=null;previewURLs.forEach(u=>URL.revokeObjectURL(u));previewURLs=[];el('weekly-a4-preview')?.replaceChildren();}
 async function ensurePDF(){
@@ -259,10 +259,10 @@ async function downloadFirstImage(){
  try{
   const pdf=await ensurePDF();
   if(!pdf||report!==original||me?.id!==user||lang!==language||!el('weekly-report-dialog').open)return;
-  const image=pdf.previewPages?.[0];
+  const image=pdf.firstPageImage;
   if(!image)throw new Error('weekly_image_unavailable');
   const url=URL.createObjectURL(image),link=document.createElement('a');
-  link.href=url;link.download=name+'.jpg';document.body.append(link);link.click();link.remove();
+  link.href=url;link.download=name+'.png';document.body.append(link);link.click();link.remove();
   setTimeout(()=>URL.revokeObjectURL(url),60000);
   el('weekly-error').textContent='';
  }catch(err){
