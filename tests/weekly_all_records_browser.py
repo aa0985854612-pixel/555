@@ -103,6 +103,13 @@ with tempfile.TemporaryDirectory() as tmp,patch.dict(os.environ,{'FEED_ORDERS_AR
    preview=root/'artifacts/weekly-red-deaths-culls.jpg';preview.write_bytes(bytes(page.evaluate('async()=>Array.from(new Uint8Array(await renderedPDF.previewPages[0].arrayBuffer()))')))
    from PIL import Image
    image=Image.open(preview).convert('RGB')
+   # Main table, totals, and vaccine rows use the same single-width rule.
+   gray=image.convert('L')
+   grid_x=round((image.width-690*.79*4)/2+(300-62)*.79*4)
+   for grid_y in (792,823,854,884,926,952,975,1007,1036,1063,1089):
+    line_y=round(84+(grid_y-69)*.72*4)
+    assert gray.getpixel((grid_x,line_y))<130
+    assert gray.getpixel((grid_x,line_y-6))>180 and gray.getpixel((grid_x,line_y+6))>180
    assert page.locator('#weekly-image').inner_text()=='下載第一張圖片'
    with page.expect_download() as image_download:page.locator('#weekly-image').click()
    downloaded=Path(tmp)/'first-page.jpg';image_download.value.save_as(downloaded)
