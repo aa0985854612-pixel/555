@@ -84,7 +84,7 @@ with tempfile.TemporaryDirectory() as tmp,patch.dict(os.environ,{'FEED_ORDERS_AR
    assert all('Noto Serif CJK TC' in draw['font'] for draw in colours)
    assert {'牧場：嘉得','豬源：殷慶盛','肉豬批號：WHITEBOARD-DEMO','入場頭數：100 頭'} <= {draw['text'] for draw in colours}
    feed_fonts={d['font'] for d in colours if d['text'].startswith('+') and 355<d['y']<680}
-   assert len(feed_fonts)==1 and next(iter(feed_fonts)).startswith(('700 ', 'bold ')),feed_fonts
+   assert len(feed_fonts)==1 and next(iter(feed_fonts)).startswith(('700 ', '800 ', 'bold ')),feed_fonts
    assert any(d['text']=='5' and 506<d['x']<554 and 532<d['y']<555 and d['colour']=='#111111' for d in colours)
    red=[d for d in colours if d['colour']=='#b42332' and d['text']]
    assert len(red)==2 and all(d['text']=='1' for d in red)
@@ -98,16 +98,16 @@ with tempfile.TemporaryDirectory() as tmp,patch.dict(os.environ,{'FEED_ORDERS_AR
    assert any(d['text']=='起始日' and '17px' in d['font'] for d in colours)
    feed_plus=[d for d in colours if d['text']=='+4(13)' and 580<d['y']<680]
    assert len(feed_plus)==2 and feed_plus[0]['x']==feed_plus[1]['x'],feed_plus
-   assert all(d['font'].startswith(('700 ', 'bold ')) for d in colours if re.fullmatch(r'(1[7-9]|2[0-9])w',d['text']) and 478<d['y']<508)
+   assert all(d['font'].startswith(('700 ', '800 ', 'bold ')) for d in colours if re.fullmatch(r'(1[7-9]|2[0-9])w',d['text']) and 478<d['y']<508)
    assert page.locator('#weekly-sheet-body .weekly-death td').first.evaluate('(e)=>getComputedStyle(e).color')=='rgb(180, 35, 50)';assert page.locator('#weekly-sheet-body .weekly-death-entry').first.evaluate('(e)=>getComputedStyle(e).color')=='rgb(17, 17, 17)';assert page.locator('#weekly-sheet-body .weekly-total-death strong').evaluate('(e)=>getComputedStyle(e).color')=='rgb(180, 35, 50)'
    preview=root/'artifacts/weekly-red-deaths-culls.jpg';preview.write_bytes(bytes(page.evaluate('async()=>Array.from(new Uint8Array(await renderedPDF.previewPages[0].arrayBuffer()))')))
    from PIL import Image
    image=Image.open(preview).convert('RGB')
    # Main table, totals, and vaccine rows use the same single-width rule.
    gray=image.convert('L')
-   grid_x=round((image.width-690*.79*5)/2+(300-62)*.79*5)
+   grid_x=round((image.width-690*.79*5.5)/2+(300-62)*.79*5.5)
    for grid_y in (792,823,854,884,926,952,975,1007,1036,1063,1089):
-    line_y=round(105+(grid_y-69)*.72*5)
+    line_y=round(21*5.5+(grid_y-69)*.72*5.5)
     assert gray.getpixel((grid_x,line_y))<130
     assert gray.getpixel((grid_x,line_y-8))>180 and gray.getpixel((grid_x,line_y+8))>180
    assert page.locator('#weekly-image').inner_text()=='下載第一張 PNG 圖片'
@@ -117,7 +117,7 @@ with tempfile.TemporaryDirectory() as tmp,patch.dict(os.environ,{'FEED_ORDERS_AR
    assert downloaded.read_bytes()==bytes(page.evaluate('async()=>Array.from(new Uint8Array(await renderedPDF.firstPageImage.arrayBuffer()))'))
    from PIL import ImageChops, ImageStat
    with Image.open(downloaded) as exported:
-    assert exported.format=='PNG' and exported.size==(2977,4210)
+    assert exported.format=='PNG' and exported.size==(3275,4631)
     difference=ImageChops.difference(exported.convert('RGB'),image)
     assert max(ImageStat.Stat(difference).mean)<2
    assert len(page.evaluate('renderedPDF.previewPages'))==2
