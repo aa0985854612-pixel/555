@@ -46,6 +46,24 @@ class VaccinePlanTests(unittest.TestCase):
         with self.assertRaisesRegex(Problem,'revision_conflict'):
             self.store.mutate(self.admin,'vaccine_plans',plan|{'doses':changed},str(uuid.uuid4()),plan['id'])
 
+    def test_shared_plan_follows_cohort_for_single_barn_and_preserves_older_plans(self):
+        old=self.add('vaccine_plans',batch_id=self.batches[0]['id'],doses=self.doses)
+        doses=copy.deepcopy(self.doses)
+        doses['pr1']['done']=True
+        shared=self.add('vaccine_plans',batch_id=self.batches[1]['id'],scope='cohort',doses=doses)
+        snapshot=self.store.snapshot()
+        for batch in self.batches:
+            report=weekly_report(snapshot,{'batch_id':[batch['id']],'all_records':['1']},today='2026-10-01')
+            self.assertIn(shared['id'],[p['id'] for p in report['vaccine_plans']])
+        first=weekly_report(snapshot,{'batch_id':[self.batches[0]['id']],'all_records':['1']},today='2026-10-01')
+        self.assertIn(old['id'],[p['id'] for p in first['vaccine_plans']])
+        with self.assertRaisesRegex(Problem,'vaccine_plan_exists'):
+            self.add('vaccine_plans',batch_id=self.batches[0]['id'],scope='cohort',doses=doses)
+        without_scope={key:value for key,value in shared.items() if key!='scope'}
+        with self.assertRaisesRegex(Problem,'revision_conflict'):
+            self.store.mutate(self.admin,'vaccine_plans',without_scope,str(uuid.uuid4()),shared['id'])
+        self.assertEqual(len(self.store.snapshot()['vaccine_plans']),2)
+
     def test_validation_permissions_and_idempotency(self):
         invalid=copy.deepcopy(self.doses)
         invalid['pr1']={'date':'','bottles':1,'done':True}

@@ -1,17 +1,20 @@
 'use strict';
-/* One audited plan belongs to one barn's batch. */
+/* Vaccination plans are shared by the selected cohort. */
 (() => {
  Object.assign(words,{
   vaccineTitle:['疫苗施打計畫','Kế hoạch tiêm vắc-xin'],
-  vaccineBatch:['批號與棟舍','Mã lứa và chuồng'],
-  vaccineChoose:['請選擇批號與棟舍','Chọn lứa và chuồng'],
+  vaccineBatch:['批號','Mã lứa'],
+  vaccineChoose:['請選擇批號','Chọn mã lứa'],
   vaccineFirst:['第一次','Lần thứ nhất'],
   vaccineSecond:['第二次','Lần thứ hai'],
   vaccineDate:['施打日期','Ngày tiêm'],
   vaccineBottles:['用藥瓶數（選填）','Số lọ (tùy chọn)'],
+  vaccineBottleUnit:['瓶','lọ'],
   vaccineDone:['已施打','Đã tiêm'],
   vaccineSave:['儲存疫苗資料','Lưu dữ liệu vắc-xin'],
-  vaccineHint:['先選批號與棟舍，再填 PR、APP 每次施打日期；完成施打後勾選「已施打」。','Chọn lứa và chuồng, nhập ngày PR và APP; đánh dấu đã tiêm sau khi hoàn tất.'],
+  vaccineHint:['選批號後填寫 PR、APP 日期與整批瓶數，同批棟舍共用；施打後勾選「已施打」。','Chọn mã lứa, nhập ngày và tổng số lọ PR, APP cho cả lứa; đánh dấu đã tiêm sau khi hoàn tất.'],
+  vaccinePrevious:['原先各棟疫苗資料','Dữ liệu tiêm cũ theo chuồng'],
+  vaccineConflicting:['各棟原有資料不同，請參考下方明細後填寫整批資料。','Dữ liệu cũ giữa các chuồng khác nhau; xem chi tiết bên dưới trước khi nhập cho cả lứa.'],
   vaccineDateRequired:['勾選已施打時，請先填寫該次施打日期。','Nhập ngày tiêm trước khi đánh dấu đã tiêm.']
  });
  Object.assign(errorWords,{
@@ -22,30 +25,60 @@
  const keys=['pr1','app1','pr2','app2'];
  let dirty=false;
  const drafts=new Map();
+ function cohortKey(batch){return batch._cohort_key||batch.name+'|'+batch.entry_date;}
+ function members(key){return (data?.batches||[]).filter(batch=>cohortKey(batch)===key);}
+ function cohortPlans(key){
+  const ids=new Set(members(key).map(batch=>batch.id));
+  return (data?.vaccine_plans||[]).filter(plan=>ids.has(plan.batch_id));
+ }
  function options(){
   const select=$('#vaccine-batch');
   if(!select||!data)return;
   const selected=select.value;
-  const barns=new Map(data.barns.map(b=>[b.id,b.name]));
-  const batches=[...data.batches].sort((a,b)=>b.entry_date.localeCompare(a.entry_date)||String(barns.get(a.barn_id)||'').localeCompare(String(barns.get(b.barn_id)||''),undefined,{numeric:true}));
-  select.innerHTML='<option value="">'+esc(t('vaccineChoose'))+'</option>'+batches.map(b=>'<option value="'+esc(b.id)+'">'+esc(b.name+'｜'+(barns.get(b.barn_id)||'')+(b.status==='ended'?' · '+t('ended'):''))+'</option>').join('');
+  const groups=(data.cohorts||[]).filter(group=>!group.archive&&members(group.key).length)
+   .sort((a,b)=>b.entry_date.localeCompare(a.entry_date)||b.name.localeCompare(a.name));
+  select.innerHTML='<option value="">'+esc(t('vaccineChoose'))+'</option>'+groups.map(group=>{
+   const groupBatches=members(group.key);
+   const barns=orderedBarns(data.barns.filter(barn=>groupBatches.some(batch=>batch.barn_id===barn.id))).map(barn=>barn.name);
+   const ended=groupBatches.every(batch=>batch.status==='ended')?' · '+t('ended'):'';
+   return '<option value="'+esc(group.key)+'">'+esc(group.name+'｜'+barns.join('、')+ended)+'</option>';
+  }).join('');
   select.value=selected;
  }
  function populate(){
   const form=$('#vaccine-form');
   if(!form)return;
-  const id=$('#vaccine-batch').value;
-  const plan=(data?.vaccine_plans||[]).find(item=>item.batch_id===id);
-  const doses=drafts.get(id)||plan?.doses;
-  for(const key of keys){
-   const dose=doses?.[key];
-   form.elements[key+'_date'].value=dose?.date||'';
-   form.elements[key+'_bottles'].value=dose?.bottles??'';
-   form.elements[key+'_done'].checked=!!dose?.done;
+  const key=$('#vaccine-batch').value,plans=cohortPlans(key);
+  const shared=plans.filter(plan=>plan.scope==='cohort');
+  const previous=plans.filter(plan=>plan.scope!=='cohort');
+  const signatures=new Set(previous.map(plan=>JSON.stringify(keys.map(name=>plan.doses[name]))));
+  const conflict=shared.length>1||(!shared.length&&signatures.size>1);
+  const plan=shared.length===1?shared[0]:(!shared.length&&signatures.size===1?previous[0]:null);
+  const doses=drafts.get(key)||plan?.doses;
+  for(const name of keys){
+   const dose=doses?.[name];
+   form.elements[name+'_date'].value=dose?.date||'';
+   form.elements[name+'_bottles'].value=dose?.bottles??'';
+   form.elements[name+'_done'].checked=!!dose?.done;
   }
-  form.querySelector('fieldset').disabled=!id||me?.role!=='admin'||!!pending;
+  const barnName=id=>{
+   const batch=data.batches.find(item=>item.id===id);
+   return data.barns.find(barn=>barn.id===batch?.barn_id)?.name||'';
+  };
+  const previousBox=$('#vaccine-previous');
+  const visible=previous.concat(shared.length>1?shared:[]);
+  previousBox.hidden=!visible.length;
+  previousBox.innerHTML=visible.length?'<summary>'+esc(t('vaccinePrevious'))+'</summary>'+visible.map(plan=>{
+   const lines=keys.map(name=>{
+    const dose=plan.doses[name];
+    if(!dose.date&&dose.bottles==null&&!dose.done)return '';
+    return name.toUpperCase()+' '+(dose.date||'—')+' '+(dose.bottles==null?'':dose.bottles+' '+t('vaccineBottleUnit'))+' '+(dose.done?t('vaccineDone'):'');
+   }).filter(Boolean);
+   return '<p><strong>'+esc(barnName(plan.batch_id))+'</strong> '+esc(lines.join('；'))+'</p>';
+  }).join(''):'';
+  form.querySelector('fieldset').disabled=!key||me?.role!=='admin'||!!pending;
   $('#vaccine-batch').disabled=!!pending;
-  form.querySelector('.form-error').textContent='';
+  form.querySelector('.form-error').textContent=conflict?t('vaccineConflicting'):'';
   dirty=drafts.size>0;
   form.dataset.dirty=dirty?'1':'';
  }
@@ -73,7 +106,7 @@
     ${doseFields('pr2','PR','vaccineSecond')}
     ${doseFields('app2','APP','vaccineSecond')}
    </div><button type="submit" class="primary">${txt('vaccineSave')}</button></fieldset>
-   <p class="form-error" role="status"></p></form></section>`);
+   <p class="form-error" role="status"></p><details id="vaccine-previous" hidden></details></form></section>`);
   const form=$('#vaccine-form');
   $('#vaccine-batch').addEventListener('change',populate);
   form.addEventListener('input',event=>{
@@ -87,19 +120,23 @@
    event.preventDefault();
    if(!me||me.role!=='admin'||!form.reportValidity())return;
    if(pending){toast(t('pending'));return;}
-   const batchId=$('#vaccine-batch').value,doses=readDoses(form);
+   const key=$('#vaccine-batch').value,doses=readDoses(form);
    if(Object.values(doses).some(dose=>dose.done&&!dose.date)){
     form.querySelector('.form-error').textContent=t('vaccineDateRequired');return;
    }
-   const current=(data.vaccine_plans||[]).find(plan=>plan.batch_id===batchId);
-   const body={batch_id:batchId,doses,...(current?{revision:current.revision}:{})};
+   const shared=cohortPlans(key).filter(plan=>plan.scope==='cohort');
+   if(shared.length>1){form.querySelector('.form-error').textContent=t('vaccineConflicting');return;}
+   const current=shared[0];
+   const batchId=current?.batch_id||members(key).map(batch=>batch.id).sort()[0];
+   const body={batch_id:batchId,scope:'cohort',doses,...(current?{revision:current.revision}:{})};
    form.querySelector('fieldset').disabled=true;
    $('#vaccine-batch').disabled=true;
    try{await startWrite('/api/vaccine_plans'+(current?'/'+current.id:''),current?'PUT':'POST',body);}
    finally{form.querySelector('fieldset').disabled=!$('#vaccine-batch').value||me?.role!=='admin'||!!pending;$('#vaccine-batch').disabled=!!pending;}
   });
   document.addEventListener('pigledger:vaccine-saved',event=>{
-   drafts.delete(event.detail.batch_id);
+   const batch=data?.batches.find(item=>item.id===event.detail.batch_id);
+   if(batch)drafts.delete(cohortKey(batch));
    dirty=drafts.size>0;
    if($('#vaccine-batch').value)populate();
   });

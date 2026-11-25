@@ -465,7 +465,8 @@ async function renderNancyWeeklyPdf(model){
  fitNotes(model.shipping_notes.map(value=>({value})),370,801,367,268,14);
 
  // PR and APP retain separate dates, bottle counts and completion states.
- const plans=new Map((model.vaccinePlans||[]).map(plan=>[plan.batch_id,plan]));
+ const plans=new Map((model.vaccinePlans||[]).filter(plan=>plan.scope!=='cohort').map(plan=>[plan.batch_id,plan]));
+ const sharedPlans=(model.vaccinePlans||[]).filter(plan=>plan.scope==='cohort');
  const batchIds=model.vaccineBatchIds||[];
  const vaccineCells=[
   {key:'pr1',x:220,top:1063,bottleTop:1089},
@@ -474,7 +475,7 @@ async function renderNancyWeeklyPdf(model){
   {key:'app2',x:268,top:1113,bottleTop:1137}
  ];
  for(const cell of vaccineCells){
-  const doses=batchIds.map(id=>plans.get(id)?.doses?.[cell.key]);
+  const doses=sharedPlans.length?sharedPlans.map(plan=>plan.doses?.[cell.key]):batchIds.map(id=>plans.get(id)?.doses?.[cell.key]);
   const dates=[...new Set(doses.map(dose=>dose?.date||''))];
   const bottles=[...new Set(doses.map(dose=>dose?.bottles??null))];
   const complete=doses.length>0&&doses.every(dose=>dose?.done);
@@ -538,7 +539,7 @@ async function renderNancyWeeklyPdf(model){
   ...model.entries.map(entry=>({value:entry.filter(Boolean).join(' · ').replace(/\n/g,' · ')})),
   {value:'疫苗施打明細',bold:true},
   ...(model.vaccinePlans||[]).flatMap(plan=>[
-   {value:model.vaccineBarns?.[plan.batch_id]||'',bold:true},
+   {value:plan.scope==='cohort'?'整批':model.vaccineBarns?.[plan.batch_id]||'',bold:true},
    ...['pr1','app1','pr2','app2'].flatMap(key=>{
     const dose=plan.doses[key];
     if(!dose.date&&dose.bottles==null&&!dose.done)return [];
