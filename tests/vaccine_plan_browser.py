@@ -96,11 +96,13 @@ with tempfile.TemporaryDirectory() as folder:
             assert not form.locator('[name=pr1_done]').is_checked()
             assert form.locator('[name=app1_done]').is_checked()
             page.evaluate("""()=>{
-                window.vaccineModels=[];window.vaccineDraws=[];window.vaccineTicks=0;
+                window.vaccineModels=[];window.vaccineDraws=[];window.vaccineTicks=0;window.vaccineTickPositions=[];
                 const pdf=weeklyPdf;
                 window.weeklyPdf=async m=>{vaccineModels.push(m);return pdf(m)};
                 const fill=CanvasRenderingContext2D.prototype.fillText;
                 CanvasRenderingContext2D.prototype.fillText=function(...a){vaccineDraws.push({text:String(a[0]),x:a[1],y:a[2]});return fill.apply(this,a)};
+                const move=CanvasRenderingContext2D.prototype.moveTo;
+                CanvasRenderingContext2D.prototype.moveTo=function(x,y){if(Math.abs(this.lineWidth-1.7)<0.001)vaccineTickPositions.push({x,y,color:this.strokeStyle});return move.call(this,x,y)};
                 const stroke=CanvasRenderingContext2D.prototype.stroke;
                 CanvasRenderingContext2D.prototype.stroke=function(...a){if(Math.abs(this.lineWidth-1.7)<0.001)vaccineTicks++;return stroke.apply(this,a)};
             }""")
@@ -108,7 +110,11 @@ with tempfile.TemporaryDirectory() as folder:
             page.wait_for_selector('#weekly-a4-preview img')
             assert page.evaluate('vaccineModels.at(-1).vaccinePlans[0].doses.app1.done')
             assert page.evaluate('vaccineTicks')==2, page.evaluate('vaccineTicks')
+            positions=page.evaluate('vaccineTickPositions')
+            assert len(positions)==2 and all(315<d['x']<363 and d['color']=='#b42332' for d in positions),positions
             drawn=page.evaluate('vaccineDraws')
+            assert any(d['text']=='APP' and 315<d['x']<363 and 1063<d['y']<1089 for d in drawn)
+            assert any(d['text']=='PR' and 315<d['x']<363 and 1113<d['y']<1137 for d in drawn)
             assert any(d['text']=='08/08' and 220<d['x']<268 and 1063<d['y']<1089 for d in drawn)
             assert any(d['text']=='08/09' and 268<d['x']<315 and 1063<d['y']<1089 for d in drawn)
             assert any(d['text']=='2' and 220<d['x']<268 and 1089<d['y']<1113 for d in drawn)
@@ -121,18 +127,18 @@ with tempfile.TemporaryDirectory() as folder:
             page.evaluate('vaccineTicks=0')
             page.evaluate("(id)=>document.dispatchEvent(new CustomEvent('pigledger:weekly-open',{detail:{batch_id:id}}))",batches[0]['id'])
             page.wait_for_selector('#weekly-a4-preview img')
-            assert page.evaluate('vaccineTicks')==3, page.evaluate('vaccineTicks')
+            assert page.evaluate('vaccineTicks')==2, page.evaluate('vaccineTicks')
             page.evaluate('vaccineTicks=0')
             page.locator('#weekly-barn').select_option('')
             page.wait_for_selector('#weekly-a4-preview img')
             assert len(page.evaluate('vaccineModels.at(-1).vaccineBatchIds'))==2
             assert len(page.evaluate('vaccineModels.at(-1).vaccinePlans'))==1
-            assert page.evaluate('vaccineTicks')==3
+            assert page.evaluate('vaccineTicks')==2
             page.evaluate('vaccineTicks=0')
             second_barn=store.snapshot()['batches'][1]['barn_id']
             page.locator('#weekly-barn').select_option(second_barn)
             page.wait_for_selector('#weekly-a4-preview img')
-            assert page.evaluate('vaccineTicks')==3
+            assert page.evaluate('vaccineTicks')==2
             assert page.evaluate('vaccineModels.at(-1).vaccinePlans[0].scope')=='cohort'
             page.locator('#weekly-close').click()
             page.locator('nav [href="#settings"]').click()

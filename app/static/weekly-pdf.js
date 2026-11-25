@@ -474,6 +474,7 @@ async function renderNancyWeeklyPdf(model){
   {key:'pr2',x:220,top:1113,bottleTop:1137},
   {key:'app2',x:268,top:1113,bottleTop:1137}
  ];
+ const vaccineStatus={};
  for(const cell of vaccineCells){
   const doses=sharedPlans.length?sharedPlans.map(plan=>plan.doses?.[cell.key]):batchIds.map(id=>plans.get(id)?.doses?.[cell.key]);
   const dates=[...new Set(doses.map(dose=>dose?.date||''))];
@@ -482,16 +483,28 @@ async function renderNancyWeeklyPdf(model){
   const partial=!complete&&doses.some(dose=>dose?.done);
   const values=dates.filter(Boolean).map(date=>date.slice(5).replace('-','/'));
   if(dates.length>1&&dates.includes(''))values.push('—');
-  drawLines(values,cell.x+1,cell.top,complete?34:46,26,{size:11,align:'center'});
+  drawLines(values,cell.x+1,cell.top,46,26,{size:11,align:'center'});
   const amounts=bottles.filter(value=>value!=null).map(String);
   if(bottles.length>1&&bottles.includes(null))amounts.push('—');
   drawLines(amounts,cell.x+1,cell.bottleTop,46,24,{size:11,align:'center'});
-  if(complete){
-   ctx.save();ctx.strokeStyle=black;ctx.lineWidth=1.7;
-   ctx.beginPath();ctx.moveTo(cell.x+35,cell.top+13);ctx.lineTo(cell.x+38,cell.top+17);ctx.lineTo(cell.x+45,cell.top+8);ctx.stroke();ctx.restore();
-  }else if(partial){
-   drawLines(['部分'],cell.x+24,cell.top+15,22,10,{size:7,align:'center'});
+  vaccineStatus[cell.key]=complete?'complete':partial?'partial':'';
+ }
+ function vaccineCheck(x,y){
+  ctx.save();ctx.strokeStyle='#b42332';ctx.lineWidth=1.7;
+  ctx.beginPath();ctx.moveTo(x,y+5);ctx.lineTo(x+4,y+9);ctx.lineTo(x+12,y);ctx.stroke();ctx.restore();
+ }
+ for(const [round,top] of [[1,1063],[2,1113]]){
+  const pr=vaccineStatus['pr'+round],app=vaccineStatus['app'+round];
+  if(pr==='complete'&&app==='complete'){
+   vaccineCheck(331,top+8);
+   continue;
   }
+  const states=[['PR',pr],['APP',app]].filter(([,status])=>status);
+  states.forEach(([name,status],index)=>{
+   const height=states.length===1?26:13,on=top+index*height;
+   drawLines([name+(status==='partial'?' 部分':'')],317,on,status==='partial'?44:23,height,{size:states.length===1?9:7,bold:true});
+   if(status==='complete')vaccineCheck(344,on+(height-9)/2);
+  });
  }
  // Replace the source sheet's thick borders with the same line used by the
  // generated cells. Draw the whole grid as one path to keep joins consistent.
