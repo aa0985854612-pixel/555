@@ -73,6 +73,11 @@ with tempfile.TemporaryDirectory() as tmp,patch.dict(os.environ,{'FEED_ORDERS_AR
    assert all('淘汰' not in pair[0] for pair in model['totals']) and not any('淘汰' in note for note in model['shipping_notes']+model['death_notes'])
    assert model['nancyTemplate']
    colours=page.evaluate('colourDraws')
+   reminders=[d for d in colours if 704<d['y']<762 and d['text'] in ('安排棟舍','豬隻秤重','安排空白料','起始日','開始出豬')]
+   assert [d['text'] for d in reminders].count('安排棟舍')==2
+   assert [d['text'] for d in reminders].count('豬隻秤重')==2
+   assert [d['text'] for d in reminders].count('安排空白料')==1
+   assert [d['text'] for d in reminders].count('開始出豬')==2
    assert all('Noto Serif CJK TC' in draw['font'] for draw in colours)
    assert {'牧場：嘉得','豬源：殷慶盛','肉豬批號：WHITEBOARD-DEMO','入場頭數：100 頭'} <= {draw['text'] for draw in colours}
    feed_fonts={d['font'] for d in colours if d['text'].startswith('+') and 355<d['y']<680}

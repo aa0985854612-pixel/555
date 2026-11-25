@@ -313,7 +313,7 @@ async function renderNancyWeeklyPdf(model){
  const weekColumns=[125,172,220,268,315,363,411,459,506,554,602,650,698,745];
  const sections=[
   {week:4,x:weekColumns,y:[283,307,331,355,425,449],headerTop:223,notesBottom:478},
-  {week:17,x:weekColumns,y:[508,532,555,580,680,704],headerTop:478,notesBottom:734},
+  {week:17,x:weekColumns,y:[508,532,555,580,680,704],headerTop:478,notesBottom:762},
   {week:30,x:weekColumns.slice(0,4),y:[792,823,854,884,926,952],headerTop:762,notesBottom:1007}
  ];
  function panel(x,y,width,height,fill='#fff'){
@@ -389,6 +389,13 @@ async function renderNancyWeeklyPdf(model){
   }
   leftLabel(['備註'],y.at(-1),notesBottom);
   for(let column=0;column<x.length-1;column++)panel(x[column],y.at(-1),x[column+1]-x[column],notesBottom-y.at(-1));
+  if(week===17){
+   const reminders={17:['安排棟舍','豬隻秤重'],23:['安排棟舍','豬隻秤重'],24:['安排空白料','起始日'],27:['開始出豬'],28:['開始出豬']};
+   for(const [number,lines] of Object.entries(reminders)){
+    const column=Number(number)-week;
+    drawLines(lines,x[column],y.at(-1),x[column+1]-x[column],notesBottom-y.at(-1),{size:10,bold:true,align:'center'});
+   }
+  }
  }
  const totalRows=[[854,884],[884,926],[926,952]];
  panel(268,823,95,31);
