@@ -6,7 +6,7 @@ from .notification_schema import PUSH_SCHEMA
 
 VERSION='2.1.7'
 SCHEMA_VERSION=4
-KINDS=('barns','batches','movements','feed_orders','deliveries','usages','weights','workbooks','source_voids','daily_checks','feed_bins','work_tasks','feed_drafts')
+KINDS=('barns','batches','movements','feed_orders','deliveries','usages','weights','workbooks','source_voids','daily_checks','feed_bins','work_tasks','feed_drafts','vaccine_plans')
 SCHEMA='''
 CREATE TABLE IF NOT EXISTS records(kind TEXT NOT NULL, id TEXT PRIMARY KEY, revision INTEGER NOT NULL, deleted INTEGER NOT NULL DEFAULT 0, data TEXT NOT NULL);
 CREATE INDEX IF NOT EXISTS records_kind ON records(kind,deleted);
@@ -227,6 +227,7 @@ class Store:
             'barns':{'name','group','feed_vendor'},
             'feed_drafts':{'title','source','sources','rows','status','confirmed_ids','confirmed_at','confirmed_by','cancelled_at','cancelled_by'},
             'work_tasks':{'title','mode','weekday','date','start_date','end_date','time','note','active'},
+            'vaccine_plans':{'batch_id','doses'},
             'batches':{'barn_id','name','group','entry_date','entry_date_override','entry_count','entry_age_days','age_date','status','cohort_id','same_batch_as','legacy_source','legacy_row','legacy_barn','note','entry_mean_kg','entry_mean_date','entry_mean_source','entry_mean_note','entry_count_source','entry_count_reason','source_assignments','stock_basis','quality_review','weekly_start_date','report_entry_lots','report_entry_lots_source'},
             'movements':{'date','batch_id','type','quantity','note','target_batch_id','total_weight_kg','outgoing_destination','outgoing_trip','quick_source'},
             'feed_orders':{'date','kg','display_unit','vendor','item','note','allocations','feed_bin_id','feed_bin_snapshot','target_batch_ids','bin_allocations','requested_barn_id','quick_source'},
@@ -260,6 +261,20 @@ class Store:
         elif kind=='work_tasks':
             from .work_calendar import validate_task
             d=validate_task(d)
+        elif kind=='vaccine_plans':
+            lookup('batches',d.get('batch_id'))
+            if previous and previous['batch_id']!=d['batch_id']:raise Invalid('missing_reference')
+            if any(p['batch_id']==d['batch_id'] for p in data.get('vaccine_plans',[])):raise Problem('vaccine_plan_exists',409)
+            doses=d.get('doses')
+            if not isinstance(doses,dict) or set(doses)!={'pr1','app1','pr2','app2'}:raise Invalid('invalid_vaccine_plan')
+            if any(not isinstance(dose,dict) or set(dose)!={'date','bottles','done'} or type(dose['done']) is not bool or not isinstance(dose['date'],str) for dose in doses.values()):raise Invalid('invalid_vaccine_plan')
+            doses={key:dict(dose) for key,dose in doses.items()}
+            d['doses']=doses
+            for dose in doses.values():
+                if dose['date']:day(dose['date'])
+                if dose['done'] and not dose['date']:raise Invalid('invalid_vaccine_plan')
+                dose['bottles']=None if dose['bottles'] in ('',None) else number(dose['bottles'])
+                if dose['bottles'] is not None and dose['bottles']<0:raise Invalid('invalid_vaccine_plan')
         elif kind=='barns':
             text('name',True); text('group')
             if 'feed_vendor' in d and d['feed_vendor'] not in ('','養全','新農科'):raise Invalid('invalid_vendor')
@@ -632,7 +647,7 @@ class Store:
             if any(a['end']>b['start'] for a,b in zip(rows,rows[1:])):raise Invalid('overlapping_usage')
 
     def mutate(self, user, kind, payload, request_key, rid=None, delete=False, return_snapshot=False):
-        self.require(user,admin=kind in ('barns','batches','workbooks','feed_bins') or delete)
+        self.require(user,admin=kind in ('barns','batches','workbooks','feed_bins','vaccine_plans') or delete)
         if kind not in KINDS:raise Problem('unknown_kind',404)
         if kind=='feed_drafts':raise Problem('feed_draft_review_required',403)
         if kind=='deliveries' and isinstance(payload,dict) and payload.get('feed_bin_id'):raise Problem('quick_review_required',409)

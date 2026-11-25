@@ -1,6 +1,6 @@
 'use strict';
 /* One A4: keep the weekly tables readable; use one shared note font and rhythm. */
-const WEEKLY_PDF_WIDTH=595.28,WEEKLY_PDF_HEIGHT=841.89,WEEKLY_PDF_SCALE=4;
+const WEEKLY_PDF_WIDTH=595.28,WEEKLY_PDF_HEIGHT=841.89,WEEKLY_PDF_SCALE=5;
 window.weeklyPdf = async function(model) {
  const PW=WEEKLY_PDF_WIDTH,PH=WEEKLY_PDF_HEIGHT,SCALE=WEEKLY_PDF_SCALE,M=24,W=PW-2*M;
  if(model.nancyTemplate)return renderNancyWeeklyPdf(model);
@@ -193,6 +193,9 @@ async function weeklyCanvasPdf(canvas){
  const canvases=Array.isArray(canvas)?canvas:[canvas];
  const PW=WEEKLY_PDF_WIDTH,PH=WEEKLY_PDF_HEIGHT;
  const images=[];
+ const firstPageImage=await new Promise((resolve,reject)=>canvases[0].toBlob(
+  blob=>blob?resolve(blob):reject(new Error('weekly_image_failed')),'image/png'
+ ));
  for(const page of canvases){
   const blob=await new Promise((resolve,reject)=>page.toBlob(b=>b?resolve(b):reject(new Error('weekly_pdf_image_failed')),'image/jpeg',.96));
   images.push({bytes:new Uint8Array(await blob.arrayBuffer()),width:page.width,height:page.height});
@@ -212,6 +215,7 @@ async function weeklyCanvasPdf(canvas){
  const pdf=new Blob(parts,{type:'application/pdf'});
  // These exact JPEG bytes are embedded in the PDF, so preview and download agree.
  pdf.previewPages=images.map(im=>new Blob([im.bytes],{type:'image/jpeg'}));
+ pdf.firstPageImage=firstPageImage;
  return pdf;
 }
 
@@ -460,6 +464,34 @@ async function renderNancyWeeklyPdf(model){
  panel(363,792,382,285);
  fitNotes(model.shipping_notes.map(value=>({value})),370,801,367,268,14);
 
+ // PR and APP retain separate dates, bottle counts and completion states.
+ const plans=new Map((model.vaccinePlans||[]).map(plan=>[plan.batch_id,plan]));
+ const batchIds=model.vaccineBatchIds||[];
+ const vaccineCells=[
+  {key:'pr1',x:220,top:1063,bottleTop:1089},
+  {key:'app1',x:268,top:1063,bottleTop:1089},
+  {key:'pr2',x:220,top:1113,bottleTop:1137},
+  {key:'app2',x:268,top:1113,bottleTop:1137}
+ ];
+ for(const cell of vaccineCells){
+  const doses=batchIds.map(id=>plans.get(id)?.doses?.[cell.key]);
+  const dates=[...new Set(doses.map(dose=>dose?.date||''))];
+  const bottles=[...new Set(doses.map(dose=>dose?.bottles??null))];
+  const complete=doses.length>0&&doses.every(dose=>dose?.done);
+  const partial=!complete&&doses.some(dose=>dose?.done);
+  const values=dates.filter(Boolean).map(date=>date.slice(5).replace('-','/'));
+  if(dates.length>1&&dates.includes(''))values.push('—');
+  drawLines(values,cell.x+1,cell.top,complete?34:46,26,{size:11,align:'center'});
+  const amounts=bottles.filter(value=>value!=null).map(String);
+  if(bottles.length>1&&bottles.includes(null))amounts.push('—');
+  drawLines(amounts,cell.x+1,cell.bottleTop,46,24,{size:11,align:'center'});
+  if(complete){
+   ctx.save();ctx.strokeStyle=black;ctx.lineWidth=1.7;
+   ctx.beginPath();ctx.moveTo(cell.x+35,cell.top+13);ctx.lineTo(cell.x+38,cell.top+17);ctx.lineTo(cell.x+45,cell.top+8);ctx.stroke();ctx.restore();
+  }else if(partial){
+   drawLines(['部分'],cell.x+24,cell.top+15,22,10,{size:7,align:'center'});
+  }
+ }
  // Replace the source sheet's thick borders with the same line used by the
  // generated cells. Draw the whole grid as one path to keep joins consistent.
  ctx.beginPath();
@@ -504,6 +536,17 @@ async function renderNancyWeeklyPdf(model){
   ...model.basics.filter(([,value])=>value).map(([label,value])=>({value:label+'：'+value})),
   {value:'各棟進場資料',bold:true},
   ...model.entries.map(entry=>({value:entry.filter(Boolean).join(' · ').replace(/\n/g,' · ')})),
+  {value:'疫苗施打明細',bold:true},
+  ...(model.vaccinePlans||[]).flatMap(plan=>[
+   {value:model.vaccineBarns?.[plan.batch_id]||'',bold:true},
+   ...['pr1','app1','pr2','app2'].flatMap(key=>{
+    const dose=plan.doses[key];
+    if(!dose.date&&dose.bottles==null&&!dose.done)return [];
+    const name=key.startsWith('pr')?'PR':'APP';
+    const number=key.endsWith('1')?'第一次':'第二次';
+    return [{value:name+' '+number+' '+(dose.date||'—')+' · '+(dose.bottles==null?'—':dose.bottles+' 瓶')+' · '+(dose.done?'已施打':'未施打')}];
+   })
+  ]),
   {value:model.death_title,bold:true},...deaths,
   {value:model.shipping_title,bold:true},...model.shipping_notes.map(value=>({value})),
   {value:'每週飼料明細',bold:true},

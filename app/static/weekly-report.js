@@ -25,7 +25,7 @@ const base={build,clickAction,translate,enter,refresh,selections};
 let selectionStatus='active',selectionData=null,selectionTask=null;
 let report=null,reportUser=null,serial=0,printing=false,title=null,pdfCache=null,pdfTask=null,previewURLs=[];
 Object.assign(words,{weeklyContinue:['續','tiếp'],weeklyActualPreview:['A4列印預覽（與下載PDF相同）','Xem trước in A4 (giống PDF tải xuống)'],weeklyScreenDetails:['查看完整畫面明細','Xem chi tiết trên màn hình']});
-Object.assign(words,{weeklyDownloadImage:['下載第一張圖片','Tải ảnh trang đầu'],weeklyImageMaking:['正在產生圖片…','Đang tạo ảnh…']});
+Object.assign(words,{weeklyDownloadImage:['下載第一張 PNG 圖片','Tải ảnh PNG trang đầu'],weeklyImageMaking:['正在產生圖片…','Đang tạo ảnh…']});
 Object.assign(words,{weeklyLatestFeedType:['料別','Loại cám'],weeklySales:['售出數（隻）','Số xuất bán (con)'],weeklyPaperSale:['售出數','Số xuất bán']});
 function clearPDF(){pdfCache=null;pdfTask=null;previewURLs.forEach(u=>URL.revokeObjectURL(u));previewURLs=[];el('weekly-a4-preview')?.replaceChildren();}
 async function ensurePDF(){
@@ -221,6 +221,11 @@ function paperBands(){
 }
 function pdfModel(){
  const r=report;
+ const vaccineLegend=lang==='vi'?(r.vaccine_plans||[]).flatMap(plan=>{
+  const barn=(r.entry_details||[]).find(entry=>entry.batch_id===plan.batch_id)?.barn||'';
+  return Object.entries(plan.doses).filter(([,dose])=>dose.date||dose.bottles!=null||dose.done)
+   .map(([key,dose])=>[barn,key.slice(0,-1).toUpperCase(),key.slice(-1),dose.date||'—',dose.bottles==null?'':dose.bottles+' '+t('vaccineBottles'),dose.done?t('vaccineDone'):''].filter(Boolean).join(' '));
+ }):[];
  const pigSources=[...new Set(r.barns.map(barn=>/^(?:第)?(?:23|24)(?:棟)?$/.test(barn.trim())?'曾勝誠':'殷慶盛'))].join('、');
  const formBasics=[
   [t('weeklyFarm'),'嘉得'],[t('weeklyPigSource'),pigSources],[t('weeklyLatestFeedType'),(r.feed_setup?.configured_vendors||[]).join('、')||r.feed_setup?.latest_type||''],[t('weeklyBatch'),r.name],
@@ -234,6 +239,8 @@ function pdfModel(){
   preentry:preentryRows().length?{title:t('weeklyPreentry'),summary:preentryTotal(),entries:preentryLines()}:null,
   title:t('weeklyFormTitle'),basics:formBasics,basicColumns:4,
   headerEntries:(r.entry_details||[]).map(e=>({barn:e.barn,date:e.date,count:e.count,mean:e.mean_kg,meanDate:e.mean_date})),
+  vaccinePlans:r.vaccine_plans||[],vaccineBatchIds:r.batch_ids||[],
+  vaccineBarns:Object.fromEntries((r.entry_details||[]).map(e=>[e.batch_id,e.barn])),
   nancyTemplate:lang==='zh',survival:r.cumulative.survival==null?'':fmt(r.cumulative.survival),
   entryHeaders:['barn','reportEntryDate','reportEntryCount','weeklyEntryAge','reportEntryMean'].map(t),
   entries:(r.entry_details||[]).map(e=>[e.barn,e.date,e.count==null?'':fmt(e.count,0),e.age_days==null?'':e.age_days+' '+t('days'),e.mean_kg==null?'':fmt(e.mean_kg)+' kg'+(e.mean_date&&e.mean_date!==e.date?'\n'+e.mean_date:'')]),
@@ -244,7 +251,7 @@ function pdfModel(){
   total_colors:summaryMetrics.map(k=>k==='death'?deathColor:undefined),
   totals:summaryMetrics.map(k=>[t(metricKey[k]),r.totals[k]==null&&r.known_totals[k]>0?t('weeklyKnown')+' '+amount(r.known_totals[k],k):amount(r.totals[k],k)]),
   cumulative:t('weeklyCurrent')+' · '+r.observed_to+'  '+t('remaining')+' '+(r.cumulative.remaining==null?'':fmt(r.cumulative.remaining,0))+'  '+t('survival')+' '+(r.cumulative.survival==null?'':fmt(r.cumulative.survival)+'%'),
-  legend:[t('weeklyPDFLegend'),planningHint(),t('weeklyShippingBasis')].filter(Boolean).join(' ')+(r.pending.length?' '+label('weeklyPendingCount',r.pending.length):'')
+  legend:[t('weeklyPDFLegend'),planningHint(),t('weeklyShippingBasis'),...vaccineLegend].filter(Boolean).join(' ')+(r.pending.length?' '+label('weeklyPendingCount',r.pending.length):'')
  };
 }
 async function downloadPDF(){
@@ -259,10 +266,10 @@ async function downloadFirstImage(){
  try{
   const pdf=await ensurePDF();
   if(!pdf||report!==original||me?.id!==user||lang!==language||!el('weekly-report-dialog').open)return;
-  const image=pdf.previewPages?.[0];
+  const image=pdf.firstPageImage;
   if(!image)throw new Error('weekly_image_unavailable');
   const url=URL.createObjectURL(image),link=document.createElement('a');
-  link.href=url;link.download=name+'.jpg';document.body.append(link);link.click();link.remove();
+  link.href=url;link.download=name+'.png';document.body.append(link);link.click();link.remove();
   setTimeout(()=>URL.revokeObjectURL(url),60000);
   el('weekly-error').textContent='';
  }catch(err){
