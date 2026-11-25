@@ -122,7 +122,7 @@ with tempfile.TemporaryDirectory() as folder:
             assert page.evaluate('vaccineModels.at(-1).vaccinePlans[0].doses.app2.done')
             assert page.evaluate('vaccineTicks')==2, page.evaluate('vaccineTicks')
             positions=page.evaluate('vaccineTickPositions')
-            assert len(positions)==2 and positions[0]['x'] != positions[1]['x'] and all(315<d['x']<363 and d['color']=='#b42332' for d in positions),positions
+            assert len(positions)==2 and positions[0]['x']==positions[1]['x'] and 1113<positions[0]['y']<1137 and 1137<positions[1]['y']<1162 and all(315<d['x']<363 and d['color']=='#b42332' for d in positions),positions
             drawn=page.evaluate('vaccineDraws')
             assert any(d['text']=='08/08' and 220<d['x']<268 and 1063<d['y']<1089 for d in drawn)
             assert any(d['text']=='08/08' and 268<d['x']<315 and 1063<d['y']<1089 for d in drawn)
