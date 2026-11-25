@@ -35,15 +35,15 @@
   const select=$('#vaccine-batch');
   if(!select||!data)return;
   const selected=select.value;
-  const groups=(data.cohorts||[]).filter(group=>!group.archive&&members(group.key).length)
+  const groups=(data.cohorts||[]).filter(group=>!group.archive&&members(group.key).some(batch=>batch.status==='active'))
    .sort((a,b)=>b.entry_date.localeCompare(a.entry_date)||b.name.localeCompare(a.name));
   select.innerHTML='<option value="">'+esc(t('vaccineChoose'))+'</option>'+groups.map(group=>{
-   const groupBatches=members(group.key);
+   const groupBatches=members(group.key).filter(batch=>batch.status==='active');
    const barns=orderedBarns(data.barns.filter(barn=>groupBatches.some(batch=>batch.barn_id===barn.id))).map(barn=>barn.name);
-   const ended=groupBatches.every(batch=>batch.status==='ended')?' · '+t('ended'):'';
-   return '<option value="'+esc(group.key)+'">'+esc(group.name+'｜'+barns.join('、')+ended)+'</option>';
+   return '<option value="'+esc(group.key)+'">'+esc(group.name+'｜'+barns.join('、'))+'</option>';
   }).join('');
   select.value=selected;
+  if(selected&&!select.value)populate();
  }
  function populate(){
   const form=$('#vaccine-form');
@@ -127,7 +127,7 @@
    const shared=cohortPlans(key).filter(plan=>plan.scope==='cohort');
    if(shared.length>1){form.querySelector('.form-error').textContent=t('vaccineConflicting');return;}
    const current=shared[0];
-   const batchId=current?.batch_id||members(key).map(batch=>batch.id).sort()[0];
+   const batchId=current?.batch_id||members(key).filter(batch=>batch.status==='active').map(batch=>batch.id).sort()[0];
    const body={batch_id:batchId,scope:'cohort',doses,...(current?{revision:current.revision}:{})};
    form.querySelector('fieldset').disabled=true;
    $('#vaccine-batch').disabled=true;
