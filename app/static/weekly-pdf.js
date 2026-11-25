@@ -267,7 +267,7 @@ async function renderNancyWeeklyPdf(model){
   {top:193,bottom:223,columns:[['入場頭數',4,160],['入場日期',5,191],['入場日齡',6,162],['入場均重',7,166]]}
  ];
  ctx.strokeStyle=black;
- ctx.lineWidth=1.15;
+ ctx.lineWidth=.9;
  ctx.beginPath();
  ctx.moveTo(66,193);ctx.lineTo(745,193);
  for(const {top,bottom,columns} of headerRows){
@@ -318,7 +318,7 @@ async function renderNancyWeeklyPdf(model){
  ];
  function panel(x,y,width,height,fill='#fff'){
   ctx.fillStyle=fill;ctx.fillRect(x,y,width,height);
-  ctx.strokeStyle=black;ctx.lineWidth=.75;ctx.strokeRect(x,y,width,height);
+  ctx.strokeStyle=black;ctx.lineWidth=.9;ctx.strokeRect(x,y,width,height);
  }
  function leftLabel(lines,top,bottom){
   panel(66,top,59,bottom-top,'#f4f4f4');
@@ -459,6 +459,38 @@ async function renderNancyWeeklyPdf(model){
  drawLines([model.shipping_title],364,762,380,30,{bold:true,size:17,align:'center'});
  panel(363,792,382,285);
  fitNotes(model.shipping_notes.map(value=>({value})),370,801,367,268,14);
+
+ // Replace the source sheet's thick borders with the same line used by the
+ // generated cells. Draw the whole grid as one path to keep joins consistent.
+ ctx.beginPath();
+ function gridLine(x1,y1,x2,y2){ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);}
+ ctx.rect(66,162,679,1000);
+ for(const y of [193,223])gridLine(66,y,745,y);
+ for(const row of headerRows){
+  let x=66;
+  for(const column of row.columns.slice(0,-1)){
+   x+=column[2];gridLine(x,row.top-1,x,row.bottom);
+  }
+ }
+ gridLine(125,223,125,1007);
+ gridLine(506,223,506,253);
+ gridLine(125,253,745,253);
+ for(const x of weekColumns.slice(1,-1))gridLine(x,253,x,478);
+ for(const y of [283,307,331,355,449,478])gridLine(66,y,745,y);
+ for(const x of weekColumns.slice(1,-1))gridLine(x,478,x,762);
+ for(const y of [508,532,555,580,680,704,762])gridLine(66,y,745,y);
+ for(const x of [172,220,268])gridLine(x,762,x,1007);
+ gridLine(363,762,363,1162);
+ for(const y of [792,823,854,884,926,952])gridLine(66,y,363,y);
+ gridLine(268,975,363,975);
+ gridLine(66,1007,363,1007);
+ for(const y of [1036,1063,1089,1113,1137])gridLine(66,y,363,y);
+ for(const x of [220,268,315])gridLine(x,1036,x,1162);
+ gridLine(363,792,745,792);
+ gridLine(363,1077,745,1077);
+ ctx.strokeStyle='#fff';ctx.lineWidth=4;ctx.lineJoin='miter';ctx.stroke();
+ ctx.strokeStyle=black;ctx.lineWidth=.9;ctx.stroke();
+
 
  // A second A4 carries the supporting entries, including records beyond 32 weeks.
  const detailCanvas=document.createElement('canvas');
