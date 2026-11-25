@@ -98,6 +98,7 @@ async function retryPending(){
   if(request.path.startsWith('/api/feed-drafts'))document.dispatchEvent(new CustomEvent('pigledger:feed-draft-saved',{detail:result}));
   if(request.path==='/api/quick-records/save')document.dispatchEvent(new CustomEvent('pigledger:quick-saved',{detail:result}));
   if(request.path==='/api/feed-orders/bulk-apply')document.dispatchEvent(new CustomEvent('pigledger:feed-bulk-saved',{detail:result}));
+  if(request.path.startsWith('/api/vaccine_plans'))document.dispatchEvent(new CustomEvent('pigledger:vaccine-saved',{detail:result}));
   if(request.path==='/api/batch-settings/apply')document.dispatchEvent(new CustomEvent('pigledger:batch-settings-saved',{detail:result}));
   if(request.path==='/api/weighings'||/^\/api\/weights(?:\/|$)/.test(request.path))document.dispatchEvent(new CustomEvent('pigledger:weighing-saved',{detail:{session_id:result.session_id||null,id:result.id||null}}));
  }catch(e){
@@ -291,7 +292,7 @@ function restorePending(){
 }
 
 async function enter(user){me=user;data=null;selectionFingerprint='';$('#login-view').hidden=true;$('#workspace').hidden=false;$('#logout').hidden=false;$('#user-name').textContent=user.username+' · '+t(user.role);await refresh();$$('.filters').forEach(f=>{for(const k of ['from','to','barn_id'])if(sharedFilters[k])f.elements[k].value=sharedFilters[k];updateFilterBatch(f);if(sharedFilters.batch_id)f.elements.batch_id.value=sharedFilters.batch_id});await renderCurrent();restorePending();persistPending()}
-function hasUnsavedWork(){return !!pending||!!$('#weighing-form')?.dataset.dirty||!!($('#delete-dialog')?.open&&$('#void-reason')?.value)||Array.from(document.querySelectorAll('#user-form input,#password-form input,#activation-form input,#workbook-file')).some(i=>i.value)||$$('form[data-kind]').some(f=>f.dataset.dirty||f.dataset.editId||['quantity','amount','total_kg','individual_kg','kg','opening'].some(k=>val(f,k)));}
+function hasUnsavedWork(){return !!$('#vaccine-form')?.dataset.dirty||!!pending||!!$('#weighing-form')?.dataset.dirty||!!($('#delete-dialog')?.open&&$('#void-reason')?.value)||Array.from(document.querySelectorAll('#user-form input,#password-form input,#activation-form input,#workbook-file')).some(i=>i.value)||$$('form[data-kind]').some(f=>f.dataset.dirty||f.dataset.editId||['quantity','amount','total_kg','individual_kg','kg','opening'].some(k=>val(f,k)));}
 let registration=null;
 function boot(){
 $('#login-form').onsubmit=async e=>{e.preventDefault();const f=e.target,b=f.querySelector('button');b.disabled=true;try{const user=await api('/api/login',{method:'POST',body:JSON.stringify(Object.fromEntries(new FormData(f)))});f.elements.password.value='';f.querySelector('.form-error').textContent='';await enter(user)}catch(e){f.querySelector('.form-error').textContent=messageError(e)}finally{b.disabled=false}};

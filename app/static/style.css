@@ -922,3 +922,11 @@ body [hidden] { display: none !important; }
 @media print {
  .weekly-sheet { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
 }
+
+/* Vaccine plans are entered separately for each barn and batch. */
+#vaccine-form fieldset{border:0;padding:0;margin:16px 0 0;min-width:0}
+#vaccine-form fieldset:disabled{opacity:.65}
+.vaccine-dose{border:1px solid #c8d1db;border-radius:10px;padding:12px;display:grid;gap:8px;min-width:0}
+.vaccine-dose h4{margin:0;font-size:1rem}
+.vaccine-dose label{min-width:0}
+#vaccine-form fieldset>.primary{margin-top:14px}
