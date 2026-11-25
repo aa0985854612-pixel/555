@@ -12,9 +12,10 @@
   vaccineBottleUnit:['瓶','lọ'],
   vaccineDone:['已施打','Đã tiêm'],
   vaccineSave:['儲存疫苗資料','Lưu dữ liệu vắc-xin'],
-  vaccineHint:['選批號後填寫 PR、APP 日期與整批瓶數，同批棟舍共用；施打後勾選「已施打」。','Chọn mã lứa, nhập ngày và tổng số lọ PR, APP cho cả lứa; đánh dấu đã tiêm sau khi hoàn tất.'],
+  vaccineHint:['選批號後，每次只需填一次 PR、APP 共用的日期與瓶數；施打後勾選「已施打」。','Chọn mã lứa, nhập chung ngày và số lọ PR, APP cho mỗi lần; đánh dấu sau khi tiêm.'],
   vaccinePrevious:['原先各棟疫苗資料','Dữ liệu tiêm cũ theo chuồng'],
   vaccineConflicting:['各棟原有資料不同，請參考下方明細後填寫整批資料。','Dữ liệu cũ giữa các chuồng khác nhau; xem chi tiết bên dưới trước khi nhập cho cả lứa.'],
+  vaccineDoseConflict:['原有 PR、APP 資料不同，請查看下方原始資料；修改該次資料時，會同時更新兩種疫苗。','Dữ liệu PR và APP cũ khác nhau; xem bên dưới. Khi sửa, cả hai sẽ được cập nhật.'],
   vaccineDateRequired:['勾選已施打時，請先填寫該次施打日期。','Nhập ngày tiêm trước khi đánh dấu đã tiêm.']
  });
  Object.assign(errorWords,{
@@ -55,18 +56,20 @@
   const conflict=shared.length>1||(!shared.length&&signatures.size>1);
   const plan=shared.length===1?shared[0]:(!shared.length&&signatures.size===1?previous[0]:null);
   const doses=drafts.get(key)||plan?.doses;
-  for(const name of keys){
-   const dose=doses?.[name];
-   form.elements[name+'_date'].value=dose?.date||'';
-   form.elements[name+'_bottles'].value=dose?.bottles??'';
-   form.elements[name+'_done'].checked=!!dose?.done;
+  const doseConflict=[1,2].some(round=>doses&&JSON.stringify(doses['pr'+round])!==JSON.stringify(doses['app'+round]));
+  for(const round of [1,2]){
+   const pr=doses?.['pr'+round],app=doses?.['app'+round];
+   const dose=JSON.stringify(pr)===JSON.stringify(app)?pr:null;
+   form.elements['dose'+round+'_date'].value=dose?.date||'';
+   form.elements['dose'+round+'_bottles'].value=dose?.bottles??'';
+   form.elements['dose'+round+'_done'].checked=!!dose?.done;
   }
   const barnName=id=>{
    const batch=data.batches.find(item=>item.id===id);
    return data.barns.find(barn=>barn.id===batch?.barn_id)?.name||'';
   };
   const previousBox=$('#vaccine-previous');
-  const visible=previous.concat(shared.length>1?shared:[]);
+  const visible=previous.concat(shared.length>1||doseConflict?shared:[]);
   previousBox.hidden=!visible.length;
   previousBox.innerHTML=visible.length?'<summary>'+esc(t('vaccinePrevious'))+'</summary>'+visible.map(plan=>{
    const lines=keys.map(name=>{
@@ -78,16 +81,20 @@
   }).join(''):'';
   form.querySelector('fieldset').disabled=!key||me?.role!=='admin'||!!pending;
   $('#vaccine-batch').disabled=!!pending;
-  form.querySelector('.form-error').textContent=conflict?t('vaccineConflicting'):'';
+  form.querySelector('.form-error').textContent=conflict?t('vaccineConflicting'):doseConflict?t('vaccineDoseConflict'):'';
   dirty=drafts.size>0;
   form.dataset.dirty=dirty?'1':'';
  }
- function readDoses(form){
-  return Object.fromEntries(keys.map(key=>[key,{
-   date:form.elements[key+'_date'].value,
-   bottles:form.elements[key+'_bottles'].value===''?null:Number(form.elements[key+'_bottles'].value),
-   done:form.elements[key+'_done'].checked
-  }]));
+ function readDoses(form,round){
+  const key=$('#vaccine-batch').value,plans=cohortPlans(key),shared=plans.filter(p=>p.scope==='cohort'),previous=plans.filter(p=>p.scope!=='cohort');
+  const signatures=new Set(previous.map(p=>JSON.stringify(keys.map(name=>p.doses[name]))));
+  const original=shared.length===1?shared[0].doses:!shared.length&&signatures.size===1?previous[0].doses:null;
+  const doses=structuredClone(drafts.get(key)||original||Object.fromEntries(keys.map(k=>[k,{date:'',bottles:null,done:false}])));
+  if(round){
+   const name='dose'+round,dose={date:form.elements[name+'_date'].value,bottles:form.elements[name+'_bottles'].value===''?null:Number(form.elements[name+'_bottles'].value),done:form.elements[name+'_done'].checked};
+   doses['pr'+round]={...dose};doses['app'+round]={...dose};
+  }
+  return doses;
  }
  function doseFields(key,vaccine,round){
   return `<section class="vaccine-dose"><h4>${esc(vaccine)} · ${txt(round)}</h4>
@@ -101,10 +108,8 @@
    <h2>${txt('vaccineTitle')}</h2><p class="hint">${txt('vaccineHint')}</p>
    <form id="vaccine-form"><label>${txt('vaccineBatch')}<select id="vaccine-batch" required></select></label>
    <fieldset disabled><div class="grid">
-    ${doseFields('pr1','PR','vaccineFirst')}
-    ${doseFields('app1','APP','vaccineFirst')}
-    ${doseFields('pr2','PR','vaccineSecond')}
-    ${doseFields('app2','APP','vaccineSecond')}
+    ${doseFields('dose1','PR ＋ APP','vaccineFirst')}
+    ${doseFields('dose2','PR ＋ APP','vaccineSecond')}
    </div><button type="submit" class="primary">${txt('vaccineSave')}</button></fieldset>
    <p class="form-error" role="status"></p><details id="vaccine-previous" hidden></details></form></section>`);
   const form=$('#vaccine-form');
@@ -112,7 +117,8 @@
   form.addEventListener('input',event=>{
    if(event.target.id==='vaccine-batch')return;
    const id=$('#vaccine-batch').value;
-   if(id)drafts.set(id,readDoses(form));
+   const round=event.target.name?.match(/^dose([12])_/);
+   if(id&&round)drafts.set(id,readDoses(form,round[1]));
    dirty=drafts.size>0;
    form.dataset.dirty=dirty?'1':'';
   });

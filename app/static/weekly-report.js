@@ -103,8 +103,8 @@ function feedLines(details=[],shared=[]){
  });
 }
 function feedCell(w){
- if(blankWeek(w))return '';
- const lines=feedLines(w.feed_details,w.feed_shared_details).map(line=>`<span class="weekly-feed-entry">${safe(line)}</span>`).join('');
+ const lines=feedText(w).split('\n').filter(Boolean).map(line=>`<span class="weekly-feed-entry">${safe(line)}</span>`).join('');
+ if(blankWeek(w)&&!lines)return '';
  return lines||amount(w.values.feed_orders,'feed_orders');
 }
 function outgoingNotation(e){
@@ -164,7 +164,12 @@ function weekHeading(w,compact){const age=shownWeek(w);return !w?'':age==null?la
 function shortDate(w){if(!w)return '';const d=w.anchor.split('-');return Number(d[1])+'/'+Number(d[2]);}
 function blankWeek(w){return !w||(w.future&&!w.has_records);}
 function saleValues(events){return outgoingGroups(events.filter(e=>e.type==='sale')).map(e=>fmt(e.quantity,0)).join('、');}
-function feedText(w){return blankWeek(w)?'':feedLines(w.feed_details,w.feed_shared_details).join('\n');}
+function feedText(w){
+ if(!w)return '';
+ const pre=w.index===1?preentryLines():[];
+ const current=blankWeek(w)?[]:feedLines(w.feed_details,w.feed_shared_details);
+ return [...pre,...current].join('\n');
+}
 
 function shippingNotes(){return outgoingGroups(report.weeks.flatMap(w=>w.events).filter(e=>e.type==='sale')).map(e=>outgoingNotation(e)+(e.note?' · '+e.note:''));}
 Object.assign(words,{weeklyDeathNotes:['死亡備註','Ghi chú heo chết'],weeklyDeathMore:['另有{n}筆死亡備註，完整內容詳App。','Còn {n} ghi chú heo chết; xem đầy đủ trong App.']});
@@ -200,7 +205,7 @@ function paperBands(){
     {label:t('weeklyPaperStart'),cells:selected.map(w=>w?.anchor?shortDate(w):''),height:16},
     ...metrics.map(k=>({
      label:t(paperMetricKey[k]),totalIndex:summaryMetrics.indexOf(k),
-     cells:selected.map(w=>blankWeek(w)?'':k==='feed_orders'?(feedText(w)||amount(w.values[k],k)):k==='sale'?saleValues(w.events):amount(w.values[k],k)),
+     cells:selected.map(w=>k==='feed_orders'?(feedText(w)||(blankWeek(w)?'':amount(w.values[k],k))):blankWeek(w)?'':k==='sale'?saleValues(w.events):amount(w.values[k],k)),
      height:k==='feed_orders'?Math.max(28,...selected.map(w=>feedText(w).split('\n').length*10+8)):18,
      bold:k==='death',color:k==='death'?deathColor:undefined,
      left:k==='feed_orders',singleLine:k==='feed_orders',monospace:k==='feed_orders'
@@ -278,7 +283,7 @@ async function downloadFirstImage(){
 }
 function markup(compact=false){
  const r=report,blocks=[];
- for(const page of panels())for(const ws of page){blocks.push(`<section class="weekly-block"><div class="weekly-table-wrap"><table class="weekly-table"><thead><tr><th>${safe(cycleTitle())}</th>${ws.map(w=>`<th>${safe(weekHeading(w,compact))}</th>`).join('')}</tr></thead><tbody><tr class="weekly-starts"><th>${t('weeklyStarts')}</th>${ws.map(w=>`<td>${safe(shortDate(w))}</td>`).join('')}</tr>${metrics.map(k=>`<tr class="weekly-${k}"><th>${t(compact?paperMetricKey[k]:metricKey[k])}</th>${ws.map(w=>`<td>${blankWeek(w)?'':k==='feed_orders'?feedCell(w):k==='sale'?saleValues(w.events):amount(w.values[k],k)}</td>`).join('')}</tr>`).join('')}</tbody></table></div></section>`);}
+ for(const page of panels())for(const ws of page){blocks.push(`<section class="weekly-block"><div class="weekly-table-wrap"><table class="weekly-table"><thead><tr><th>${safe(cycleTitle())}</th>${ws.map(w=>`<th>${safe(weekHeading(w,compact))}</th>`).join('')}</tr></thead><tbody><tr class="weekly-starts"><th>${t('weeklyStarts')}</th>${ws.map(w=>`<td>${safe(shortDate(w))}</td>`).join('')}</tr>${metrics.map(k=>`<tr class="weekly-${k}"><th>${t(compact?paperMetricKey[k]:metricKey[k])}</th>${ws.map(w=>`<td>${k==='feed_orders'?feedCell(w):blankWeek(w)?'':k==='sale'?saleValues(w.events):amount(w.values[k],k)}</td>`).join('')}</tr>`).join('')}</tbody></table></div></section>`);}
 
  const totals=summaryMetrics.map(k=>`<div class="weekly-total-${k}"><span>${t(metricKey[k])}</span><strong>${amount(r.totals[k],k)}</strong>${r.totals[k]==null&&r.known_totals[k]>0?`<small>${t('weeklyKnown')} ${amount(r.known_totals[k],k)}</small>`:''}</div>`).join('');
  const details=compact?'':`<details class="weekly-details"><summary>${t('weeklyDetails')}</summary><ul>${r.weeks.filter(w=>w.events.length).map(w=>`<li>${safe(w.start)}：${safe(notes(w))}</li>`).join('')}</ul>${footnotes(false)}</details>`;
