@@ -105,9 +105,9 @@ with tempfile.TemporaryDirectory() as tmp,patch.dict(os.environ,{'FEED_ORDERS_AR
    image=Image.open(preview).convert('RGB')
    # Main table, totals, and vaccine rows use the same single-width rule.
    gray=image.convert('L')
-   grid_x=round((image.width-690*.79*5.5)/2+(300-62)*.79*5.5)
+   grid_x=round((image.width-690*.79*7.5)/2+(300-62)*.79*7.5)
    for grid_y in (792,823,854,884,926,952,975,1007,1036,1063,1089):
-    line_y=round(21*5.5+(grid_y-69)*.72*5.5)
+    line_y=round(21*7.5+(grid_y-69)*.72*7.5)
     assert gray.getpixel((grid_x,line_y))<130
     assert gray.getpixel((grid_x,line_y-8))>180 and gray.getpixel((grid_x,line_y+8))>180
    assert page.locator('#weekly-image').inner_text()=='下載第一張 PNG 圖片'
@@ -117,7 +117,7 @@ with tempfile.TemporaryDirectory() as tmp,patch.dict(os.environ,{'FEED_ORDERS_AR
    assert downloaded.read_bytes()==bytes(page.evaluate('async()=>Array.from(new Uint8Array(await renderedPDF.firstPageImage.arrayBuffer()))'))
    from PIL import ImageChops, ImageStat
    with Image.open(downloaded) as exported:
-    assert exported.format=='PNG' and exported.size==(3275,4631)
+    assert exported.format=='PNG' and exported.size==(4465,6315)
     difference=ImageChops.difference(exported.convert('RGB'),image)
     assert max(ImageStat.Stat(difference).mean)<2
    assert len(page.evaluate('renderedPDF.previewPages'))==2

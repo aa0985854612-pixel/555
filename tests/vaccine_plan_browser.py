@@ -54,7 +54,7 @@ with tempfile.TemporaryDirectory() as folder:
     try:
         with sync_playwright() as p:
             browser=p.chromium.launch(executable_path='/usr/bin/chromium',args=['--no-sandbox'])
-            page=browser.new_page(viewport={'width':390,'height':844})
+            page=browser.new_page(viewport={'width':390,'height':844},user_agent='Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 Chrome/130.0.0.0 Mobile Safari/537.36')
             errors=[]
             page.on('pageerror',lambda e:errors.append(str(e)))
             page.goto(url)
@@ -109,7 +109,7 @@ with tempfile.TemporaryDirectory() as folder:
             page.evaluate("""()=>{
                 window.vaccineModels=[];window.vaccineDraws=[];window.vaccineTicks=0;window.vaccineTickPositions=[];
                 const pdf=weeklyPdf;
-                window.weeklyPdf=async m=>{vaccineModels.push(m);return pdf(m)};
+                window.weeklyPdf=async m=>{vaccineModels.push(m);const result=await pdf(m);window.vaccineResult=result;return result};
                 const fill=CanvasRenderingContext2D.prototype.fillText;
                 CanvasRenderingContext2D.prototype.fillText=function(...a){vaccineDraws.push({text:String(a[0]),x:a[1],y:a[2]});return fill.apply(this,a)};
                 const move=CanvasRenderingContext2D.prototype.moveTo;
@@ -119,6 +119,7 @@ with tempfile.TemporaryDirectory() as folder:
             }""")
             page.evaluate("(id)=>document.dispatchEvent(new CustomEvent('pigledger:weekly-open',{detail:{batch_id:id}}))",batches[0]['id'])
             page.wait_for_selector('#weekly-a4-preview img')
+            assert page.evaluate('async()=>{const image=await createImageBitmap(vaccineResult.firstPageImage);return [image.width,image.height]}')==[4167,5894]
             assert page.evaluate('vaccineModels.at(-1).vaccinePlans[0].doses.app2.done')
             assert page.evaluate('vaccineTicks')==2, page.evaluate('vaccineTicks')
             positions=page.evaluate('vaccineTickPositions')
@@ -171,6 +172,12 @@ with tempfile.TemporaryDirectory() as folder:
             page.wait_for_function("()=>!Array.from(document.querySelector('#vaccine-batch').options).some(o=>o.value==='VACCINE-DEMO|2026-07-01')")
             historical=page.request.get(url+'/api/weekly-report?batch_id='+batches[0]['id']+'&batch_status=ended&all_records=1').json()
             assert historical['vaccine_plans'][0]['doses']['pr1']['done']
+            fallback=page.evaluate('''async()=>{
+                const original=HTMLCanvasElement.prototype.toBlob;let failed=false;
+                HTMLCanvasElement.prototype.toBlob=function(callback,...args){if(!failed){failed=true;callback(null);return}return original.call(this,callback,...args)};
+                try {const result=await weeklyPdf(vaccineModels.at(-1));const image=await createImageBitmap(result.firstPageImage);return [image.width,image.height]} finally {HTMLCanvasElement.prototype.toBlob=original}
+            }''')
+            assert fallback==[3275,4631],fallback
             assert not errors,errors
             browser.close()
     finally:
