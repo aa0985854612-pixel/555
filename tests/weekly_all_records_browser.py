@@ -70,7 +70,7 @@ with tempfile.TemporaryDirectory() as tmp,patch.dict(os.environ,{'FEED_ORDERS_AR
    assert bands[0]['stages']==[['保育段棟舍',8],['肉豬段棟舍',5]] and bands[2]['summary']
    assert bands[0]['rows'][0]['cells'][:7]==['']*7
    rows=[row for band in bands for row in band['rows']];culls=[row for row in rows if row['label']=='淘汰數（隻）'];assert len(culls)==3 and sum(int(v) for row in culls for v in row['cells'] if v)==5
-   assert all('淘汰' not in pair[0] for pair in model['totals']) and not any('淘汰' in note for note in model['shipping_notes']+model['death_notes'])
+   assert dict(model['totals'])['淘汰數（隻）']=='5' and not any('淘汰' in note for note in model['shipping_notes']+model['death_notes'])
    assert model['nancyTemplate'] and model['survival']=='97.00'
    stats=page.request.get(url+'/api/statistics?batch_id='+batches[13]['id']+'&to=2026-10-25').json()
    assert stats['cumulative']['survival']==97
@@ -86,6 +86,7 @@ with tempfile.TemporaryDirectory() as tmp,patch.dict(os.environ,{'FEED_ORDERS_AR
    feed_fonts={d['font'] for d in colours if d['text'].startswith('+') and 355<d['y']<680}
    assert len(feed_fonts)==1 and next(iter(feed_fonts)).startswith(('700 ', '800 ', 'bold ')),feed_fonts
    assert any(d['text']=='5' and 506<d['x']<554 and 532<d['y']<555 and d['colour']=='#111111' for d in colours)
+   assert any(d['text']=='5' and 268<d['x']<363 and 823<d['y']<854 and d['colour']=='#111111' for d in colours)
    red=[d for d in colours if d['colour']=='#b42332' and d['text']]
    assert len(red)==2 and all(d['text']=='1' for d in red)
    assert any(506<d['x']<554 and 555<d['y']<580 for d in red)
