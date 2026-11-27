@@ -143,7 +143,7 @@ function footnotes(compact){
  if(compact)return `<footer class="weekly-footnotes"><p>${t('weeklyShortLegend')} ${t('weeklyPrintFeedHint')}</p><p>${t('weeklyPrintDetails')} ${t('weeklyShippingBasis')}</p></footer>`;
  return `<footer class="weekly-footnotes"><p class="weekly-print-details">${t('weeklyPrintDetails')}</p><p>${t('weeklyBasis')} ${t('weeklyAgeBasis')}</p>${r.age_mixed?`<p>${t('mixedAges')}（${r.observed_to}）：${r.barn_ages.map(b=>safe(b.barn)+' '+safe(displayAge(b.age_days))).join('；')}</p>`:''}<p>${t('coverageDisclaimer')} ${r.death_check_coverage?`${t('noDeathsChecked')} ${r.death_check_coverage.confirmed_zero_batch_days} · ${t('notReported')} ${r.death_check_coverage.awaiting_batch_days} ${t('batchDays')}。`:''}${t('weeklyNone')} * ${t('weeklyDates')}：${r.from} → ${r.to}；${t('weeklyObserved')} ${r.observed_to}</p>${compact&&r.weeks.some(w=>w.events.filter(e=>['sale','cull'].includes(e.type)&&e.outgoing_destination).length>1)?`<p>${t('weeklyOutgoingOverflow')}</p>`:''}<p>${t('weeklyFeedNotation')}</p><p>${t('weeklyFeedBasis')}</p><p>${t('cohortFormula')}</p></footer>`;
 }
-Object.assign(words,{weeklyPreentry:['進場前叫料','Cám đặt trước khi nhập heo'],weeklyPreentryHint:['依已指定批次列出，保留原日期，另外加總，不併入期間合計。','Theo lứa đã gán, giữ ngày gốc và cộng riêng, không gộp vào tổng kỳ.'],weeklyPreentryMore:['另有{n}筆進場前叫料，完整內容詳App。','Còn {n} lần đặt trước nhập; xem đầy đủ trong App.']});
+Object.assign(words,{weeklyPreentry:['進場前叫料','Cám đặt trước khi nhập heo'],weeklyPreentryHint:['依已指定批次列出並保留原日期；紀錄表總量包含表上列出的飼料。','Theo lứa đã gán, giữ ngày gốc; tổng trên bảng gồm các lượng thức ăn đã hiển thị.'],weeklyPreentryMore:['另有{n}筆進場前叫料，完整內容詳App。','Còn {n} lần đặt trước nhập; xem đầy đủ trong App.']});
 function preentryRows(){const p=report.preentry_feed;return p?[...p.details,...p.shared_details]:[];}
 function preentryTotal(){const p=report.preentry_feed;if(!p)return '';return p.total_kg!=null?fmtFeed(p.total_kg/1000)+' '+t('ton'):p.known_kg>0?t('weeklyKnown')+' '+fmtFeed(p.known_kg/1000)+' '+t('ton')+' · '+t('sharedFeedPending'):t('sharedFeedPending');}
 function preentryLines(){const p=report.preentry_feed;return p?feedLines(p.details,p.shared_details):[];}
@@ -167,13 +167,22 @@ function beforeFinalEntry(w){return !!w&&(report.entry_details||[]).length>1&&w.
 function shortDate(w){if(!w||!w.anchor||beforeFinalEntry(w))return '';const d=w.anchor.split('-');return Number(d[1])+'/'+Number(d[2]);}
 function blankWeek(w){return !w||(w.future&&!w.has_records);}
 function saleValues(events){return outgoingGroups(events.filter(e=>e.type==='sale')).map(e=>fmt(e.quantity,0)).join('、');}
-function feedText(w){
- if(!w||beforeFinalEntry(w))return '';
+function displayedFeedRows(w){
+ if(!w||beforeFinalEntry(w))return {details:[],shared:[]};
  const prior=w.index===1?(report.weeks||[]).filter(beforeFinalEntry):[];
  const pre=w.index===1?report.preentry_feed:null;
  const periods=[...prior,...(blankWeek(w)?[]:[w])];
- return feedLines([...(pre?.details||[]),...periods.flatMap(week=>week.feed_details||[])],
-                  [...(pre?.shared_details||[]),...periods.flatMap(week=>week.feed_shared_details||[])]).join('\n');
+ return {details:[...(pre?.details||[]),...periods.flatMap(week=>week.feed_details||[])],
+         shared:[...(pre?.shared_details||[]),...periods.flatMap(week=>week.feed_shared_details||[])]};
+}
+function feedText(w){const rows=displayedFeedRows(w);return feedLines(rows.details,rows.shared).join('\n');}
+function displayedFeedTotal(){
+ return sheetWeeks().reduce((total,w)=>{
+  if(beforeFinalEntry(w))return total;
+  const rows=displayedFeedRows(w),entries=[...rows.details,...rows.shared];
+  if(entries.length)return total+entries.reduce((sum,row)=>sum+row.kg,0);
+  return total+(blankWeek(w)?0:(w.values?.feed_orders||0));
+ },0);
 }
 
 function shippingNotes(){return outgoingGroups(report.weeks.flatMap(w=>w.events).filter(e=>e.type==='sale')).map(e=>outgoingNotation(e)+(e.note?' · '+e.note:''));}
@@ -259,7 +268,7 @@ function pdfModel(){
   shipping_title:t('weeklyOutgoingNotes'),shipping_notes:shippingNotes(),
   totalLabel:t('weeklyTotal'),formTotalLabel:t('weeklyFormTotal'),
   total_colors:summaryMetrics.map(k=>k==='death'?deathColor:undefined),
-  totals:summaryMetrics.map(k=>[t(metricKey[k]),r.totals[k]==null&&r.known_totals[k]>0?t('weeklyKnown')+' '+amount(r.known_totals[k],k):amount(r.totals[k],k)]),
+  totals:summaryMetrics.map(k=>[t(metricKey[k]),k==='feed_orders'?amount(displayedFeedTotal(),k):r.totals[k]==null&&r.known_totals[k]>0?t('weeklyKnown')+' '+amount(r.known_totals[k],k):amount(r.totals[k],k)]),
   cumulative:t('weeklyCurrent')+' · '+r.observed_to+'  '+t('remaining')+' '+(r.cumulative.remaining==null?'':fmt(r.cumulative.remaining,0))+'  '+t('survival')+' '+(r.cumulative.survival==null?'':fmt(r.cumulative.survival)+'%'),
   legend:[t('weeklyPDFLegend'),planningHint(),t('weeklyShippingBasis'),...vaccineLegend].filter(Boolean).join(' ')+(r.pending.length?' '+label('weeklyPendingCount',r.pending.length):'')
  };
@@ -290,7 +299,7 @@ function markup(compact=false){
  const r=report,blocks=[];
  for(const page of panels())for(const ws of page){blocks.push(`<section class="weekly-block"><div class="weekly-table-wrap"><table class="weekly-table"><thead><tr><th>${safe(cycleTitle())}</th>${ws.map(w=>`<th>${safe(weekHeading(w,compact))}</th>`).join('')}</tr></thead><tbody><tr class="weekly-starts"><th>${t('weeklyStarts')}</th>${ws.map(w=>`<td>${safe(shortDate(w))}</td>`).join('')}</tr>${metrics.map(k=>`<tr class="weekly-${k}"><th>${t(compact?paperMetricKey[k]:metricKey[k])}</th>${ws.map(w=>`<td>${k==='feed_orders'?feedCell(w):blankWeek(w)?'':k==='sale'?saleValues(w.events):amount(w.values[k],k)}</td>`).join('')}</tr>`).join('')}</tbody></table></div></section>`);}
 
- const totals=summaryMetrics.map(k=>`<div class="weekly-total-${k}"><span>${t(metricKey[k])}</span><strong>${amount(r.totals[k],k)}</strong>${r.totals[k]==null&&r.known_totals[k]>0?`<small>${t('weeklyKnown')} ${amount(r.known_totals[k],k)}</small>`:''}</div>`).join('');
+ const totals=summaryMetrics.map(k=>`<div class="weekly-total-${k}"><span>${t(metricKey[k])}</span><strong>${amount(k==='feed_orders'?displayedFeedTotal():r.totals[k],k)}</strong>${k!=='feed_orders'&&r.totals[k]==null&&r.known_totals[k]>0?`<small>${t('weeklyKnown')} ${amount(r.known_totals[k],k)}</small>`:''}</div>`).join('');
  const details=compact?'':`<details class="weekly-details"><summary>${t('weeklyDetails')}</summary><ul>${r.weeks.filter(w=>w.events.length).map(w=>`<li>${safe(w.start)}：${safe(notes(w))}</li>`).join('')}</ul>${footnotes(false)}</details>`;
  return `<article class="weekly-sheet${compact?' weekly-one-page':''}"><header class="weekly-heading"><h1>嘉得 · ${t('weeklyReport')}</h1></header><dl class="weekly-basics">${paperBasics().map(([k,v])=>`<div><dt>${t(k)}</dt><dd>${safe(v)}</dd></div>`).join('')}</dl>${entryFacts()}<p class="weekly-period-line">${t('weeklyDates')}：${safe(r.from)} → ${safe(r.to)} · ${t('weeklyObserved')} ${safe(r.observed_to)}<br>${t('weeklyPaperPeriod')} ${safe(planningHint())}</p>${preentryBlock(compact)}${blocks.join('')}${notesBlock(compact)}<section class="weekly-totals"><h2>${t('weeklyTotal')}</h2><div class="weekly-totals-grid">${totals}</div></section><p class="weekly-cumulative"><span>${t('weeklyCurrent')} · ${safe(r.observed_to)}</span><span>${t('remaining')} <strong>${r.cumulative.remaining==null?'—':fmt(r.cumulative.remaining,0)}</strong></span><span>${t('weeklySurvival')} <strong>${r.cumulative.survival==null?'—':fmt(r.cumulative.survival)+'%'}</strong></span></p>${r.pending.length?compact?`<p class="weekly-compact-pending">${safe(label('weeklyPendingCount',r.pending.length))}</p>`:`<details class="weekly-pending"><summary>${safe(label('weeklyPendingCount',r.pending.length))}</summary><ul>${r.pending.map(p=>`<li>${safe(pendingText(p))}</li>`).join('')}</ul></details>`:''}${footnotes(true)}${details}</article>`;
 }
