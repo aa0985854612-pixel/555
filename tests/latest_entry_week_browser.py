@@ -11,7 +11,7 @@ with tempfile.TemporaryDirectory() as folder:
  barn=add('barns',name='15棟')
  lots=[{'date':'2026-10-09','count':70,'mean_kg':19},{'date':'2026-10-16','count':30,'mean_kg':22}]
  batch=add('batches',barn_id=barn['id'],name='TWO-ARRIVALS',entry_date='2026-10-09',entry_count=100,entry_age_days=64,entry_mean_kg=19,status='active',report_entry_lots=lots)
- for day,kg in [('2026-10-07',1000),('2026-10-12',2000),('2026-10-16',3000)]:
+ for day,kg in [('2026-10-07',6000),('2026-10-12',4000)]:
   add('feed_orders',date=day,kg=kg,display_unit='ton',vendor='',allocations=[{'batch_id':batch['id'],'kg':kg}])
  before=store.snapshot()
  server=Server(('127.0.0.1',0),store);threading.Thread(target=server.serve_forever,daemon=True).start()
@@ -24,11 +24,17 @@ with tempfile.TemporaryDirectory() as folder:
    model=page.evaluate('models.at(-1)');band=next(b for b in model['pages'][0] if b.get('firstWeek')==4);column=band['headers'].index('11週');previous=band['headers'].index('10週')
    assert band['rows'][0]['cells'][column]=='10/16' and band['rows'][0]['cells'][previous]=='',band
    assert band['rows'][3]['cells'][previous]=='',band
-   assert band['rows'][3]['cells'][column].split('\n')==['10/7+1(15)','10/12+2(15)','10/16+3(15)'],band['rows'][3]['cells'][column]
+   assert band['rows'][3]['cells'][column].split('\n')==['10/7+6(15)','10/12+4(15)'],band['rows'][3]['cells'][column]
    assert [entry['date'] for entry in model['headerEntries']]==['2026-10-09','2026-10-16']
    assert [entry['mean'] for entry in model['headerEntries']]==[19,22]
    assert any(pair[1]=='71 天' for pair in model['basics'])
+   assert model['totals'][1][1]=='10',model['totals']
+   assert page.locator('#weekly-sheet-body .weekly-total-feed_orders strong').text_content()=='10'
    assert store.snapshot()['batches']==before['batches'] and store.snapshot()['feed_orders']==before['feed_orders'] and not errors,errors
+   add('feed_orders',date='2026-10-16',kg=1500,display_unit='ton',vendor='',allocations=[{'batch_id':batch['id'],'kg':1500}])
+   page.evaluate('async()=>await refresh()')
+   page.wait_for_function("()=>models.at(-1).totals[1][1]==='11.5'")
+   assert page.evaluate('models.at(-1).totals[1][1]')=='11.5'
    browser.close()
  finally:server.shutdown();server.server_close()
 print('PASS final arrival weight determines A4 start week and date; both arrival records remain intact')
