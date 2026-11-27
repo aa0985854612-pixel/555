@@ -39,6 +39,30 @@ class EntryLotReportTests(unittest.TestCase):
   report=weekly_report(self.store.snapshot(),{'batch_id':[self.batch['id']],'all_records':['1']},today='2026-10-19')
   later=next(w for w in report['weeks'] if w['anchor']=='2026-10-16')
   self.assertEqual(later['age_week'],12)
+ def test_last_arrival_weight_sets_age_and_week_without_mutating_records(self):
+  self.save(report_entry_lots=self.lots)
+  for weight,age,week in [(19.99,64,10),(20,64,10),(20.01,71,11),(24.99,71,11),(25,78,12),(30,78,12)]:
+   data=self.store.snapshot();before=copy.deepcopy(data);data['batches'][0]['report_entry_lots'][1]['mean_kg']=weight;before=copy.deepcopy(data)
+   r=weekly_report(data,{'batch_id':[self.batch['id']],'all_records':['1']},today='2026-10-19')
+   first=next(w for w in r['weeks'] if w['index']==1)
+   self.assertEqual((r['latest_entry_date'],r['latest_entry_mean_kg'],r['entry_age_days'],first['anchor'],first['age_week']),('2026-10-16',weight,age,'2026-10-16',week))
+   self.assertEqual(r['age_basis'],'latest_entry_weight');self.assertEqual([e['count'] for e in r['entry_details']],[702,350]);self.assertEqual(data,before)
+ def test_missing_last_weight_never_borrows_earlier_weight(self):
+  self.save(report_entry_lots=self.lots)
+  r=weekly_report(self.store.snapshot(),{'batch_id':[self.batch['id']],'all_records':['1']},today='2026-10-19')
+  self.assertIsNone(r['latest_entry_mean_kg']);self.assertNotEqual(r['age_basis'],'latest_entry_weight')
+ def test_linked_barns_use_latest_entry_weight_and_date(self):
+  other=self.add('barns',name='21棟');second=self.add('batches',barn_id=other['id'],name=self.batch['name'],entry_date='2026-10-16',entry_count=318,entry_age_days=64,entry_mean_kg=26,status='active',same_batch_as=self.batch['id'])
+  r=weekly_report(self.store.snapshot(),{'cohort':[self.batch['name']+'|2026-10-09'],'all_records':['1']},today='2026-10-19')
+  first=next(w for w in r['weeks'] if w['index']==1)
+  self.assertEqual((r['latest_entry_date'],r['latest_entry_mean_kg'],r['entry_age_days'],first['anchor'],first['age_week']),('2026-10-16',26,78,'2026-10-16',12))
+  self.assertEqual([e['date'] for e in r['entry_details']],['2026-10-09','2026-10-16'])
+ def test_same_day_latest_arrivals_use_head_count_weighted_average(self):
+  other=self.add('barns',name='21棟');self.add('batches',barn_id=other['id'],name=self.batch['name'],entry_date='2026-10-16',entry_count=100,entry_age_days=71,entry_mean_kg=28,status='active',same_batch_as=self.batch['id'])
+  self.save(report_entry_lots=[{'date':'2026-10-09','count':952,'mean_kg':19},{'date':'2026-10-16','count':100,'mean_kg':22}])
+  r=weekly_report(self.store.snapshot(),{'cohort':[self.batch['name']+'|2026-10-09'],'all_records':['1']},today='2026-10-19')
+  self.assertEqual(r['latest_entry_mean_kg'],25);self.assertEqual(r['entry_age_days'],78)
+  self.assertEqual(next(w for w in r['weeks'] if w['index']==1)['age_week'],12)
  def test_older_batch_editor_preserves_report_fields(self):
   self.batch=self.save(report_entry_lots=self.lots,report_entry_lots_source='verified',weekly_start_date='2026-10-16');payload={k:v for k,v in self.batch.items() if k not in ('report_entry_lots','report_entry_lots_source','weekly_start_date')};updated=self.store.mutate(self.user,'batches',payload|{'note':'other edit'},str(uuid.uuid4()),self.batch['id']);self.assertEqual(updated['report_entry_lots'],self.lots);self.assertEqual(updated['weekly_start_date'],'2026-10-16')
  def test_unlink_keeps_all_records_attached_to_their_original_batch(self):

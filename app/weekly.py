@@ -32,9 +32,22 @@ def weekly_report(data,query,today=None):
     keys={cohort_key(b) for b in members}
     if not members or len(keys)!=1 or not (get('cohort') or get('batch_id')):raise Invalid('weekly_choose_batch')
     entry=min(b['entry_date'] for b in members)
-    lot_dates=[lot['date'] for b in members for lot in b.get('report_entry_lots',[])]
+    arrivals=[{'date':lot['date'],'count':lot['count'],'mean_kg':lot.get('mean_kg')}
+              for b in members for lot in (b.get('report_entry_lots') or
+                  [{'date':b['entry_date'],'count':b.get('entry_count'),'mean_kg':b.get('entry_mean_kg')}])]
+    lot_dates=[lot['date'] for lot in arrivals]
     earliest_entry=min([entry]+lot_dates)
-    anchor_date=max(lot_dates+[b['entry_date'] for b in members]) if lot_dates else entry
+    anchor_date=max(lot_dates+[b['entry_date'] for b in members])
+    latest=[lot for lot in arrivals if lot['date']==anchor_date]
+    # If multiple barns arrive on the final day, use their head-count weighted
+    # mean only when all weights and counts are known; never borrow an older lot.
+    latest_mean=None
+    if latest and all(lot['mean_kg'] is not None for lot in latest):
+        means={lot['mean_kg'] for lot in latest}
+        if len(means)==1:latest_mean=next(iter(means))
+        elif all(lot['count'] is not None and lot['count']>0 for lot in latest):
+            latest_mean=sum(lot['mean_kg']*lot['count'] for lot in latest)/sum(lot['count'] for lot in latest)
+    latest_age=(64 if latest_mean<=20 else 78 if latest_mean>=25 else 71) if len(arrivals)>1 and latest_mean is not None else None
     all_records=get('all_records')=='1'
     default_start=entry if all_records else min(b.get('weekly_start_date') or b['entry_date'] for b in members)
     start=earliest_entry if all_records else max(get('from') or default_start,earliest_entry)
@@ -95,6 +108,8 @@ def weekly_report(data,query,today=None):
     age_values={age(b,entry) for b in members};entry_age=next(iter(age_values)) if len(age_values)==1 else None
     grid_ages={age(b,anchor_date) for b in members}
     grid_age=next(iter(grid_ages)) if len(grid_ages)==1 else None
+    if latest_age is not None:
+        entry_age=grid_age=latest_age
     # A named earliest-entry barn supplies grid labels, never a fake cohort age.
     week_reference=None
     if grid_age is None:
@@ -148,4 +163,4 @@ def weekly_report(data,query,today=None):
     vaccine_plans=[p for p in data.get('vaccine_plans',[]) if
                    (p.get('scope')=='cohort' and p['batch_id'] in cohort_member_ids) or
                    (p.get('scope','barn')=='barn' and p['batch_id'] in ids)]
-    return {'feed_allocation_policy':allocation_policy(),'all_records':all_records,'feed_orders_are_arrivals':orders_are_arrivals(),'week_reference':week_reference,'preentry_feed':preentry_feed,'entry_details':entry_details,'vaccine_plans':vaccine_plans,'outgoing_destinations':destinations,'feed_setup':report_feed_setup(data,members,orders+preentry),'death_check_coverage':coverage,'cohort':key,'name':members[0]['name'],'entry_date':entry,'entry_age_days':entry_age,'entry_mean_kg':mean,'barns':[barns[b['barn_id']] for b in members],'batch_ids':sorted(ids),'from':start,'to':end,'observed_to':until,'weeks':weeks,'totals':totals,'known_totals':known,'cumulative':h,'pending':pending,'age_mixed':entry_age is None and all(b.get('entry_age_days') is not None for b in members),'barn_ages':[{'barn':barns[b['barn_id']],'age_days':age(b,until),'entry_date':b['entry_date']} for b in members],'week_basis':'entry_date_every_7_days','age_basis':'ordinal_week_entry_age_floor_plus_one','feed_basis':'allocated_manual_orders_kg_not_consumption'}
+    return {'feed_allocation_policy':allocation_policy(),'all_records':all_records,'feed_orders_are_arrivals':orders_are_arrivals(),'week_reference':week_reference,'preentry_feed':preentry_feed,'entry_details':entry_details,'vaccine_plans':vaccine_plans,'outgoing_destinations':destinations,'feed_setup':report_feed_setup(data,members,orders+preentry),'death_check_coverage':coverage,'cohort':key,'name':members[0]['name'],'entry_date':entry,'entry_age_days':entry_age,'entry_mean_kg':mean,'latest_entry_date':anchor_date,'latest_entry_mean_kg':latest_mean,'age_basis':'latest_entry_weight' if latest_age is not None else 'ordinal_week_entry_age_floor_plus_one','barns':[barns[b['barn_id']] for b in members],'batch_ids':sorted(ids),'from':start,'to':end,'observed_to':until,'weeks':weeks,'totals':totals,'known_totals':known,'cumulative':h,'pending':pending,'age_mixed':entry_age is None and all(b.get('entry_age_days') is not None for b in members),'barn_ages':[{'barn':barns[b['barn_id']],'age_days':age(b,until),'entry_date':b['entry_date']} for b in members],'week_basis':'entry_date_every_7_days','feed_basis':'allocated_manual_orders_kg_not_consumption'}

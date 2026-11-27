@@ -14,12 +14,12 @@ class WeeklyReferenceTests(unittest.TestCase):
  def add(self,kind,**row):return self.s.mutate(self.u,kind,row,str(uuid.uuid4()))
  def report(self,data=None,**q):return weekly_report(data or self.s.snapshot(),{'cohort':['LINKED|2026-10-09'],'to':['2026-10-18']}|q,today='2026-10-18')
  def test_named_reference_does_not_become_a_common_cohort_age(self):
-  before=self.s.snapshot();r=self.report();self.assertTrue(r['age_mixed']);self.assertIsNone(r['entry_age_days']);self.assertEqual(r['week_reference']['barn'],'15棟');self.assertEqual(r['week_reference']['start_week'],11);self.assertEqual(r['week_reference']['basis'],'named_earliest_entry_barn_only');self.assertTrue(all(w['age_week'] is None for w in r['weeks']))
+  before=self.s.snapshot();r=self.report();self.assertTrue(r['age_mixed']);self.assertIsNone(r['entry_age_days']);self.assertEqual(r['week_reference']['barn'],'15棟');self.assertEqual(r['week_reference']['start_week'],12);self.assertEqual(r['week_reference']['basis'],'named_earliest_entry_barn_only');self.assertTrue(all(w['age_week'] is None for w in r['weeks']))
   self.assertEqual([(e['date'],e['age_days']) for e in r['entry_details']],[('2026-10-09',71),('2026-10-16',71)]);self.assertEqual([b['age_days'] for b in r['barn_ages']],[80,73]);self.assertEqual(before,self.s.snapshot())
  def test_each_single_barn_keeps_its_own_entry_anchored_weeks(self):
   a=self.report(batch_id=[self.first['id']]);b=self.report(batch_id=[self.second['id']]);self.assertIsNone(a['week_reference']);self.assertIsNone(b['week_reference']);self.assertEqual([w['age_week'] for w in a['weeks']],[11,12]);self.assertEqual([w['age_week'] for w in b['weeks']],[11]);self.assertEqual(b['weeks'][0]['anchor'],'2026-10-16')
  def test_reference_is_stable_when_input_order_is_reversed_or_interval_changes(self):
-  data=self.s.snapshot();data['batches'].reverse();r=self.report(data,**{'from':['2026-10-16']});self.assertEqual(r['week_reference']['batch_id'],self.first['id']);self.assertEqual(r['weeks'][0]['index'],2);self.assertEqual(r['weeks'][0]['anchor'],'2026-10-16')
+  data=self.s.snapshot();data['batches'].reverse();r=self.report(data,**{'from':['2026-10-16']});self.assertEqual(r['week_reference']['batch_id'],self.first['id']);self.assertEqual(r['weeks'][0]['index'],1);self.assertEqual(r['weeks'][0]['anchor'],'2026-10-16')
  def test_unknown_earliest_entry_age_is_not_borrowed_from_a_later_barn(self):
   data=self.s.snapshot();data['batches'][0]['entry_age_days']=None;r=self.report(data);self.assertIsNone(r['week_reference']);self.assertTrue(all(w['age_week'] is None for w in r['weeks']))
  def test_reference_does_not_fill_missing_age_for_another_barn(self):
