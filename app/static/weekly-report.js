@@ -104,6 +104,7 @@ function feedLines(details=[],shared=[]){
  });
 }
 function feedCell(w){
+ if(beforeFinalEntry(w))return '';
  const lines=feedText(w).split('\n').filter(Boolean).map(line=>`<span class="weekly-feed-entry">${safe(line)}</span>`).join('');
  if(blankWeek(w)&&!lines)return '';
  return lines||amount(w.values.feed_orders,'feed_orders');
@@ -162,14 +163,17 @@ function panels(){
  const weeks=sheetWeeks(),pages=[];for(let start=0;start<weeks.length;start+=40){const ws=weeks.slice(start,start+40).concat([null,null]),cols=Math.ceil(ws.length/2);pages.push([ws.slice(0,cols),ws.slice(cols)]);}return pages;
 }
 function weekHeading(w,compact){const age=shownWeek(w);return !w?'':age==null?label('weeklyPeriod',w.index):compact?label('weeklyWeekShort',age):label('weeklyWeek',age);}
-function shortDate(w){if(!w)return '';const d=w.anchor.split('-');return Number(d[1])+'/'+Number(d[2]);}
+function beforeFinalEntry(w){return !!w&&(report.entry_details||[]).length>1&&w.index<1;}
+function shortDate(w){if(!w||!w.anchor||beforeFinalEntry(w))return '';const d=w.anchor.split('-');return Number(d[1])+'/'+Number(d[2]);}
 function blankWeek(w){return !w||(w.future&&!w.has_records);}
 function saleValues(events){return outgoingGroups(events.filter(e=>e.type==='sale')).map(e=>fmt(e.quantity,0)).join('、');}
 function feedText(w){
- if(!w)return '';
- const pre=w.index===1?preentryLines():[];
- const current=blankWeek(w)?[]:feedLines(w.feed_details,w.feed_shared_details);
- return [...pre,...current].join('\n');
+ if(!w||beforeFinalEntry(w))return '';
+ const prior=w.index===1?(report.weeks||[]).filter(beforeFinalEntry):[];
+ const pre=w.index===1?report.preentry_feed:null;
+ const periods=[...prior,...(blankWeek(w)?[]:[w])];
+ return feedLines([...(pre?.details||[]),...periods.flatMap(week=>week.feed_details||[])],
+                  [...(pre?.shared_details||[]),...periods.flatMap(week=>week.feed_shared_details||[])]).join('\n');
 }
 
 function shippingNotes(){return outgoingGroups(report.weeks.flatMap(w=>w.events).filter(e=>e.type==='sale')).map(e=>outgoingNotation(e)+(e.note?' · '+e.note:''));}
@@ -206,7 +210,7 @@ function paperBands(){
     {label:t('weeklyPaperStart'),cells:selected.map(w=>w?.anchor?shortDate(w):''),height:16},
     ...metrics.map(k=>({
      label:t(paperMetricKey[k]),totalIndex:summaryMetrics.indexOf(k),
-     cells:selected.map(w=>k==='feed_orders'?(feedText(w)||(blankWeek(w)?'':amount(w.values[k],k))):blankWeek(w)?'':k==='sale'?saleValues(w.events):amount(w.values[k],k)),
+     cells:selected.map(w=>k==='feed_orders'?(feedText(w)||(blankWeek(w)||beforeFinalEntry(w)?'':amount(w.values[k],k))):blankWeek(w)?'':k==='sale'?saleValues(w.events):amount(w.values[k],k)),
      height:k==='feed_orders'?Math.max(28,...selected.map(w=>feedText(w).split('\n').length*10+8)):18,
      bold:k==='death',color:k==='death'?deathColor:undefined,
      left:k==='feed_orders',singleLine:k==='feed_orders',monospace:k==='feed_orders'
