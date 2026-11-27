@@ -85,7 +85,7 @@ async function generate(e){
 }
 const deathColor='#b42332';
 const metrics=['cull','death','feed_orders','sale'];
-const summaryMetrics=metrics.filter(k=>k!=='cull');
+const summaryMetrics=metrics;
 const paperMetricKey={sale:'weeklyPaperSale',cull:'weeklyPaperCull',death:'weeklyPaperDeath',feed_orders:'weeklyPaperFeed'};
 const metricKey={death:'weeklyDeaths',sale:'weeklySales',cull:'weeklyCulls',feed_orders:'weeklyFeed'};
 function amount(n,key){return n==null||n===0?'':key==='feed_orders'?new Intl.NumberFormat(lang==='vi'?'vi-VN':'zh-TW',{maximumFractionDigits:3}).format(n/1000):fmt(n,0);}

@@ -406,10 +406,9 @@ async function renderNancyWeeklyPdf(model,scale){
    }
   }
  }
- const totalRows=[[854,884],[884,926],[926,952]];
- panel(268,823,95,31);
- // Align the totals' feed and sales rows with the resized weekly rows.
- for(const [index,unit] of [[1,'噸'],[2,'頭']]){
+ const totalRows=[[823,854],[854,884],[884,926],[926,952]];
+ // Align every total with its corresponding weekly row.
+ for(const [index,unit] of [[0,'頭'],[1,'頭'],[2,'噸'],[3,'頭']]){
   const [top,bottom]=totalRows[index];
   panel(268,top,95,bottom-top);
   drawLines([unit],344,top,18,bottom-top,{size:13,bold:true,align:'center'});

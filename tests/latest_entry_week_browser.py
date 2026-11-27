@@ -28,13 +28,13 @@ with tempfile.TemporaryDirectory() as folder:
    assert [entry['date'] for entry in model['headerEntries']]==['2026-10-09','2026-10-16']
    assert [entry['mean'] for entry in model['headerEntries']]==[19,22]
    assert any(pair[1]=='71 天' for pair in model['basics'])
-   assert model['totals'][1][1]=='10',model['totals']
+   assert model['totals'][2][1]=='10',model['totals']
    assert page.locator('#weekly-sheet-body .weekly-total-feed_orders strong').text_content()=='10'
    assert store.snapshot()['batches']==before['batches'] and store.snapshot()['feed_orders']==before['feed_orders'] and not errors,errors
    add('feed_orders',date='2026-10-16',kg=1500,display_unit='ton',vendor='',allocations=[{'batch_id':batch['id'],'kg':1500}])
    page.evaluate('async()=>await refresh()')
-   page.wait_for_function("()=>models.at(-1).totals[1][1]==='11.5'")
-   assert page.evaluate('models.at(-1).totals[1][1]')=='11.5'
+   page.wait_for_function("()=>models.at(-1).totals[2][1]==='11.5'")
+   assert page.evaluate('models.at(-1).totals[2][1]')=='11.5'
    browser.close()
  finally:server.shutdown();server.server_close()
 print('PASS final arrival weight determines A4 start week and date; both arrival records remain intact')
